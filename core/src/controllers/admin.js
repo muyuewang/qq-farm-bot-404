@@ -76,6 +76,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const PUBLIC_API_PATHS = new Set([
   "/login",
+  "/register",
   "/auto-login",
   "/qr/create",
   "/qr/check",
@@ -83,7 +84,19 @@ const PUBLIC_API_PATHS = new Set([
   "/public/login-links",
   "/changelog",
   "/health",
+  "/card-claim/status",
+  "/card-claim/claim",
+  "/public/renew",
+  "/public/reset-password/verify",
+  "/public/reset-password/confirm",
+  "/announcement",
+  "/announcement/read",
+  "/auth/validate",
 ]);
+const PUBLIC_API_PREFIXES = [
+  "/public/capture-certificate/",
+  "/card/info/",
+];
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const ONE_MINUTE_MS = 60 * 1000;
 const LOG_SNAPSHOT_LIMIT = 100;
@@ -161,7 +174,7 @@ function registerAuthGate(expressApp, requireAdminToken) {
   expressApp.use("/api", (req, res, next) => {
     if (
       PUBLIC_API_PATHS.has(req.path)
-      || req.path.startsWith("/public/capture-certificate/")
+      || PUBLIC_API_PREFIXES.some(prefix => req.path.startsWith(prefix))
     ) return next();
     return requireAdminToken(req, res, next);
   });
