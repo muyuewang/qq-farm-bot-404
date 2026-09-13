@@ -34,7 +34,8 @@ const lockoutRemaining = ref(0)
 const rateLimitRemaining = ref(0)
 const routeUsername = computed(() => String(route.query.username || '').trim())
 
-const cardClaimEnabled = ref(false)
+const cardClaimEnabled = ref(true)
+const cardClaimStock = ref(0)
 const cardClaimLoading = ref(false)
 const showClaimModal = ref(false)
 const claimModalContent = ref({
@@ -215,6 +216,13 @@ function toggleMode() {
   showPasswordStrength.value = false
   lockoutRemaining.value = 0
   rateLimitRemaining.value = 0
+  // 切到注册时清空浏览器自动填充的登录账号
+  if (!isLogin.value) {
+    username.value = ''
+    password.value = ''
+    cardCode.value = ''
+    checkCardClaimStatus()
+  }
 }
 
 function openRenewal() {
@@ -377,12 +385,16 @@ async function submitResetPassword() {
 async function checkCardClaimStatus() {
   try {
     const res = await api.get('/api/card-claim/status')
-    if (res.data.ok) {
-      cardClaimEnabled.value = res.data.enabled === true
+    if (res.data?.ok) {
+      // 接口明确返回 enabled 时才关闭按钮，避免接口异常导致按钮消失
+      cardClaimEnabled.value = res.data.enabled !== false
+      cardClaimStock.value = Number(res.data.availableTimeCards) || 0
     }
   }
   catch (e) {
     console.error('检查卡密领取状态失败:', e)
+    // 接口失败时仍展示按钮，领取时再报错，避免注册页完全没入口
+    cardClaimEnabled.value = true
   }
 }
 
@@ -500,6 +512,8 @@ async function fetchGameVersion() {
             v-model="username"
             type="text"
             placeholder="请输入用户名（3-32位字母数字下划线）"
+            :autocomplete="isLogin ? 'username' : 'new-username'"
+            :name="isLogin ? 'username' : 'register-username'"
             required
           />
           <p v-if="username && !usernameValid.valid" class="form-hint error">
@@ -517,6 +531,8 @@ async function fetchGameVersion() {
             v-model="password"
             type="password"
             placeholder="请输入密码"
+            :autocomplete="isLogin ? 'current-password' : 'new-password'"
+            :name="isLogin ? 'password' : 'register-password'"
             required
           />
           <PasswordStrengthMeter
@@ -558,6 +574,12 @@ async function fetchGameVersion() {
               <span v-if="cardClaimLoading" class="i-svg-spinners-90-ring-with-bg" />
               <span v-else>免费领取卡密</span>
             </button>
+            <p v-if="cardClaimStock === 0" class="mt-1 text-[11px] text-amber-600">
+              当前无可用时间卡密，请联系管理员补充库存
+            </p>
+          </div>
+          <div v-else class="mb-2 text-xs text-gray-400">
+            管理员未开启免费领卡，请使用已有卡密注册
           </div>
 
           <BaseInput
@@ -565,6 +587,8 @@ async function fetchGameVersion() {
             v-model="cardCode"
             type="text"
             placeholder="请输入卡密"
+            autocomplete="off"
+            name="card-code"
             :required="!isLogin"
           />
         </div>

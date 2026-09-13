@@ -10,6 +10,8 @@ const props = defineProps<{
   min?: string | number
   max?: string | number
   step?: string | number
+  autocomplete?: string
+  name?: string
 }>()
 const emit = defineEmits<{
   (e: 'clear'): void
@@ -45,6 +47,8 @@ function updateModel(event: Event) {
         :min="min"
         :max="max"
         :step="step"
+        :autocomplete="autocomplete"
+        :name="name"
         class="base-input w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none transition-all duration-200 dark:border-gray-700 disabled:bg-gray-50 dark:text-white disabled:text-gray-400 focus:ring-2 dark:disabled:bg-gray-800/50"
         :class="{ 'pr-10': type === 'password' || (clearable && model) }"
         @input="updateModel"
