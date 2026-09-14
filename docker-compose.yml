@@ -59,6 +59,12 @@ services:
     environment:
       NAPCAT_UID: "${NAPCAT_UID:-1000}"
       NAPCAT_GID: "${NAPCAT_GID:-1000}"
+      # 无 GPU/EGL 的容器里强制软件渲染，避免 GPU 进程退出导致界面/二维码异常
+      ELECTRON_DISABLE_GPU: "1"
+      ELECTRON_ENABLE_LOGGING: "0"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      QTWEBENGINE_CHROMIUM_FLAGS: "--no-sandbox --disable-gpu --disable-dev-shm-usage --in-process-gpu"
+      ELECTRON_EXTRA_LAUNCH_ARGS: "--no-sandbox --disable-gpu --disable-dev-shm-usage"
     ports:
       - "127.0.0.1:6099:6099"
     volumes:
