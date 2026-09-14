@@ -54,6 +54,8 @@ services:
     container_name: qq-farm-napcat
     hostname: "${NAPCAT_DEVICE_NAME:-QQ-Farm-NapCat}"
     restart: unless-stopped
+    # Electron/Chromium 需要较大的 /dev/shm，否则二维码/界面可能白屏或转圈
+    shm_size: "1gb"
     environment:
       NAPCAT_UID: "${NAPCAT_UID:-1000}"
       NAPCAT_GID: "${NAPCAT_GID:-1000}"
