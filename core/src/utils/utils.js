@@ -77,6 +77,7 @@ function resolveModuleTag(moduleName) {
         warehouse: '仓库',
         task: '任务',
         activity: '活动',
+        pet: '宠物',
         system: '系统',
     };
     const m = String(moduleName || '').trim();
@@ -94,6 +95,7 @@ function inferModuleFromTag(tag) {
         任务: 'task',
         活跃: 'task',
         活动: 'activity',
+        宠物: 'pet',
         系统: 'system',
         错误: 'system',
         WS: 'system',

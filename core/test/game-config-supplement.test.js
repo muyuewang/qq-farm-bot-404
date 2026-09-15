@@ -65,6 +65,16 @@ test('star bell flower is configured as a 2x2 crop', () => {
   assert.equal(getPlantBySeedId(29003)?.size, 2);
 });
 
+test('bubble cotton candy resolves its official 2x2 plant configuration', () => {
+  const plant = getPlantBySeedId(29004);
+  assert.equal(plant?.id, 1029004);
+  assert.equal(plant?.size, 2);
+  assert.equal(plant?.fruit?.id, 49004);
+  assert.equal(plant?.fruit?.count, 192);
+  assert.equal(plant?.exp, 7680);
+  assert.ok(getPlantGrowPhases(plant.id).length > 0);
+});
+
 test('charity red flower uses the official single-grid plant configuration', () => {
   const plant = getPlantBySeedId(20883);
   assert.equal(plant?.id, 1020883);
@@ -74,10 +84,16 @@ test('charity red flower uses the official single-grid plant configuration', () 
   assert.match(plant?.grow_phases || '', /盛开:0/);
 });
 
-test('charity flower activity items use official names', () => {
+test('charity flower activity items use official names and static icons', () => {
   assert.equal(getItemById(1040)?.name, '爱心值');
   assert.equal(getItemById(2158)?.name, '小红花做好事头像框');
   assert.equal(getItemById(101604)?.name, '公益小红花结算礼包');
+  assert.equal(getItemImageById(101604), '/activity/charity-flower/settlement-pack.png');
+  assert.equal(
+    fs.existsSync(path.join(__dirname, '..', '..', 'web', 'public', 'activity', 'charity-flower', 'settlement-pack.png')),
+    true,
+    'charity flower settlement pack image file',
+  );
   assertImageExists(20883, 'red flower seed image');
   assertImageExists(40883, 'red flower fruit image');
 });

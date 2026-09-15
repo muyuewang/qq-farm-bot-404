@@ -123,6 +123,25 @@ function buildLandMap(lands) {
   return map;
 }
 
+/**
+ * 收集植物当前生效的变异配置 ID。
+ *
+ * 全量土地响应通常在 PlantInfo.mutant_config_ids 返回结果，但部分新变异会先随
+ * 当前 PlantPhaseInfo.mutants 下发。两处都读取，避免个人土地漏掉阶段级变异。
+ */
+function getPlantMutantConfigIds(plant, currentPhase) {
+  const plantIds = Array.isArray(plant && plant.mutant_config_ids)
+    ? plant.mutant_config_ids
+    : [];
+  const phaseMutants = Array.isArray(currentPhase && currentPhase.mutants)
+    ? currentPhase.mutants
+    : [];
+  return [...new Set([
+    ...plantIds.map(toNum),
+    ...phaseMutants.map(item => toNum(item && item.mutant_config_id))
+  ].filter(Boolean))];
+}
+
 /** 获取从属土地 ID 列表 */
 function getSlaveLandIds(land) {
   const slaveIds = Array.isArray(land && land.slave_land_ids) ? land.slave_land_ids : [];
@@ -509,7 +528,7 @@ async function getLandsDetail() {
 
       const phase = toNum(currentPhase.phase);
       const plantId = toNum(plant.id);
-      const mutantConfigIds = plant.mutant_config_ids || [];
+      const mutantConfigIds = getPlantMutantConfigIds(plant, currentPhase);
       const displayPlantId = getMutantDisplayPlantId(plantId, mutantConfigIds);
       const displayName = getPlantName(displayPlantId) || getPlantName(plantId) || plant.name || '未知';
       const plantInfo = getPlantById(plantId);
@@ -588,6 +607,7 @@ module.exports = {
   getCurrentPhase,
   convertServerPhaseToClient,
   buildLandMap,
+  getPlantMutantConfigIds,
   getDisplayLandContext,
   isOccupiedSlaveLand,
   analyzeLands,

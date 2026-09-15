@@ -1,0 +1,93 @@
+{
+  "source": "1112386029_3_7a848d2182f9352fe969854ee7ac1de1",
+  "items": [
+    {
+      "id": 1040516,
+      "name": "黄金·狗尾草",
+      "file": "1040516.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/7c/7c1bd774-f63f-41de-bbed-f18cade3ac74.e5075.png",
+      "assetPath": "model/v4/gold/Crop_516_Seed/spriteFrame",
+      "sha256": "84a531a8384fac0737f0c5d51e9e0c80c93223e9929e486c0df0f040d49830a6"
+    },
+    {
+      "id": 1041072,
+      "name": "黄金·寒兰",
+      "file": "1041072.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/15/15ab6624-68ea-47df-a778-adec28b777bd.7dd85.png",
+      "assetPath": "model/v4/gold/Crop_1072_Seed/spriteFrame",
+      "sha256": "cae38c8c380fc1095a37a9281952cad156e5f98826496de08ec435cd29768b96"
+    },
+    {
+      "id": 1041625,
+      "name": "黄金·枸杞",
+      "file": "1041625.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/e1/e18de53d-4afd-4e5e-ac99-6894f2d344b7.d85a4.png",
+      "assetPath": "model/v4/gold/Crop_1625_Seed/spriteFrame",
+      "sha256": "58eb7c288e2f8b57237cb2c586c053e1cb7e62392773c0bc9fd89179803d71be"
+    },
+    {
+      "id": 1045995,
+      "name": "黄金·芦苇",
+      "file": "1045995.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/18/1844862c-ec08-42a5-8789-3f64a5e4e67c.74815.png",
+      "assetPath": "model/v4/gold/Crop_5995_Seed/spriteFrame",
+      "sha256": "180c64aa50a44e01816135ed1c0c62e6f6cbc4010a41d18018cbae9bb4482089"
+    },
+    {
+      "id": 204008,
+      "name": "比熊棉花糖",
+      "file": "204008.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/11/1133e8e6-1aa3-49ed-837b-798fa0711570.5f3d2.png",
+      "assetPath": "gui/texture/skinIcon/icon_skin_tower_4/spriteFrame",
+      "sha256": "2d01437a4e98bad99699b6dcb090f22d40799a9952f7ff69b2dd6c8e6a78a2f9"
+    },
+    {
+      "id": 204009,
+      "name": "黄金·比熊棉花糖",
+      "file": "204009.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/02/02465b12-698d-486e-b94e-43abae9cdca8.dc916.png",
+      "assetPath": "gui/texture/skinIcon/icon_skin_tower_4_1/spriteFrame",
+      "sha256": "705e883be6242ebea46294bd9a4fa7f9c523e17ea23e5c76edb91496613f9f96"
+    },
+    {
+      "id": 1049004,
+      "name": "黄金·泡泡棉花糖",
+      "file": "1049004.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/38/38b64bc2-532a-4831-a181-069a52fcae8c.090d0.png",
+      "assetPath": "model/v4/gold/Crop_9004_Seed/spriteFrame",
+      "sha256": "02b648d693f74d047342d126ac526889b193ad245cf717a64f7e23afd2a6f09c"
+    },
+    {
+      "id": 41072,
+      "name": "寒兰",
+      "file": "41072.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/26/2692cc1d-0c03-4c10-88d5-9ec8618b174d.516dd.png",
+      "assetPath": "model/v4/Crop_1072_Seed/spriteFrame",
+      "sha256": "1ff88c6d5cb0822abae1356398f7483654c148ce95730bc09a90d752294eed92"
+    },
+    {
+      "id": 41625,
+      "name": "枸杞",
+      "file": "41625.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/0f/0fccda22-4bd4-436a-a88f-83acd068dfa9.5a321.png",
+      "assetPath": "model/v4/Crop_1625_Seed/spriteFrame",
+      "sha256": "2529bf48f61c830a859bd501f19fa292b69a7fbb1fd4ce566b9c9842ff86552a"
+    },
+    {
+      "id": 21072,
+      "name": "寒兰种子",
+      "file": "21072.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/26/2692cc1d-0c03-4c10-88d5-9ec8618b174d.516dd.png",
+      "assetPath": "model/v4/Crop_1072_Seed/spriteFrame",
+      "sha256": "1ff88c6d5cb0822abae1356398f7483654c148ce95730bc09a90d752294eed92"
+    },
+    {
+      "id": 21625,
+      "name": "枸杞种子",
+      "file": "21625.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/0f/0fccda22-4bd4-436a-a88f-83acd068dfa9.5a321.png",
+      "assetPath": "model/v4/Crop_1625_Seed/spriteFrame",
+      "sha256": "2529bf48f61c830a859bd501f19fa292b69a7fbb1fd4ce566b9c9842ff86552a"
+    }
+  ]
+}

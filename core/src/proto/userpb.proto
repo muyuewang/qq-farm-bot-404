@@ -11,6 +11,7 @@ message LoginRequest {
     int64 share_cfg_id = 6;
     string scene_id = 7;
     ReportData report_data = 8;
+    bytes extra = 9;
 }
 
 // 设备信息
@@ -95,6 +96,7 @@ message VersionInfo {
 message HeartbeatRequest {
     int64 gid = 1;
     string client_version = 2;
+    int64 field_3 = 3;
 }
 
 message HeartbeatReply {

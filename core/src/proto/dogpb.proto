@@ -38,6 +38,10 @@ message DogSkillUsage {
 
 message DeployDogRequest { int64 dog_id = 1; }
 message DeployDogReply { int64 dog_id = 1; }
+// 活动赠送的宠物仍需在宠物系统激活。2026-09-14 比熊 HAR 证实请求字段 1
+// 与 DeployDogRequest 相同，响应字段 1 为激活后的完整 DogInfo。
+message ActivateDogRequest { int64 dog_id = 1; }
+message ActivateDogReply { DogInfo dog = 1; }
 message WithdrawDogRequest {}
 message WithdrawDogReply { int64 dog_id = 1; }
 message AddFoodRequest { int64 item_id = 1; int64 count = 2; }

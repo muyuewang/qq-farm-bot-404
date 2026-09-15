@@ -464,6 +464,7 @@ function cleanupTaskSystem() {
 // ---- 导出 ----
 
 module.exports = {
+  getTaskInfo,
   checkAndClaimTasks,
   initTaskSystem,
   cleanupTaskSystem,

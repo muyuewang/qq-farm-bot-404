@@ -54,6 +54,7 @@ export function useStrategySettings({
     { label: '最大净利润/时', value: 'max_profit' },
     { label: '最大普通肥净利润/时', value: 'max_fert_profit' },
     { label: '背包种子优先', value: 'bag_priority' },
+    { label: '任务作物优先', value: 'task_priority' },
     { label: '优先种植种子', value: 'seed_priority' },
   ]
 

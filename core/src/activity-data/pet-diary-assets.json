@@ -9,7 +9,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo5",
     "file": "img_s3PhotoWall_photo5.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/04/04762433-d7fd-45bf-bf7a-74761c70f7ce.a4e96.png",
-    "sha256": "b4ea94a4f042286503f87810cb679e74b456f176499318e6b9cf46f465fb979c"
+    "sha256": "533b1d71a1fe16b3565ec9dc364b189f58755c312caf6624cdb697ca707b5880"
   },
   {
     "path": "gui/texture/Season/S3/S3Open/BigImg/S3Open_dog_1",
@@ -33,13 +33,13 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo8",
     "file": "img_s3PhotoWall_photo8.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/17/17e09369-60e6-4e51-8d3e-d4bf320b2fb4.9f6dc.png",
-    "sha256": "b79cd260135db32ab40a81a9edb37ea22429134c12b9f91ae5ba324ab57779f7"
+    "sha256": "91cb514b4ebce4b3b0a9d5c150051584fec553fe41ce48d399e3ea887acd4e47"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo0",
     "file": "img_s3PhotoWall_photo0.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/20/20a66be9-fb2e-4b93-be94-4bdf2a2cb625.da082.png",
-    "sha256": "04fee1ce25b38d47da6a696a51baeb7d8534282bcce06f36854a8a8d0c95a9c9"
+    "sha256": "bb85d4f7d5796f6378b4410c63d0cb4d3104b2ea7880efbf0aefc9c533f4686c"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_say2",
@@ -52,12 +52,6 @@
     "file": "img_exchange_item4.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/26/269bbd24-0158-4bb8-a715-49acdc1ef22c.df16d.png",
     "sha256": "ca14a3ef5222fb91233a4edf264e45fe96f16dd8ed6c52c8d732f8f98474bb09"
-  },
-  {
-    "path": "gui/texture/Season/S3/S3Open/BigImg/img_S3Open_bg",
-    "file": "img_S3Open_bg.png",
-    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/27/27148419-80e8-4a3e-baf3-ad2ba0a0ccf6.94f7f.png",
-    "sha256": "7a4507f15be81adfd57f427e9c3347c508e3fd9a476e676a9750945fc86aeb2d"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_say12",
@@ -87,7 +81,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo2",
     "file": "img_s3PhotoWall_photo2.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/3d/3d829f19-e6ed-4a6f-8c1d-f943c8fb0e97.2c436.png",
-    "sha256": "52bfa0dc0c9320ee1cbeed7e41c00ae286767590580011c0efb24787e01cb680"
+    "sha256": "5bb723ee4a8c25abd682b192bbc461366fdd7c74794095a184e0545dd8e8059e"
   },
   {
     "path": "gui/texture/Season/S3/S3SkillType/img_s3_skillType5",
@@ -111,7 +105,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo3",
     "file": "img_s3PhotoWall_photo3.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/47/476ee9bc-92d0-4c30-8878-bba92a99111a.ffde5.png",
-    "sha256": "9aa97303e4eddd1c6f979d6f7684d30d7db4e40e92345effe5880cf1f095aa9c"
+    "sha256": "0049924d20646a2745630b9a63d262fbd0cf2ffd3d94ad5b4361f4ea6f0773d9"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_say0",
@@ -153,13 +147,13 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo7",
     "file": "img_s3PhotoWall_photo7.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/6b/6bc27e7c-8003-4b65-aebb-0a715814c656.d415c.png",
-    "sha256": "41a682ee3be6900f8fe322097f9b43c06749ee5cc68f07a0690147b12c2add8f"
+    "sha256": "398a88fc8c169ff7f177342a49ed78ffda9984cfa453f0bfa3ef90ee2bfe585e"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo13",
     "file": "img_s3PhotoWall_photo13.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/71/7120cb69-9a24-4e3c-978a-3222cd5558cb.39443.png",
-    "sha256": "9b7808aa66c11c0198f41d561553608e44f40355c0a9438cf2ee9950d2af719c"
+    "sha256": "9b019c2e06ec7864c95ad8a305fef601b68d7b066d89b1cd9313e3d92058cb1b"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_say8",
@@ -171,7 +165,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo1",
     "file": "img_s3PhotoWall_photo1.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/7f/7f32e152-605f-4eaa-a43d-744c42882d0d.6562d.png",
-    "sha256": "7245f087a05e55f3f2c43b48afd014f17b07ce10055b5a7851f3dab800f6ad78"
+    "sha256": "8f437039d4346d8742507275bf00c65de6b3be6cb7ad67e10177002f77b62651"
   },
   {
     "path": "gui/texture/Season/S3/S3SkillType/img_s3_skillType4",
@@ -189,7 +183,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo10",
     "file": "img_s3PhotoWall_photo10.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/8e/8eb1f98c-8c4e-4273-b108-cc4a2176a959.41271.png",
-    "sha256": "b124f1433257ac0b342d2305af814ee87f6dd34fadba62e971718c14df3a7a01"
+    "sha256": "31ab33d3537d34ac2554c0206018049e69a879cd42103b0b946181e451b44e6a"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_say7",
@@ -213,7 +207,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo14",
     "file": "img_s3PhotoWall_photo14.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/b1/b1d28c76-7f0f-40de-9458-197e37b6f986.3062e.png",
-    "sha256": "2d3d67bd21b1a45943b352c29a2baadb93212372196055775bed61092ea17296"
+    "sha256": "d7b6799b731de1ac29c4abdacd0dba10cc94b20871db45af77efdd1a02231424"
   },
   {
     "path": "gui/texture/activity/yuanqigao/img_exchange_item5",
@@ -225,7 +219,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo6",
     "file": "img_s3PhotoWall_photo6.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/b4/b475c90f-9504-42ea-ad3e-6e451d522fea.7ffe2.png",
-    "sha256": "6a30ea618d613f8a2c5bb81276e9d0b5073b3ac3c3afdfaab2826e37c80538d6"
+    "sha256": "cb09cf62757a456adffcd28ffcaf2aca310b5163148c33e12272e906f933aa45"
   },
   {
     "path": "gui/texture/Season/S3/S3Open/BigImg/S3Open_dog_2",
@@ -243,7 +237,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo4",
     "file": "img_s3PhotoWall_photo4.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/cb/cb025be0-543f-4b75-946b-7254097a8b76.4b26b.png",
-    "sha256": "07aab98a048c025ebefa6790f3ce8e864fd89e5ca99ae079968decf7325373dd"
+    "sha256": "02e5e6d937d5ee91b62bd74420c34d8c8e1c2408f8bc98d05ce726ba7714fd44"
   },
   {
     "path": "gui/texture/Season/S3/S3SkillType/img_s3_skillType1",
@@ -255,7 +249,7 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo11",
     "file": "img_s3PhotoWall_photo11.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/e3/e3feb162-775d-46d4-8bb7-d671f66fb2ce.86103.png",
-    "sha256": "10a7aaa4541ae3d4438c0acc41f579408c8f287c37cfb764c96f60632884a7e2"
+    "sha256": "92206757ed6cb5cda233f756376f0c131db9ff1430531f94b661ea689f0b683c"
   },
   {
     "path": "gui/texture/activity/yuanqigao/img_exchange_item2",
@@ -285,13 +279,13 @@
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo9",
     "file": "img_s3PhotoWall_photo9.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/f5/f58403b2-010c-473f-8f14-72e696c84354.6c246.png",
-    "sha256": "1ae72aab876fb46ac6488d81ed771ecdc3c31a9672e4a07fcb9c65aab1c9f61c"
+    "sha256": "ebb2bf840816b20edb083ad650562fb467fe2b5db0ce7b34fb86abf758ab5837"
   },
   {
     "path": "gui/texture/Season/S3/S3PhotoWallPhotos/img_s3PhotoWall_photo12",
     "file": "img_s3PhotoWall_photo12.png",
     "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/f7/f74f50cc-4c28-49fb-be85-6620c1a3525c.c865b.png",
-    "sha256": "77d82396e1d53dd6a37cd99d3a0d7ffed85a66ad7d1bb4ec5ec20604bd201e39"
+    "sha256": "a422d25a5d3dd2ad0440c3b92ed51d9d1f2db7637eb4f756a1c31630158d41b4"
   },
   {
     "path": "gui/texture/Season/S3/S3SkillType/img_s3_skillType2",
@@ -1322,15 +1316,9 @@
     "offset": null
   },
   {
-    "path": "gui/texture/Season/S3/S3BattlePass/img_s3BattlePass_bg",
-    "file": "img_s3BattlePass_bg.png",
-    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/82/82c9515d-361f-4fad-a71b-0417d24ec3a0.25615.png",
-    "sha256": "0acac24b2e5cdce4de3c9d9035a52efca3f239f3ec0d2cf07b7c3bccfcc3ad46"
-  },
-  {
     "path": "derived/pet-diary/spine/scene-bailu",
-    "file": "scene-bailu.png",
-    "sha256": "8cf60fac7937f4c9033ccb7714d5c212ccfa241517a09e4371935e5ff9d15589",
+    "file": "scene-bailu-static.webp",
+    "sha256": "7c6e469001a48a24af861171ec378ceb0c00920cabd2b272f0a5c00582c232f2",
     "derived": {
       "method": "Official Spine mesh/bone rendering; no rectangular atlas reconstruction",
       "version": "3.8.99",
@@ -1355,8 +1343,9 @@
         "bytes": 2943599
       },
       "output": {
-        "width": 900,
-        "height": 1604,
+        "width": 720,
+        "height": 1283,
+        "encoding": "lossy WebP quality 78",
         "crop": {
           "x": -448,
           "y": -799,
@@ -1368,8 +1357,8 @@
   },
   {
     "path": "derived/pet-diary/spine/scene-shop",
-    "file": "scene-shop.png",
-    "sha256": "4176e4e40ee890f9ed8a57d8629c93799944c1cb48c4aac9045a648b46dbd6c5",
+    "file": "scene-shop-static.webp",
+    "sha256": "455cb735c80ca954bc9de44d0594de7acbde78a785059cbec5db07a7f07aabd6",
     "derived": {
       "method": "Official Spine mesh/bone rendering; no rectangular atlas reconstruction",
       "version": "3.8.99",
@@ -1394,8 +1383,9 @@
         "bytes": 1384692
       },
       "output": {
-        "width": 2040,
-        "height": 900,
+        "width": 720,
+        "height": 318,
+        "encoding": "lossy WebP quality 78",
         "crop": {
           "x": -510,
           "y": -224,
@@ -1407,8 +1397,8 @@
   },
   {
     "path": "derived/pet-diary/spine/scene-stories",
-    "file": "scene-stories.png",
-    "sha256": "35905129155a18c9fe40311f92983076cbcbe0e29313fcc47d0f9ac6005dd558",
+    "file": "scene-stories-static.webp",
+    "sha256": "71be26f98b7bf179592ab2bdaee54fa6ff26f34d165eef4e0771b4ebae7b7a1b",
     "derived": {
       "method": "Official Spine mesh/bone rendering; no rectangular atlas reconstruction",
       "version": "3.8.99",
@@ -1433,8 +1423,9 @@
         "bytes": 2202262
       },
       "output": {
-        "width": 2040,
-        "height": 920,
+        "width": 720,
+        "height": 325,
+        "encoding": "lossy WebP quality 78",
         "crop": {
           "x": -508,
           "y": -260,
@@ -1446,8 +1437,8 @@
   },
   {
     "path": "derived/pet-diary/spine/scene-home-puppy",
-    "file": "scene-home-puppy.png",
-    "sha256": "0b9a057cd27b243c2a5c2f3f325545c9140754368a6f1717bdfb1eeefbd8f323",
+    "file": "scene-home-puppy.webp",
+    "sha256": "0cb5f2ac460b645e0e9f0f784fa6b201dd00fbc4b7c36e494ddaf07f45a16dc5",
     "derived": {
       "method": "Official Spine mesh/bone rendering; no rectangular atlas reconstruction",
       "version": "3.8.99",
@@ -1473,8 +1464,9 @@
         "bytes": 681210
       },
       "output": {
-        "width": 900,
-        "height": 1400
+        "width": 720,
+        "height": 1120,
+        "encoding": "lossy WebP quality 78"
       },
       "composition": {
         "room": "img_s3BattlePass_bg.png",
@@ -1497,8 +1489,8 @@
   },
   {
     "path": "derived/pet-diary/spine/scene-home-adult",
-    "file": "scene-home-adult.png",
-    "sha256": "42331216f329e4cd32de4db2354237c6e42c899d81d385c4f7f1040f7ec2437f",
+    "file": "scene-home-adult.webp",
+    "sha256": "f74a26788f998b2b24e41e3d0b4e97a3067fb05d61bd528e38a9ba629a1bb2c9",
     "derived": {
       "method": "Official Spine mesh/bone rendering; no rectangular atlas reconstruction",
       "version": "3.8.99",
@@ -1524,8 +1516,9 @@
         "bytes": 695936
       },
       "output": {
-        "width": 900,
-        "height": 1400
+        "width": 720,
+        "height": 1120,
+        "encoding": "lossy WebP quality 78"
       },
       "composition": {
         "room": "img_s3BattlePass_bg.png",
@@ -2011,53 +2004,6 @@
         "notes": "Official stepped curves retained; duplicate frames may be merged without changing timing"
       }
     }
-  },
-  {
-    "path": "derived/pet-diary/spine/scene-bailu-animated",
-    "file": "scene-bailu.webp",
-    "derived": {
-      "method": "Official Spine mesh/bone rendering; no rectangular atlas reconstruction",
-      "version": "3.8.99",
-      "renderer": "pixi.js 7.4.3 + @pixi-spine/runtime-3.8 4.0.6",
-      "animation": "loop",
-      "timeSeconds": 0.7,
-      "skin": "default",
-      "skeleton": {
-        "file": "bailu.skel",
-        "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/db/db837d36-678a-478e-a34c-fbe775e7338f.30c3a.bin",
-        "sha256": "815e3537db2760eb02d68009e06cd10fb4b2c889d5ebf6be616e9793c0b84671"
-      },
-      "atlas": {
-        "file": "bailu.atlas",
-        "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/import/db/db837d36-678a-478e-a34c-fbe775e7338f.42f64.json",
-        "sha256": "37a55192ad3d855f03d5b83a005cc4883aa26f12c35457b622bc3d5f8559b36d"
-      },
-      "texture": {
-        "file": "bailu.png",
-        "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/90/902f4ec8-5cd7-440a-8d52-065b5c0667e6.3aba0.png",
-        "sha256": "dba98e1d906f84f7ab1b0bbe0242ee32d1e14f58d80da09ba623f4fef7214dae",
-        "bytes": 2943599
-      },
-      "output": {
-        "width": 900,
-        "height": 1604,
-        "crop": {
-          "x": -448,
-          "y": -799,
-          "width": 896,
-          "height": 1596
-        }
-      },
-      "animationExport": {
-        "durationSeconds": 6.666666666666667,
-        "sampleFps": 12,
-        "sampleFrames": 80,
-        "loop": 0,
-        "encoding": "Direct RGBA PNG frames + img2webp 1.6.0 -min_size -sharp_yuv -lossy -q 85 -m 6",
-        "notes": "Fixed crop matches the existing static scene; official loop retained."
-      }
-    },
-    "sha256": "2523827e1611d073ce1b020a0c7fed17f8e21e24c17332bbb6311a1026875c2e"
   },
   {
     "path": "derived/pet-diary/escort/dog-walk-static",

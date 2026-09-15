@@ -1,9 +1,32 @@
 const process = require('node:process');
 
+const DEFAULT_CLIENT_VERSION = '1.14.0.4_20260911';
+
+function parseClientVersion(value) {
+    const match = String(value || '').trim().match(/^(\d+(?:\.\d+){2,4})_(\d{8})$/);
+    return match ? { parts: match[1].split('.').map(Number), date: Number(match[2]) } : null;
+}
+
+function resolveClientVersion(value) {
+    const version = String(value || '').trim();
+    const candidate = parseClientVersion(version);
+    const baseline = parseClientVersion(DEFAULT_CLIENT_VERSION);
+    if (!candidate || !baseline) return version || DEFAULT_CLIENT_VERSION;
+    if (candidate.date !== baseline.date) {
+        return candidate.date < baseline.date ? DEFAULT_CLIENT_VERSION : version;
+    }
+    const width = Math.max(candidate.parts.length, baseline.parts.length);
+    for (let index = 0; index < width; index += 1) {
+        const delta = (candidate.parts[index] || 0) - (baseline.parts[index] || 0);
+        if (delta !== 0) return delta < 0 ? DEFAULT_CLIENT_VERSION : version;
+    }
+    return version;
+}
+
 // 默认系统配置
 const DEFAULT_SYSTEM_CONFIG = {
     serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
-    clientVersion: '1.13.0.5_20260723',
+    clientVersion: DEFAULT_CLIENT_VERSION,
     platform: 'qq',
     os: 'iOS'
 };
@@ -38,7 +61,7 @@ function updateRuntimeConfig(config) {
         CONFIG.serverUrl = config.serverUrl;
     }
     if (config.clientVersion && typeof config.clientVersion === 'string') {
-        CONFIG.clientVersion = config.clientVersion;
+        CONFIG.clientVersion = resolveClientVersion(config.clientVersion);
     }
     if (config.platform && typeof config.platform === 'string') {
         CONFIG.platform = config.platform;
@@ -84,9 +107,11 @@ const PHASE_NAMES = ['未知', '种子', '发芽', '小叶', '大叶', '开花',
 
 module.exports = {
     CONFIG,
+    DEFAULT_CLIENT_VERSION,
     PlantPhase,
     PHASE_NAMES,
     updateRuntimeConfig,
     getRuntimeConfig,
-    getDefaultSystemConfig
+    getDefaultSystemConfig,
+    resolveClientVersion,
 };
