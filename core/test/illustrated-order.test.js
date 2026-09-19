@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  buildIllustratedItem,
   sortIllustratedItems,
 } = require('../src/controllers/admin-illustrated-helpers');
 
@@ -29,4 +30,27 @@ test('items without a tier are placed after configured illustrated tiers', () =>
     items.map(item => item.seedId),
     [204006, 204007],
   );
+});
+
+test('illustrated item exposes server-provided mutant wish progress', () => {
+  const item = buildIllustratedItem({
+    seed_id: 204009,
+    illustrated_tier: 4,
+    guarantee_info: {
+      progress_type: 4,
+      current: 14,
+      total: 60,
+    },
+  }, {
+    seedGoodsMap: new Map(),
+    userLevel: 1,
+    adminLogger: { info() {} },
+    nongmeFruitMap: new Map(),
+  });
+
+  assert.deepEqual(item.wishProgress, {
+    type: 4,
+    current: 14,
+    total: 60,
+  });
 });

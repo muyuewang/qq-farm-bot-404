@@ -282,7 +282,12 @@ function startDailyRoutineTimer() {
     workerScheduler.setIntervalTask('daily_routine_interval', 60000, () => {
         if (!loginReady) return;
         const today = getLocalDateKey();
-        if (today === lastDailyRunDate) return;
+        if (today === lastDailyRunDate) {
+            // 分享资格在服务端日切后可能延迟刷新；服务内部有 10 分钟冷却，
+            // 持续检查可避免零点单次未命中后必须重连才能领取。
+            performDailyShare(false).catch(() => null);
+            return;
+        }
         lastDailyRunDate = today;
         runDailyRoutines(true)
             .then(() => runBadOnceOnStartup(true))

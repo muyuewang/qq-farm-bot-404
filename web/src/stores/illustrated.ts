@@ -13,6 +13,11 @@ export interface IllustratedItem {
   unlocked: boolean
   plantedCount?: number
   harvestCount?: number
+  wishProgress?: {
+    type: number
+    current: number
+    total: number
+  } | null
   canBuy?: boolean
   goodsId?: number
   price?: number

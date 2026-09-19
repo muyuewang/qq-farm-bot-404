@@ -119,6 +119,21 @@ function decodeIllustratedReplyRaw(rawBody) {
       const extraValue = getFieldValue(5);
       const rewardInfoBytes = getFieldBytes(6);
       const hasReward = getFieldValue(7);
+      const guaranteeInfoBytes = getFieldBytes(8);
+      const guaranteeInfoFields = guaranteeInfoBytes
+        ? scanProtobufMessage(guaranteeInfoBytes)
+        : [];
+      const getGuaranteeValue = (fieldNum) => {
+        const found = guaranteeInfoFields.find((f) => f.field === fieldNum && f.wire === 0);
+        return found ? Number(found.value) : 0;
+      };
+      const guaranteeInfo = guaranteeInfoBytes
+        ? {
+            progress_type: getGuaranteeValue(1),
+            current: getGuaranteeValue(2),
+            total: getGuaranteeValue(3),
+          }
+        : null;
 
       return {
         fruitId,
@@ -130,6 +145,7 @@ function decodeIllustratedReplyRaw(rawBody) {
         extraValue,
         rewardInfoBase64: rewardInfoBytes ? rewardInfoBytes.toString('base64') : '',
         hasReward: hasReward > 0,
+        guaranteeInfo,
       };
     })
     .filter((item) => item.fruitId > 0);
@@ -209,6 +225,7 @@ async function getIllustratedListV2(refresh = false, illustratedType = 1) {
         harvest_count: 0,
         category: 1,
         has_reward: item.hasReward,
+        guarantee_info: item.guaranteeInfo,
       }));
       return { items, ...summary, __raw: raw };
     }

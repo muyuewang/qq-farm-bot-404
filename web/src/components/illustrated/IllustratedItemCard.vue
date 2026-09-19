@@ -20,6 +20,7 @@ const imageError = ref(false)
 const L = {
   planted: '\u79CD\u690D',
   harvest: '\u6536\u83B7',
+  wishProgress: '\u5FC3\u613F\u8FDB\u5EA6',
   price: '\u4EF7\u683C',
   gold: '\u91D1\u5E01',
   buy: '\u7ACB\u5373\u8D2D\u4E70',
@@ -30,6 +31,7 @@ const L = {
 watch(() => props.item?.image, () => {
   imageError.value = false
 })
+
 </script>
 
 <template>
@@ -77,6 +79,9 @@ watch(() => props.item?.image, () => {
       <div class="mt-2 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
         <div class="truncate">
           {{ L.planted }} {{ item.plantedCount || 0 }} / {{ L.harvest }} {{ item.harvestCount || 0 }}
+        </div>
+        <div v-if="Number(item.wishProgress?.total) > 0" class="truncate text-pink-600 font-semibold dark:text-pink-400">
+          {{ L.wishProgress }} {{ item.wishProgress.current || 0 }}/{{ item.wishProgress.total }}
         </div>
         <div class="truncate">
           {{ progressHint }}

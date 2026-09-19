@@ -24,6 +24,14 @@ message IllustratedItem {
     int32 harvest_count = 5;
     bytes reward_info = 6;
     bool has_reward = 7;
+    IllustratedGuaranteeInfo guarantee_info = 8;
+}
+
+// Only present for mutant illustrated entries whose wish guarantee is enabled.
+message IllustratedGuaranteeInfo {
+    int32 progress_type = 1;
+    int32 current = 2;
+    int32 total = 3;
 }
 
 message GetIllustratedListV2Reply {
