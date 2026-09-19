@@ -408,7 +408,9 @@ const DEFAULT_INTERVALS = {
     farmMin: 2,
     farmMax: 5,
     helpMin: 30,
-    helpMax: 35
+    helpMax: 35,
+    stealMin: 25,
+    stealMax: 30
 };
 
 /** 默认静默时段 */
@@ -444,6 +446,7 @@ const DEFAULT_ACCOUNT_CONFIG = {
     auto2x2SyncBuy: false,
     prioritizeGrowthTasks: false,
     plantSeedPriority: [],
+    stealDelaySeconds: 1,
     friendBadRetryDate: '',
     intervals: DEFAULT_INTERVALS,
     friendQuietHours: DEFAULT_QUIET_HOURS,
@@ -645,7 +648,11 @@ function normalizeIntervals(raw) {
     let helpMax = toInt(input.helpMax, 35);
     if (helpMin > helpMax) [helpMin, helpMax] = [helpMax, helpMin];
 
-    return { ...input, farm, farmMin, farmMax, helpMin, helpMax };
+    let stealMin = toInt(input.stealMin, 25);
+    let stealMax = toInt(input.stealMax, 30);
+    if (stealMin > stealMax) [stealMin, stealMax] = [stealMax, stealMin];
+
+    return { ...input, farm, farmMin, farmMax, helpMin, helpMax, stealMin, stealMax };
 }
 
 // ==================== 配置克隆/合并 ====================
@@ -805,6 +812,9 @@ function normalizeAccountConfig(raw, fallbackConfig = accountFallbackConfig) {
     if (input.plantSeedPriority !== undefined && input.plantSeedPriority !== null) {
         cfg.plantSeedPriority = normalizeBagSeedPriority(input.plantSeedPriority);
     }
+    if (input.stealDelaySeconds !== undefined && input.stealDelaySeconds !== null) {
+        cfg.stealDelaySeconds = Math.max(0, Math.min(60, Number(input.stealDelaySeconds) || 0));
+    }
     if (input.prioritizeGrowthTasks !== undefined && input.prioritizeGrowthTasks !== null) {
         cfg.prioritizeGrowthTasks = input.prioritizeGrowthTasks === true;
     }
@@ -901,6 +911,7 @@ function pickDefaultPlanConfig(raw) {
         prioritize2x2Crops: cfg.prioritize2x2Crops === true,
         auto2x2SyncBuy: cfg.auto2x2SyncBuy === true,
         plantSeedPriority: [...(cfg.plantSeedPriority || [])],
+        stealDelaySeconds: Math.max(0, Math.min(60, Number(cfg.stealDelaySeconds) || 0)),
         prioritizeGrowthTasks: cfg.prioritizeGrowthTasks === true || cfg.plantingStrategy === 'task_priority',
         intervals: { ...cfg.intervals },
         friendQuietHours: { ...cfg.friendQuietHours },
@@ -1240,6 +1251,7 @@ function getConfigSnapshot(accountId) {
         prioritize2x2Crops: cfg.prioritize2x2Crops === true,
         auto2x2SyncBuy: cfg.auto2x2SyncBuy === true,
         plantSeedPriority: [...(cfg.plantSeedPriority || [])],
+        stealDelaySeconds: Math.max(0, Math.min(60, Number(cfg.stealDelaySeconds) || 0)),
         prioritizeGrowthTasks: cfg.prioritizeGrowthTasks === true || cfg.plantingStrategy === 'task_priority',
         friendBadRetryDate: String(cfg.friendBadRetryDate || ''),
         intervals: { ...cfg.intervals },
@@ -1303,6 +1315,9 @@ function applyConfigSnapshot(patch = {}, opts = {}) {
     }
     if (patch.plantSeedPriority !== undefined && patch.plantSeedPriority !== null) {
         cfg.plantSeedPriority = normalizeBagSeedPriority(patch.plantSeedPriority);
+    }
+    if (patch.stealDelaySeconds !== undefined && patch.stealDelaySeconds !== null) {
+        cfg.stealDelaySeconds = Math.max(0, Math.min(60, Number(patch.stealDelaySeconds) || 0));
     }
     if (patch.prioritizeGrowthTasks !== undefined && patch.prioritizeGrowthTasks !== null) {
         cfg.prioritizeGrowthTasks = patch.prioritizeGrowthTasks === true;
@@ -1435,6 +1450,11 @@ function getPrioritizeGrowthTasks(accountId) {
 
 function getPrioritize2x2Crops(accountId) {
     return getAccountConfigSnapshot(accountId).prioritize2x2Crops === true;
+}
+
+function getStealDelaySeconds(accountId) {
+    const cfg = getAccountConfigSnapshot(accountId);
+    return Math.max(0, Math.min(60, Number(cfg.stealDelaySeconds) || 0));
 }
 
 function getAuto2x2SyncBuy(accountId) {
@@ -2045,6 +2065,7 @@ module.exports = {
     getPrioritize2x2Crops,
     getAuto2x2SyncBuy,
     getPlantSeedPriority,
+    getStealDelaySeconds,
     getPrioritizeGrowthTasks,
     getFriendBadRetryDate,
     getBagSeedPriority,
