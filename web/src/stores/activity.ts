@@ -305,7 +305,12 @@ export interface RainPoemActivityData {
 }
 
 export interface CharityFlowerActivityData {
-  uid: string; title: string; activityId: number; startTime: number; endTime: number; active: boolean
+  uid: string
+  title: string
+  activityId: number
+  startTime: number
+  endTime: number
+  active: boolean
   love: { itemId: number, count: number, personalScore: number, canDonate: boolean }
   global: { score: number, target: number, amountYuan: number, targetYuan: number, reached: boolean }
   share: { status: number, claimable: boolean, claimed: boolean, rewards: QixiItem[] }
@@ -462,6 +467,7 @@ export const useActivityStore = defineStore('activity', () => {
     starRecordClaimLoading.value = false
     qingmeiClaimLoading.value = false
     qingmeiSellLoading.value = false
+    petDiaryLoading.value = false
     heluError.value = ''
   }
 
@@ -482,7 +488,8 @@ export const useActivityStore = defineStore('activity', () => {
     rainPoemLoading.value = true
     try {
       const { data } = await api.get('/api/activity/rain-poem', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId))) rainPoemActivity.value = data.activity || null
+      if (data.ok && isCurrentAccount(String(accountId)))
+        rainPoemActivity.value = data.activity || null
       return data
     }
     finally { rainPoemLoading.value = false }
@@ -492,7 +499,8 @@ export const useActivityStore = defineStore('activity', () => {
     charityFlowerLoading.value = true
     try {
       const { data } = await api.get('/api/activity/charity-flower', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId))) charityFlowerActivity.value = data.activity || null
+      if (data.ok && isCurrentAccount(String(accountId)))
+        charityFlowerActivity.value = data.activity || null
       return data
     }
     finally { charityFlowerLoading.value = false }

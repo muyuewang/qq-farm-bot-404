@@ -38,6 +38,7 @@ export function useStrategySettings({
     plantingStrategy: 'max_exp',
     prioritize2x2Crops: false,
     auto2x2SyncBuy: false,
+    prioritizeGrowthTasks: false,
     bagSeedPriority: [] as number[],
     bagSeedKnownIds: [] as number[],
     bagSeedFallbackStrategy: 'level',
@@ -48,13 +49,13 @@ export function useStrategySettings({
   })
 
   const plantingStrategyOptions = [
+    { label: '背包种子优先', value: 'bag_priority' },
+    { label: '任务作物优先', value: 'task_priority' },
     { label: '最高等级作物', value: 'level' },
     { label: '最大经验/时', value: 'max_exp' },
     { label: '最大普通肥经验/时', value: 'max_fert_exp' },
     { label: '最大净利润/时', value: 'max_profit' },
     { label: '最大普通肥净利润/时', value: 'max_fert_profit' },
-    { label: '背包种子优先', value: 'bag_priority' },
-    { label: '任务作物优先', value: 'task_priority' },
     { label: '优先种植种子', value: 'seed_priority' },
   ]
 
@@ -74,7 +75,7 @@ export function useStrategySettings({
   watchEffect(async () => {
     const requestId = ++strategyPreviewRequestId
     let strategy = localStrategySettings.value.plantingStrategy
-    if (strategy === 'bag_priority') {
+    if (strategy === 'bag_priority' || strategy === 'task_priority') {
       strategy = localStrategySettings.value.bagSeedFallbackStrategy || 'level'
     }
     if (!seeds.value || seeds.value.length === 0) {
@@ -140,9 +141,12 @@ export function useStrategySettings({
   function syncLocalStrategySettings() {
     if (settings.value) {
       localStrategySettings.value = JSON.parse(JSON.stringify({
-        plantingStrategy: settings.value.plantingStrategy,
+        plantingStrategy: settings.value.prioritizeGrowthTasks === true
+          ? 'task_priority'
+          : settings.value.plantingStrategy,
         prioritize2x2Crops: settings.value.prioritize2x2Crops === true,
         auto2x2SyncBuy: settings.value.auto2x2SyncBuy === true,
+        prioritizeGrowthTasks: settings.value.prioritizeGrowthTasks === true,
         bagSeedPriority: settings.value.bagSeedPriority ?? [],
         bagSeedKnownIds: settings.value.bagSeedKnownIds ?? [],
         bagSeedFallbackStrategy: settings.value.bagSeedFallbackStrategy ?? 'level',
@@ -171,6 +175,7 @@ export function useStrategySettings({
       const fullSettings = {
         ...settings.value,
         ...localStrategySettings.value,
+        prioritizeGrowthTasks: localStrategySettings.value.plantingStrategy === 'task_priority',
         automation: getAutomationSettings().automation,
       }
       const res = await settingStore.saveSettings(String(currentAccountId.value), fullSettings)

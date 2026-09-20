@@ -81,6 +81,7 @@ const unlocked = computed(() => pet.value?.stories.filter(s => s.unlocked).lengt
 const seedRewards = computed(() => pet.value?.seeds.days.find(d => d.claimable && !d.claimed)?.rewards || pet.value?.seeds.days[0]?.rewards || [])
 const claimableTreasures = computed(() => pet.value?.treasures.some(t => t.status === 3 || (t.status === 2 && t.endTime > 0 && t.endTime <= now.value)))
 const escortingCount = computed(() => pet.value?.treasures.filter(t => t.status === 2 && t.endTime > now.value).length || 0)
+const homeTreasures = computed(() => [...(pet.value?.treasures || [])].sort((a, b) => a.createdTime - b.createdTime))
 const treasureImage = '/game-config/seed_images_named/1030_%E5%BE%85%E6%8A%A4%E9%80%81%E5%AE%9D%E8%97%8F.png'
 const luckyStars = computed(() => pet.value?.balances.find(item => item.id === '1029'))
 const activityRemaining = computed(() => {
@@ -164,6 +165,17 @@ function itemText(items: PetItem[] = []) {
 function remaining(end: number) {
   const minutes = Math.max(0, Math.ceil((end - now.value) / 60000))
   return minutes > 0 ? `${Math.floor(minutes / 60)}小时${minutes % 60}分` : '已到结算时间'
+}
+function treasureStatus(status: number, endTime: number) {
+  if (status === 3 || (status === 2 && endTime > 0 && endTime <= now.value))
+    return '待领取'
+  if (status === 2)
+    return `护送中 · 剩余 ${remaining(endTime)}`
+  if (status === 1)
+    return '待护送 · 正在排队'
+  if (status === 4)
+    return '已领取'
+  return '状态待刷新'
 }
 function accountId() {
   return String(accountStore.currentAccountId || '')
@@ -275,7 +287,7 @@ watch(pet, (value) => {
             <div class="pet-home-top">
               <article class="pet-garden" aria-label="比熊之家">
                 <div class="pet-room">
-                  <img class="pet-room-scene" :src="art(pet.nurture.adult ? 'scene-home-adult' : 'scene-home-puppy')" :alt="pet.nurture.adult ? '成年比熊坐在家中的爪印地毯上' : '幼年比熊坐在家中的爪印地毯上'">
+                  <img class="pet-room-scene" :src="`/activity/pet-diary/scene-home-${pet.nurture.adult ? 'adult' : 'puppy'}.webp?v=20260912`" :alt="pet.nurture.adult ? '成年比熊坐在家中的爪印地毯上' : '幼年比熊坐在家中的爪印地毯上'" decoding="async">
                   <div class="pet-dog-plaque">
                     <span class="pet-rarity">
                       <img :src="art(pet.nurture.adult ? 'img_pet_rarity4' : 'img_pet_rarity2')" alt="">
@@ -352,6 +364,14 @@ watch(pet, (value) => {
                   <div v-if="!pet.treasures.length" class="pet-empty pet-empty--small">
                     <img :src="treasureImage" alt="">暂无待护送宝藏
                   </div>
+                  <article v-for="treasure in homeTreasures" :key="treasure.id" class="pet-treasure">
+                    <img :src="treasure.item.image || treasureImage" :alt="treasure.item.name">
+                    <div>
+                      <strong>{{ treasure.item.name }} ×{{ treasure.item.count }}</strong>
+                      <span>{{ treasureStatus(treasure.status, treasure.endTime) }}</span>
+                      <b>初始价值 {{ treasure.originalCount }} · 已被挑战 {{ treasure.plunderCount }}/{{ treasure.maxPlunderCount || '不限' }}</b>
+                    </div>
+                  </article>
                 </article>
                 <article class="pet-card">
                   <div class="pet-section-title">
@@ -406,9 +426,9 @@ watch(pet, (value) => {
           <main v-else-if="tab === 'stories'" class="pet-story-section" aria-label="爪印手记">
             <div class="pet-page-background" aria-hidden="true">
               <picture>
-                <source :srcset="art('scene-stories')" media="(prefers-reduced-motion: reduce)">
+                <source srcset="/activity/pet-diary/scene-stories-static.webp?v=20260912" media="(prefers-reduced-motion: reduce)" type="image/webp">
                 <source srcset="/activity/pet-diary/scene-stories.webp?v=20260910-hd" type="image/webp">
-                <img :src="art('scene-stories')" alt="" width="1020" height="460">
+                <img src="/activity/pet-diary/scene-stories-static.webp?v=20260912" alt="" width="1020" height="460" decoding="async">
               </picture>
             </div>
             <div class="pet-paper pet-story-paper">
@@ -418,7 +438,7 @@ watch(pet, (value) => {
               </div><div class="pet-stories">
                 <article v-for="story in pet.stories" :key="story.order" class="pet-story" :class="{ locked: !story.unlocked }">
                   <div class="pet-photo">
-                    <img v-if="story.unlocked && story.photo" :src="story.photo" :alt="`第 ${story.order} 则手记照片`"><img v-else class="pet-photo-placeholder" :src="art('img_s3PhotoWall_emptyBg')" :alt="`第 ${story.order} 则手记尚未解锁`">
+                    <img v-if="story.unlocked && story.photo" :src="story.photo" :alt="`第 ${story.order} 则手记照片`" loading="lazy" decoding="async"><img v-else class="pet-photo-placeholder" :src="art('img_s3PhotoWall_emptyBg')" :alt="`第 ${story.order} 则手记尚未解锁`" loading="lazy" decoding="async">
                   </div><img v-if="story.unlocked" class="pet-photo-pin" :src="art('img_s3PhotoWall_ding')" alt=""><img v-if="story.unlocked && story.captionImage" class="pet-caption" :src="story.captionImage" alt="比熊成长手记"><p v-else-if="story.unlocked && story.caption">
                     {{ story.caption }}
                   </p><button v-if="story.unlocked" class="pet-button pet-story-claim" :disabled="busy || story.claimed" @click="diary.operate('story', { order: story.order })">
@@ -432,9 +452,9 @@ watch(pet, (value) => {
           <main v-else-if="tab === 'shop'" class="pet-shop" aria-label="拾物小铺">
             <div class="pet-page-background" aria-hidden="true">
               <picture>
-                <source :srcset="art('scene-shop')" media="(prefers-reduced-motion: reduce)">
+                <source srcset="/activity/pet-diary/scene-shop-static.webp?v=20260912" media="(prefers-reduced-motion: reduce)" type="image/webp">
                 <source srcset="/activity/pet-diary/scene-shop.webp?v=20260910-hd" type="image/webp">
-                <img :src="art('scene-shop')" alt="" width="1020" height="450">
+                <img src="/activity/pet-diary/scene-shop-static.webp?v=20260912" alt="" width="1020" height="450" decoding="async">
               </picture>
             </div>
             <div class="pet-paper pet-shop-paper">
@@ -462,9 +482,8 @@ watch(pet, (value) => {
               <div class="pet-solar-scene" :class="{ 'pet-solar-scene--bailu': currentTerm.name.includes('白露') }">
                 <template v-if="currentTerm.name.includes('白露')">
                   <picture>
-                    <source :srcset="art('scene-bailu')" media="(prefers-reduced-motion: reduce)">
-                    <source srcset="/activity/pet-diary/scene-bailu.webp?v=20260910-motion" type="image/webp">
-                    <img class="pet-solar-landscape" :src="art('scene-bailu')" alt="白露节气，小童在芦苇水塘中用荷叶接露水">
+                    <source srcset="/activity/pet-diary/scene-bailu-static.webp?v=20260912" type="image/webp">
+                    <img class="pet-solar-landscape" src="/activity/pet-diary/scene-bailu-static.webp?v=20260912" alt="白露节气，小童在芦苇水塘中用荷叶接露水" decoding="async">
                   </picture>
                   <div class="pet-solar-lettering">
                     <img :src="art('img_S3Jieqi_title_bailu_trim')" alt="白露"><img :src="art('img_S3Jieqi_txt_bailu_trim')" alt="白露节令题诗">
@@ -2137,8 +2156,28 @@ watch(pet, (value) => {
   .pet-header {
     position: relative;
     inset: auto;
-    padding: 20px 28px;
-    flex-wrap: wrap;
+    padding: 16px;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .pet-brand {
+    flex: 1;
+    min-width: 0;
+  }
+  .pet-heading {
+    flex: 1;
+  }
+  .pet-heading h1 img {
+    width: clamp(150px, 32cqw, 210px);
+  }
+  .pet-header-tools {
+    flex: none;
+    gap: 6px;
+  }
+  .pet-wallet {
+    right: auto;
+    left: 0;
+    width: min(300px, calc(100cqw - 32px));
   }
   .pet-home-top {
     display: block;
@@ -2180,9 +2219,6 @@ watch(pet, (value) => {
   .pet-stories {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .pet-heading h1 img {
-    width: 230px;
-  }
   .pet-solar-gift {
     grid-template-columns: 1fr;
   }
@@ -2211,7 +2247,7 @@ watch(pet, (value) => {
     gap: 6px;
   }
   .pet-heading h1 img {
-    width: 168px;
+    width: clamp(120px, 32cqw, 168px);
   }
   .pet-heading h1 {
     margin-bottom: 7px;
@@ -2442,6 +2478,22 @@ watch(pet, (value) => {
   }
   .pet-exchange-product h3 {
     font-size: 17px;
+  }
+}
+@container (max-width: 430px) {
+  .pet-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pet-brand {
+    grid-column: 1 / -1;
+  }
+  .pet-header-tools {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .pet-wallet {
+    width: min(300px, calc(100cqw - 32px));
   }
 }
 @container (max-width: 350px) {

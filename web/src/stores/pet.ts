@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/api'
 
-export interface PetDog { id: number, name: string, image: string, desc: string, level: number, rarity: number, owned: boolean, deployed: boolean }
+export interface PetDog { id: number, name: string, image: string, desc: string, level: number, rarity: number, owned: boolean, activatable: boolean, deployed: boolean }
 export interface PetFood { id: number, name: string, image: string, count: number, days: number, duration: number }
 export interface CapitalMode { enabled: boolean, dogId: number, leadSeconds: number }
 
@@ -45,6 +45,7 @@ export const usePetStore = defineStore('pet', () => {
     }
     finally { mutating.value = false }
   }
+  const activate = (accountId: string, dogId: number) => mutate(accountId, '/api/dog/activate', { dogId })
   const deploy = (accountId: string, dogId: number) => mutate(accountId, '/api/dog/deploy', { dogId })
   const withdraw = (accountId: string) => mutate(accountId, '/api/dog/withdraw')
   const feed = (accountId: string, foodId: number, count: number) => mutate(accountId, '/api/dog/feed', { foodId, count })
@@ -54,5 +55,5 @@ export const usePetStore = defineStore('pet', () => {
       throw new Error(data?.error || '保存失败')
     capitalMode.value = data.data.capitalMode
   }
-  return { overview, logs, capitalMode, loading, mutating, fetchOverview, fetchLogs, fetchCapitalMode, deploy, withdraw, feed, saveCapitalMode }
+  return { overview, logs, capitalMode, loading, mutating, fetchOverview, fetchLogs, fetchCapitalMode, activate, deploy, withdraw, feed, saveCapitalMode }
 })

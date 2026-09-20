@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import type { Account } from '@/stores/account'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import api from '@/api'
-import AccountModal from '@/components/AccountModal.vue'
 import AccountCareerModal from '@/components/AccountCareerModal.vue'
+import AccountModal from '@/components/AccountModal.vue'
 import RemarkModal from '@/components/RemarkModal.vue'
-import type { Account } from '@/stores/account'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
 
@@ -238,7 +238,7 @@ async function handleAccountSaved() {
       class="max-w-[min(76vw,280px)] flex items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-gray-100/70 dark:hover:bg-gray-700/50"
       @click="toggleDropdown"
     >
-      <div class="h-9 w-9 flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200 transition hover:ring-2 hover:ring-[var(--theme-primary)] dark:bg-gray-700 dark:ring-gray-600" title="查看角色生涯" @click="openCareer">
+      <div class="h-9 w-9 flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200 transition dark:bg-gray-700 hover:ring-2 dark:ring-gray-600 hover:ring-[var(--theme-primary)]" title="查看角色生涯" @click="openCareer">
         <img
           v-if="shouldShowAvatar(currentAccount)"
           :src="currentAvatarSrc"
@@ -281,7 +281,7 @@ async function handleAccountSaved() {
       <div
         v-if="showAccountDropdown"
         class="fixed z-[9999] overflow-hidden border border-gray-200/70 rounded-xl bg-white/95 py-1 shadow-xl backdrop-blur-sm dark:border-gray-700/70 dark:bg-gray-900/95"
-        :style="{ top: dropdownPos.top + 'px', left: dropdownPos.left + 'px', width: dropdownPos.width + 'px' }"
+        :style="{ top: `${dropdownPos.top}px`, left: `${dropdownPos.left}px`, width: `${dropdownPos.width}px` }"
       >
         <div class="custom-scrollbar max-h-72 overflow-y-auto">
           <template v-if="visibleAccounts.length > 0">

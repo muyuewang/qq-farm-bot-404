@@ -244,6 +244,7 @@ message ActivityNode {
     WeatherTaskInfo weather_tasks = 117;
     WeatherResearchInfo weather_research = 118;
     ActivityBodyCharityFlower charity_flower = 116;
+    ActivityBodyPetDiary pet_diary = 115;
 }
 
 enum CharityFlowerShareStatus {
@@ -386,3 +387,63 @@ message OperateReply {
     CharityFlowerSetComplianceAgreedRsp charity_flower_set_compliance_agreed = 139;
     TechTreeSubmitNodeRsp tech_tree_submit_node = 140;
 }
+
+// 萌宠日记（S3 比熊萌宠主题赛季，uid = SEASON_BEAR_CAMPAIGN）活动体，
+// 对应 ActivityNode 字段 115。
+// 字段号来自 2026-09-10 官方客户端 List/Operate 明文响应；
+// 子字段语义为结合官方活动规则与多帧差分推断命名，尚未与官方生成代码逐字段核对，
+// 详见 core/docs/pet-diary-protocol-recovery.md。
+message ActivityBodyPetDiary {
+    PetDiaryPet pet = 1;                // 115.1 比熊成长状态
+    PetDiaryHome home = 2;              // 115.2 比熊之家解锁状态
+    PetDiaryEscort escort = 3;          // 115.3 寻宝/宝藏护送状态
+    PetDiaryPhotoWall photo_wall = 4;   // 115.4 爪印手记照片墙
+    PetDiaryPouch pouch = 6;            // 115.6 锦囊
+    // 115.7 / 115.8 / 115.9 在抓包中为空子消息，含义未确认，暂不解析。
+}
+
+// 115.1 比熊成长状态。抓包观察到 {1: 1}、{3: 700}、{4: 1} 三个标量。
+message PetDiaryPet {
+    int64 stage = 1;      // 阶段，观察到恒为 1
+    int64 progress = 3;   // 成长进度/投喂量，推断
+    int64 state = 4;      // 状态，观察到恒为 1
+}
+
+// 115.2 比熊之家状态。抓包仅观察到 {1: 1}。
+message PetDiaryHome {
+    int64 state = 1;
+}
+
+// 115.3 寻宝/宝藏护送状态。抓包观察到 {3: 100} 与 {4: {id:1028, count:700}}。
+// 1028 为「萌宠元气糕」，100 与规则中「100 点不可掠夺保底资金」一致。
+message PetDiaryEscort {
+    int64 guard = 3;       // 宝藏保底资金，观察到恒为 100
+    corepb.Item cake = 4;  // 元气糕相关记录，推断为寻宝消耗或库存
+}
+
+// 115.4.1 爪印手记单个相册片段。
+message PetDiaryPhotoEntry {
+    int64 id = 1;          // 片段序号，1..9
+    int64 unlocked = 2;    // 是否已解锁
+    int64 progress = 3;    // 解锁/领取进度，推断
+    string content = 4;    // JSON 字符串：{"photo": <spriteFrame>, "say": <spriteFrame>}
+    int64 claimed = 5;     // 是否已领取故事奖励
+}
+
+message PetDiaryPhotoWall {
+    repeated PetDiaryPhotoEntry entries = 1;
+}
+
+// 115.6 锦囊。抓包观察到 {2: "f"}、{4: {1,2,3}}、{6: 1}。
+message PetDiaryPouch {
+    string flag = 2;       // 观察到恒为 "f"
+    PetDiaryPouchSlot slot = 4;
+    int64 state = 6;       // 观察到恒为 1
+}
+
+message PetDiaryPouchSlot {
+    int64 id = 1;          // 观察到 105
+    int64 type = 2;        // 观察到 1
+    int64 count = 3;       // 观察到 2
+}
+

@@ -244,10 +244,14 @@ function featureSummary(group: ActivityGroup) {
 function contentSummary(group: ActivityGroup) {
   const summary = featureSummary(group)
   const parts = [`节点 ${summary.nodes}`]
-  if (summary.exchange) parts.push(`兑换 ${summary.exchange}`)
-  if (summary.randomShop) parts.push(`刷新店 ${summary.randomShop}`)
-  if (summary.draw) parts.push(`抽奖 ${summary.draw}`)
-  if (summary.starRecord) parts.push(`图鉴 ${summary.starRecord}`)
+  if (summary.exchange)
+    parts.push(`兑换 ${summary.exchange}`)
+  if (summary.randomShop)
+    parts.push(`刷新店 ${summary.randomShop}`)
+  if (summary.draw)
+    parts.push(`抽奖 ${summary.draw}`)
+  if (summary.starRecord)
+    parts.push(`图鉴 ${summary.starRecord}`)
   return parts.join(' · ')
 }
 
@@ -375,11 +379,11 @@ onMounted(loadUpdateStatus)
     </div>
 
     <template v-if="report">
-      <div class="flex flex-col gap-3 rounded-lg border border-gray-200 px-4 py-3 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-3 border border-gray-200 rounded-lg px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" :class="statusClass">{{ statusLabel }}</span>
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
+            <span class="text-sm text-gray-900 font-medium dark:text-white">
               {{ report.online?.accountName || '等待在线账号' }}
             </span>
             <span class="text-xs text-gray-500">{{ formatTime(report.online?.scannedAt || report.scannedAt) }}</span>
@@ -394,7 +398,7 @@ onMounted(loadUpdateStatus)
         </BaseButton>
       </div>
 
-      <div v-if="report.unknownActivityIds.length" class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+      <div v-if="report.unknownActivityIds.length" class="flex flex-wrap items-center gap-2 border border-amber-200 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
         <span class="i-carbon-warning-alt shrink-0" />
         <strong>发现 {{ report.unknownActivityIds.length }} 个待适配节点</strong>
         <code v-for="id in report.unknownActivityIds" :key="id" class="rounded bg-white/70 px-1.5 py-0.5 text-xs dark:bg-gray-900/40">{{ id }}</code>
@@ -406,23 +410,27 @@ onMounted(loadUpdateStatus)
         </li>
       </ul>
 
-      <div v-if="!report.online?.available" class="rounded-lg border border-dashed border-gray-200 p-8 text-center dark:border-gray-700">
+      <div v-if="!report.online?.available" class="border border-gray-200 rounded-lg border-dashed p-8 text-center dark:border-gray-700">
         <span class="i-carbon-unlink mx-auto text-3xl text-gray-300" />
         <p class="mt-2 text-sm text-gray-500">
           {{ report.online?.error || '启动并连接任意账号后，定时器会自动读取服务端活动列表。' }}
         </p>
       </div>
 
-      <div v-else class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+      <div v-else class="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div class="flex items-baseline gap-2">
-              <h4 class="font-semibold text-gray-900 dark:text-white">全部活动</h4>
+              <h4 class="text-gray-900 font-semibold dark:text-white">
+                全部活动
+              </h4>
               <span class="text-xs text-gray-400">{{ allActivityGroups.length }} 个</span>
             </div>
-            <p class="mt-0.5 text-xs text-gray-500">按开始日期倒序 · 点击卡片查看节点详情</p>
+            <p class="mt-0.5 text-xs text-gray-500">
+              按开始日期倒序 · 点击卡片查看节点详情
+            </p>
           </div>
-          <div class="inline-flex max-w-full overflow-x-auto rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900" role="group" aria-label="活动状态筛选">
+          <div class="max-w-full inline-flex overflow-x-auto rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900" role="group" aria-label="活动状态筛选">
             <button
               v-for="filter in activityStatusFilters"
               :key="filter.key"
@@ -435,55 +443,59 @@ onMounted(loadUpdateStatus)
             </button>
           </div>
         </div>
-        <div v-if="filteredActivityGroups.length" class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <button
-              v-for="group in filteredActivityGroups"
-              :key="group.id"
-              class="relative overflow-hidden rounded-lg border bg-gradient-to-br from-white via-gray-50 to-slate-100 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 dark:from-gray-800 dark:via-gray-850 dark:to-gray-900"
-              :class="[
-                activityLifecycleStatus(group) === 'ended' && 'opacity-70',
-                selectedActivityId === group.id ? 'border-cyan-500 ring-1 ring-cyan-500' : 'border-gray-200 dark:border-gray-700',
-              ]"
-              @click="selectedActivityId = selectedActivityId === group.id ? null : group.id"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" :class="lifecycleClass(activityLifecycleStatus(group))">
-                  <span :class="activityLifecycleStatus(group) === 'active' ? 'i-carbon-events' : activityLifecycleStatus(group) === 'upcoming' ? 'i-carbon-time' : activityLifecycleStatus(group) === 'ended' ? 'i-carbon-checkmark' : 'i-carbon-warning-alt'" />
-                  {{ lifecycleLabel(activityLifecycleStatus(group)) }}
-                </span>
-                <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="groupHasUnknownNode(group) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200'">
-                  {{ groupHasUnknownNode(group) ? '待适配' : '已适配' }}
-                </span>
-              </div>
-              <div class="mt-4">
-                <h6 class="text-lg font-semibold text-gray-900 dark:text-white">{{ group.title || `活动 ${group.id}` }}</h6>
-                <code class="mt-1 block text-xs text-gray-400">ID {{ group.id }}</code>
-                <div class="mt-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-300">
-                  <div class="flex items-start gap-2">
-                    <span class="i-carbon-calendar mt-0.5 shrink-0 text-gray-400" />
-                    <span>{{ formatActivityDate(group.startTime) }}</span>
-                  </div>
-                  <div class="flex items-start gap-2">
-                    <span class="i-carbon-flag mt-0.5 shrink-0 text-gray-400" />
-                    <span>{{ formatActivityDate(group.endTime) }}</span>
-                  </div>
+        <div v-if="filteredActivityGroups.length" class="grid mt-3 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <button
+            v-for="group in filteredActivityGroups"
+            :key="group.id"
+            class="dark:via-gray-850 relative overflow-hidden border rounded-lg from-white via-gray-50 to-slate-100 bg-gradient-to-br p-4 text-left shadow-sm transition dark:from-gray-800 dark:to-gray-900 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 hover:-translate-y-0.5"
+            :class="[
+              activityLifecycleStatus(group) === 'ended' && 'opacity-70',
+              selectedActivityId === group.id ? 'border-cyan-500 ring-1 ring-cyan-500' : 'border-gray-200 dark:border-gray-700',
+            ]"
+            @click="selectedActivityId = selectedActivityId === group.id ? null : group.id"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium" :class="lifecycleClass(activityLifecycleStatus(group))">
+                <span :class="activityLifecycleStatus(group) === 'active' ? 'i-carbon-events' : activityLifecycleStatus(group) === 'upcoming' ? 'i-carbon-time' : activityLifecycleStatus(group) === 'ended' ? 'i-carbon-checkmark' : 'i-carbon-warning-alt'" />
+                {{ lifecycleLabel(activityLifecycleStatus(group)) }}
+              </span>
+              <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="groupHasUnknownNode(group) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' : 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200'">
+                {{ groupHasUnknownNode(group) ? '待适配' : '已适配' }}
+              </span>
+            </div>
+            <div class="mt-4">
+              <h6 class="text-lg text-gray-900 font-semibold dark:text-white">
+                {{ group.title || `活动 ${group.id}` }}
+              </h6>
+              <code class="mt-1 block text-xs text-gray-400">ID {{ group.id }}</code>
+              <div class="mt-3 text-xs text-gray-600 space-y-1.5 dark:text-gray-300">
+                <div class="flex items-start gap-2">
+                  <span class="i-carbon-calendar mt-0.5 shrink-0 text-gray-400" />
+                  <span>{{ formatActivityDate(group.startTime) }}</span>
                 </div>
-                <div class="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-                  <span class="rounded bg-white/80 px-2 py-1 dark:bg-gray-800">{{ contentSummary(group) }}</span>
+                <div class="flex items-start gap-2">
+                  <span class="i-carbon-flag mt-0.5 shrink-0 text-gray-400" />
+                  <span>{{ formatActivityDate(group.endTime) }}</span>
                 </div>
               </div>
-              <span class="i-carbon-chevron-right absolute bottom-4 right-4 text-gray-300 transition" :class="selectedActivityId === group.id && 'rotate-90 text-cyan-500'" />
-            </button>
+              <div class="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                <span class="rounded bg-white/80 px-2 py-1 dark:bg-gray-800">{{ contentSummary(group) }}</span>
+              </div>
+            </div>
+            <span class="i-carbon-chevron-right absolute bottom-4 right-4 text-gray-300 transition" :class="selectedActivityId === group.id && 'rotate-90 text-cyan-500'" />
+          </button>
         </div>
-        <div v-else class="mt-3 rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500 dark:border-gray-700">
+        <div v-else class="mt-3 border border-gray-200 rounded-lg border-dashed p-8 text-center text-sm text-gray-500 dark:border-gray-700">
           当前状态下暂无活动
         </div>
 
-        <article v-if="selectedActivityGroup" class="mt-4 rounded-lg border border-cyan-200 bg-cyan-50/40 p-4 dark:border-cyan-900 dark:bg-cyan-950/20">
+        <article v-if="selectedActivityGroup" class="mt-4 border border-cyan-200 rounded-lg bg-cyan-50/40 p-4 dark:border-cyan-900 dark:bg-cyan-950/20">
           <div class="flex items-start justify-between gap-3">
             <div>
               <div class="flex flex-wrap items-center gap-2">
-                <h5 class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedActivityGroup.title || `活动 ${selectedActivityGroup.id}` }}</h5>
+                <h5 class="text-lg text-gray-900 font-semibold dark:text-white">
+                  {{ selectedActivityGroup.title || `活动 ${selectedActivityGroup.id}` }}
+                </h5>
                 <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="lifecycleClass(activityLifecycleStatus(selectedActivityGroup))">
                   {{ lifecycleLabel(activityLifecycleStatus(selectedActivityGroup)) }}
                 </span>
@@ -498,96 +510,40 @@ onMounted(loadUpdateStatus)
           </div>
 
           <div v-if="selectedActivityGroup.children?.length" class="mt-4">
-            <h6 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">功能节点</h6>
+            <h6 class="mb-2 text-sm text-gray-900 font-semibold dark:text-white">
+              功能节点
+            </h6>
             <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            <div
-              v-for="node in selectedActivityGroup.children"
-              :key="node.id"
-              class="rounded-lg border border-gray-200 bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <div class="flex items-start justify-between gap-2">
-                <span class="text-sm font-medium text-gray-900 dark:text-white">{{ activityNodeLabel(node) }}</span>
-                <code class="shrink-0 text-xs text-gray-400">{{ node.id }}</code>
+              <div
+                v-for="node in selectedActivityGroup.children"
+                :key="node.id"
+                class="border border-gray-200 rounded-lg bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <span class="text-sm text-gray-900 font-medium dark:text-white">{{ activityNodeLabel(node) }}</span>
+                  <code class="shrink-0 text-xs text-gray-400">{{ node.id }}</code>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                  <span v-if="node.features?.exchangeShop" class="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">兑换</span>
+                  <span v-if="node.features?.randomShop" class="rounded bg-violet-50 px-1.5 py-0.5 text-violet-700 dark:bg-violet-900/30 dark:text-violet-200">刷新店</span>
+                  <span v-if="node.features?.draw" class="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">抽奖</span>
+                  <span v-if="node.features?.starRecord" class="rounded bg-teal-50 px-1.5 py-0.5 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">图鉴</span>
+                  <span v-if="node.features?.weatherTasks" class="rounded bg-orange-50 px-1.5 py-0.5 text-orange-700 dark:bg-orange-900/30 dark:text-orange-200">任务</span>
+                  <span v-if="node.features?.weatherResearch" class="rounded bg-cyan-50 px-1.5 py-0.5 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">研究</span>
+                  <span v-if="node.features?.qixiBridge" class="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200">建设</span>
+                  <span v-if="node.features?.qixiGift" class="rounded bg-pink-50 px-1.5 py-0.5 text-pink-700 dark:bg-pink-900/30 dark:text-pink-200">赠礼</span>
+                </div>
               </div>
-              <div class="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                <span v-if="node.features?.exchangeShop" class="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">兑换</span>
-                <span v-if="node.features?.randomShop" class="rounded bg-violet-50 px-1.5 py-0.5 text-violet-700 dark:bg-violet-900/30 dark:text-violet-200">刷新店</span>
-                <span v-if="node.features?.draw" class="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">抽奖</span>
-                <span v-if="node.features?.starRecord" class="rounded bg-teal-50 px-1.5 py-0.5 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">图鉴</span>
-                <span v-if="node.features?.weatherTasks" class="rounded bg-orange-50 px-1.5 py-0.5 text-orange-700 dark:bg-orange-900/30 dark:text-orange-200">任务</span>
-                <span v-if="node.features?.weatherResearch" class="rounded bg-cyan-50 px-1.5 py-0.5 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">研究</span>
-                <span v-if="node.features?.qixiBridge" class="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200">建设</span>
-                <span v-if="node.features?.qixiGift" class="rounded bg-pink-50 px-1.5 py-0.5 text-pink-700 dark:bg-pink-900/30 dark:text-pink-200">赠礼</span>
-              </div>
-            </div>
             </div>
           </div>
 
           <div v-if="activityRuleSections(selectedActivityGroup).length" class="mt-4 border-t border-cyan-100 pt-4 dark:border-cyan-900">
             <section v-for="section in activityRuleSections(selectedActivityGroup)" :key="section.id">
-              <h6 class="text-sm font-semibold text-gray-900 dark:text-white">{{ section.title }}</h6>
+              <h6 class="text-sm text-gray-900 font-semibold dark:text-white">
+                {{ section.title }}
+              </h6>
               <img v-for="image in section.images" :key="image" :src="image" :alt="section.title" class="mt-3 max-h-96 w-full rounded-lg bg-white object-contain dark:bg-gray-900">
-              <div class="mt-2 space-y-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                <p v-for="(line, index) in section.lines" :key="`${section.id}-${index}`" class="whitespace-pre-line">{{ line }}</p>
-              </div>
-            </section>
-          </div>
-        </article>
-      </div>
-
-      <div v-if="discoveredGroups.length" class="space-y-4">
-        <article v-for="group in discoveredGroups" :key="`detail-${group.id}`" class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h4 class="text-lg font-semibold text-gray-900 dark:text-white">{{ group.title || `活动 ${group.id}` }}</h4>
-              <code class="mt-1 block text-sm text-gray-500">ID {{ group.id }}</code>
-            </div>
-            <span class="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">
-              {{ activityStatus(group) }}
-            </span>
-          </div>
-          <div class="mt-4 grid gap-3 sm:grid-cols-3">
-            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-              <div class="text-xs text-gray-500">开始时间</div>
-              <div class="mt-1 font-medium text-gray-900 dark:text-white">{{ formatTime(group.startTime && group.startTime * 1000) }}</div>
-            </div>
-            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-              <div class="text-xs text-gray-500">结束时间</div>
-              <div class="mt-1 font-medium text-gray-900 dark:text-white">{{ formatTime(group.endTime && group.endTime * 1000) }}</div>
-            </div>
-            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-              <div class="text-xs text-gray-500">内容摘要</div>
-              <div class="mt-1 font-medium text-gray-900 dark:text-white">{{ contentSummary(group) }}</div>
-            </div>
-          </div>
-          <div v-if="group.children?.length" class="mt-4">
-            <div class="text-sm font-semibold text-gray-900 dark:text-white">活动节点 {{ group.children.length }}</div>
-            <div class="mt-2 grid gap-2 sm:grid-cols-2">
-              <div v-for="child in group.children" :key="child.id" class="rounded-lg border border-gray-100 px-3 py-2 dark:border-gray-700">
-                <div class="flex justify-between gap-2 text-sm">
-                  <span class="font-medium">{{ child.title || `节点 ${child.id}` }}</span>
-                  <code class="text-xs text-gray-500">{{ child.id }}</code>
-                </div>
-                <div class="mt-1 text-xs text-gray-500">{{ activityNodeLabel(child) }} · {{ contentSummary(child) }}</div>
-                <p class="mt-2 text-xs leading-5 text-gray-500">{{ activityNodeDescription(child) }}</p>
-              </div>
-            </div>
-          </div>
-          <div v-if="activityRuleSections(group).length" class="mt-5 border-t border-gray-100 pt-4 dark:border-gray-700">
-            <h5 class="font-semibold text-gray-900 dark:text-white">玩法规则与完整活动说明</h5>
-            <section
-              v-for="section in activityRuleSections(group)"
-              :key="section.id"
-              class="mt-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-900/40"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h6 class="font-medium text-gray-900 dark:text-white">{{ section.title }}</h6>
-                <span class="text-xs text-gray-500">
-                  节点 {{ section.id }}<template v-if="section.uid"> · {{ section.uid }}</template>
-                </span>
-              </div>
-              <img v-for="image in section.images" :key="image" :src="image" :alt="section.title" class="mt-3 max-h-96 w-full rounded-lg bg-white object-contain dark:bg-gray-900">
-              <div class="mt-3 space-y-2 text-sm leading-6 text-gray-700 dark:text-gray-300">
+              <div class="mt-2 text-sm text-gray-600 leading-6 space-y-1 dark:text-gray-300">
                 <p v-for="(line, index) in section.lines" :key="`${section.id}-${index}`" class="whitespace-pre-line">
                   {{ line }}
                 </p>
@@ -597,6 +553,91 @@ onMounted(loadUpdateStatus)
         </article>
       </div>
 
+      <div v-if="discoveredGroups.length" class="space-y-4">
+        <article v-for="group in discoveredGroups" :key="`detail-${group.id}`" class="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 class="text-lg text-gray-900 font-semibold dark:text-white">
+                {{ group.title || `活动 ${group.id}` }}
+              </h4>
+              <code class="mt-1 block text-sm text-gray-500">ID {{ group.id }}</code>
+            </div>
+            <span class="rounded-full bg-teal-50 px-3 py-1 text-xs text-teal-700 font-medium dark:bg-teal-900/30 dark:text-teal-200">
+              {{ activityStatus(group) }}
+            </span>
+          </div>
+          <div class="grid mt-4 gap-3 sm:grid-cols-3">
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
+              <div class="text-xs text-gray-500">
+                开始时间
+              </div>
+              <div class="mt-1 text-gray-900 font-medium dark:text-white">
+                {{ formatTime(group.startTime && group.startTime * 1000) }}
+              </div>
+            </div>
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
+              <div class="text-xs text-gray-500">
+                结束时间
+              </div>
+              <div class="mt-1 text-gray-900 font-medium dark:text-white">
+                {{ formatTime(group.endTime && group.endTime * 1000) }}
+              </div>
+            </div>
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
+              <div class="text-xs text-gray-500">
+                内容摘要
+              </div>
+              <div class="mt-1 text-gray-900 font-medium dark:text-white">
+                {{ contentSummary(group) }}
+              </div>
+            </div>
+          </div>
+          <div v-if="group.children?.length" class="mt-4">
+            <div class="text-sm text-gray-900 font-semibold dark:text-white">
+              活动节点 {{ group.children.length }}
+            </div>
+            <div class="grid mt-2 gap-2 sm:grid-cols-2">
+              <div v-for="child in group.children" :key="child.id" class="border border-gray-100 rounded-lg px-3 py-2 dark:border-gray-700">
+                <div class="flex justify-between gap-2 text-sm">
+                  <span class="font-medium">{{ child.title || `节点 ${child.id}` }}</span>
+                  <code class="text-xs text-gray-500">{{ child.id }}</code>
+                </div>
+                <div class="mt-1 text-xs text-gray-500">
+                  {{ activityNodeLabel(child) }} · {{ contentSummary(child) }}
+                </div>
+                <p class="mt-2 text-xs text-gray-500 leading-5">
+                  {{ activityNodeDescription(child) }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div v-if="activityRuleSections(group).length" class="mt-5 border-t border-gray-100 pt-4 dark:border-gray-700">
+            <h5 class="text-gray-900 font-semibold dark:text-white">
+              玩法规则与完整活动说明
+            </h5>
+            <section
+              v-for="section in activityRuleSections(group)"
+              :key="section.id"
+              class="mt-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-900/40"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h6 class="text-gray-900 font-medium dark:text-white">
+                  {{ section.title }}
+                </h6>
+                <span class="text-xs text-gray-500">
+                  节点 {{ section.id }}<template v-if="section.uid"> · {{ section.uid }}</template>
+                </span>
+              </div>
+              <img v-for="image in section.images" :key="image" :src="image" :alt="section.title" class="mt-3 max-h-96 w-full rounded-lg bg-white object-contain dark:bg-gray-900">
+              <div class="mt-3 text-sm text-gray-700 leading-6 space-y-2 dark:text-gray-300">
+                <p v-for="(line, index) in section.lines" :key="`${section.id}-${index}`" class="whitespace-pre-line">
+                  {{ line }}
+                </p>
+              </div>
+            </section>
+          </div>
+        </article>
+      </div>
     </template>
   </section>
 </template>

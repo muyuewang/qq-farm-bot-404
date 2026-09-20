@@ -2994,6 +2994,107 @@ const operatePetDiary = (action, params, options) => getPetDiaryService().operat
 const getPetDiaryRecords = (kind) => getPetDiaryService().getPetDiaryRecords(kind);
 const getPetDiaryFriend = (gid) => getPetDiaryService().getPetDiaryFriend(gid);
 
+// ---- 萌宠日记字段 115（ActivityBodyPetDiary）只读解码 ----
+// 上游同步保留：ActivityNode 字段 115 的 pet/home/escort/photo_wall/pouch 子结构归一化，
+// 与上面 pet_treasure_hunt 富读模型并行存在。此处仅提供官方明文响应的回归解码，
+// 不臆造 Operate 命令字。协议证据见 core/docs/pet-diary-protocol-recovery.md。
+
+const PET_DIARY_START_TIME = 1789005600;
+const PET_DIARY_END_TIME = 1791820799;
+const PET_DIARY_ITEM_NAMES = new Map([
+  [1028, '萌宠元气糕'], [1029, '幸运星'], [1030, '待护送宝藏'],
+]);
+
+function getPetDiaryItemName(itemId) {
+  const id = toNum(itemId);
+  if (!id) return '';
+  return PET_DIARY_ITEM_NAMES.get(id) || '';
+}
+
+function normalizePetDiaryItem(item) {
+  if (!item) return null;
+  const id = toNum(item.id);
+  const count = toNum(item.count);
+  if (!id && !count) return null;
+  return { itemId: id, count, name: getPetDiaryItemName(id) };
+}
+
+function parsePetDiaryPhotoContent(content) {
+  if (typeof content !== 'string' || !content) return { photo: '', say: '' };
+  try {
+    const parsed = JSON.parse(content);
+    return {
+      photo: String(parsed?.photo || ''),
+      say: String(parsed?.say || ''),
+    };
+  } catch {
+    return { photo: '', say: '' };
+  }
+}
+
+function isPetDiaryWithinWindow(nowSeconds) {
+  const now = typeof nowSeconds === 'number' && Number.isFinite(nowSeconds)
+    ? Math.floor(nowSeconds)
+    : Math.floor(Date.now() / 1000);
+  return now >= PET_DIARY_START_TIME && now <= PET_DIARY_END_TIME;
+}
+
+function normalizePetDiaryPet(pet) {
+  return {
+    stage: toNum(pet?.stage),
+    progress: toNum(pet?.progress),
+    state: toNum(pet?.state),
+  };
+}
+
+function normalizePetDiaryEscort(escort) {
+  return {
+    guard: toNum(escort?.guard),
+    cake: normalizePetDiaryItem(escort?.cake),
+  };
+}
+
+function normalizePetDiaryPouch(pouch) {
+  const slot = pouch?.slot || {};
+  return {
+    flag: String(pouch?.flag || ''),
+    state: toNum(pouch?.state),
+    slot: {
+      id: toNum(slot?.id),
+      type: toNum(slot?.type),
+      count: toNum(slot?.count),
+    },
+  };
+}
+
+function normalizePetDiaryPhotoWall(wall) {
+  const entries = Array.isArray(wall?.entries) ? wall.entries : [];
+  const slots = entries
+    .map((entry) => {
+      const content = parsePetDiaryPhotoContent(entry?.content);
+      const unlocked = toNum(entry?.unlocked) > 0;
+      const claimed = toNum(entry?.claimed) > 0;
+      return {
+        id: toNum(entry?.id),
+        unlocked,
+        claimed,
+        claimable: unlocked && !claimed,
+        progress: toNum(entry?.progress),
+        photo: content.photo,
+        say: content.say,
+      };
+    })
+    .filter((slot) => slot.id > 0 || slot.unlocked);
+
+  return {
+    slots,
+    totalCount: slots.length,
+    unlockedCount: slots.filter((slot) => slot.unlocked).length,
+    claimedCount: slots.filter((slot) => slot.claimed).length,
+    claimableCount: slots.filter((slot) => slot.claimable).length,
+  };
+}
+
 module.exports = {
   NANGUA_ACTIVITY_UID,
   HELU_ACTIVITY_UID,
@@ -3083,4 +3184,10 @@ module.exports = {
   operatePetDiary,
   getPetDiaryRecords,
   getPetDiaryFriend,
+  isPetDiaryWithinWindow,
+  normalizePetDiaryPet,
+  normalizePetDiaryEscort,
+  normalizePetDiaryPouch,
+  normalizePetDiaryPhotoWall,
+  normalizePetDiaryItem,
 };

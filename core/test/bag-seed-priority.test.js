@@ -77,7 +77,7 @@ test('personal bag seed tab matches the official client order', () => {
   ]);
 });
 
-test('current game order replaces a previously saved order', () => {
+test('saved custom order survives inventory synchronization', () => {
   const accountId = 'replace-old';
   store.applyConfigSnapshot({
     bagSeedPriority: [103, 102, 101],
@@ -90,8 +90,8 @@ test('current game order replaces a previously saved order', () => {
     { ...seed(102, 2), rarity: 2, plantExp: 30 },
   ], { persist: false });
 
-  assert.deepEqual(result.priority, [102, 103, 101]);
-  assert.equal(result.changed, true);
+  assert.deepEqual(result.priority, [103, 102, 101]);
+  assert.equal(result.changed, false);
 });
 
 test('removed preferred strategies fall back to supported defaults', () => {
@@ -105,6 +105,11 @@ test('removed preferred strategies fall back to supported defaults', () => {
   assert.equal(config.plantingStrategy, 'max_exp');
   assert.equal(store.getBagSeedFallbackStrategy(accountId), 'level');
   assert.equal('preferredSeedId' in config, false);
+
+  store.applyConfigSnapshot({
+    bagSeedFallbackStrategy: 'task_priority',
+  }, { accountId, persist: false });
+  assert.equal(store.getBagSeedFallbackStrategy(accountId), 'level');
 });
 
 test('empty and 2x2 seeds are excluded from the 1x1 priority', () => {
@@ -117,4 +122,55 @@ test('empty and 2x2 seeds are excluded from the 1x1 priority', () => {
   assert.deepEqual(result.priority, [101]);
   assert.deepEqual(result.knownIds, [101]);
   assert.deepEqual(result.seeds.map(item => item.seedId), [101]);
+});
+
+test('depleted seeds retain their position and new seeds are appended', () => {
+  const accountId = 'inventory-changes';
+  store.applyConfigSnapshot({ bagSeedPriority: [103, 101] }, { accountId, persist: false });
+  const result = store.syncBagSeedPriority(accountId, [seed(101, 1), seed(102, 2)], { persist: false });
+  assert.deepEqual(result.priority, [103, 101, 102]);
+  const restored = store.syncBagSeedPriority(accountId, [seed(102, 2), seed(103, 3), seed(101, 1)], { persist: false });
+  assert.deepEqual(restored.priority, [103, 101, 102]);
+});
+
+test('settings API persists task priority and custom bag order per account', async () => {
+  const schedulerPath = require.resolve('../src/services/scheduler');
+  const cachedScheduler = require.cache[schedulerPath];
+  require.cache[schedulerPath] = { id: schedulerPath, filename: schedulerPath, loaded: true, exports: { getSchedulerRegistrySnapshot: () => [] } };
+  const { createDataProvider } = require('../src/runtime/data-provider');
+  if (cachedScheduler) require.cache[schedulerPath] = cachedScheduler;
+  else delete require.cache[schedulerPath];
+  const broadcasts = [];
+  const provider = createDataProvider({
+    store: { ...store, applyConfigSnapshot: (patch, options) => store.applyConfigSnapshot(patch, { ...options, persist: false }) },
+    getAccounts: () => ({ accounts: [{ id: 'settings-one' }, { id: 'settings-two' }] }),
+    nextConfigRevision: () => 1,
+    broadcastConfigToWorkers: id => broadcasts.push(id),
+  });
+  await provider.saveSettings('settings-one', {
+    prioritizeGrowthTasks: true,
+    bagSeedPriority: [103, 101, 102],
+    bagSeedKnownIds: [101, 102, 103],
+  });
+  assert.equal(store.getPrioritizeGrowthTasks('settings-one'), true);
+  assert.equal(store.getPrioritizeGrowthTasks('settings-two'), false);
+  assert.deepEqual(store.getBagSeedPriority('settings-one'), [103, 101, 102]);
+  assert.deepEqual(broadcasts, ['settings-one']);
+  await provider.saveSettings('settings-one', { prioritizeGrowthTasks: false });
+  assert.equal(store.getPrioritizeGrowthTasks('settings-one'), false);
+  assert.deepEqual(store.getBagSeedPriority('settings-one'), [103, 101, 102]);
+
+  await provider.saveSettings('settings-one', {
+    plantingStrategy: 'task_priority',
+    prioritizeGrowthTasks: false,
+  });
+  assert.equal(store.getPlantingStrategy('settings-one'), 'task_priority');
+  assert.equal(store.getPrioritizeGrowthTasks('settings-one'), true);
+  assert.equal(store.getConfigSnapshot('settings-one').prioritizeGrowthTasks, true);
+
+  await provider.saveSettings('settings-one', {
+    plantingStrategy: 'max_exp',
+    prioritizeGrowthTasks: false,
+  });
+  assert.equal(store.getPrioritizeGrowthTasks('settings-one'), false);
 });

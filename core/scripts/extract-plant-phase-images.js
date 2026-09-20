@@ -397,10 +397,10 @@ function exportCachedSpinePlants(entries, output, manifest, wantedAssets) {
     const spineCropName = `Crop_${String(plant.all_state_spine || '').split('/').pop().replace(/^\D+/, '')}`;
     const phaseRegions = new Map([
       // Spine 图集里的 zhongzi 是背包种子图标；阶段1没有地上植物贴图。
-      [2, ['grow_02', 'grow_1', '02', `${assetName}_2`, `${spineCropName}_2`]],
-      [3, ['grow_03', 'grow_2', '03', `${assetName}_3`, `${spineCropName}_3`]],
-      [4, ['grow_04', 'grow_3', '04', `${assetName}_4`, `${spineCropName}_4`]],
-      [5, ['grow_05', 'grow_4', '05', `${assetName}_5`, `${spineCropName}_5`]],
+      [2, ['grow_02', 'grow_1', '02', '2', `${assetName}_2`, `${spineCropName}_2`]],
+      [3, ['grow_03', 'grow_2', '03', '3', `${assetName}_3`, `${spineCropName}_3`]],
+      [4, ['grow_04', 'grow_3', '04', '4', `${assetName}_4`, `${spineCropName}_4`]],
+      [5, ['grow_05', 'grow_4', '05', '5', `${assetName}_5`, `${spineCropName}_5`]],
       [7, ['kuwei', '07', 'kuwei_tiangong', 'kuwei_tiangong2']],
     ]);
     for (const [phase, regionNames] of phaseRegions) {

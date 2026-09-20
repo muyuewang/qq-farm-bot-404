@@ -254,22 +254,35 @@ async function batchGetFriendDogInfo(friends) {
 
 // ===== Friends list =====
 let friendsListCache = null;
+let friendsListRefreshAt = 0;
+let friendsListPending = null;
+const FRIEND_LIST_REFRESH_MS = 5 * 60 * 1000;
 
 /**
  * Get a processed friends list with dog info from cache if available.
  * Filters out fake NPCs (name "小小农夫" with level 1).
  */
 async function getFriendsList(forceRefresh = false) {
+  if (friendsListPending) return friendsListPending;
+  if (!forceRefresh && Date.now() < friendsListRefreshAt) return friendsListCache || [];
+  friendsListRefreshAt = Date.now() + FRIEND_LIST_REFRESH_MS;
+  friendsListPending = fetchFriendsList();
   try {
-    if (!forceRefresh && friendsListCache) return friendsListCache;
+    return await friendsListPending;
+  } finally {
+    friendsListPending = null;
+  }
+}
 
+async function fetchFriendsList() {
+  try {
     log('好友', '开始获取好友列表', {
       module: 'friend',
       event: '获取好友列表',
     });
 
     const { getAllFriends } = require('./friend-api');
-    const allFriendsReply = await getAllFriends(forceRefresh);
+    const allFriendsReply = await getAllFriends(true);
     const rawFriends = allFriendsReply.game_friends || [];
     const userState = getUserState();
     const accountId = process.env.FARM_ACCOUNT_ID || '';
@@ -589,6 +602,7 @@ function getFriendsListCache() {
 
 function setFriendsListCache(cache) {
   friendsListCache = cache;
+  friendsListRefreshAt = cache ? Date.now() + FRIEND_LIST_REFRESH_MS : 0;
 }
 
 // ===== Exports =====

@@ -174,6 +174,7 @@ function createDataProvider(deps) {
         getDogSkillGiftStatus: (ref) => callWorkerApi(resolveAccountId(ref), 'getDogSkillGiftStatus'),
         claimDogSkillGifts: (ref) => callWorkerApi(resolveAccountId(ref), 'claimDogSkillGifts'),
         getPetOverview: (ref) => callWorkerApi(resolveAccountId(ref), 'getPetOverview'),
+        activateDog: (ref, dogId) => callWorkerApi(resolveAccountId(ref), 'activateDog', dogId),
         deployDog: (ref, dogId) => callWorkerApi(resolveAccountId(ref), 'deployDog', dogId),
         withdrawDog: (ref) => callWorkerApi(resolveAccountId(ref), 'withdrawDog'),
         feedDog: (ref, foodId, count) => callWorkerApi(resolveAccountId(ref), 'feedDog', foodId, count),
@@ -272,10 +273,10 @@ function createDataProvider(deps) {
             const patch = {
                 plantingStrategy: s.plantingStrategy !== undefined ? s.plantingStrategy : s.strategy,
                 prioritize2x2Crops: s.prioritize2x2Crops,
+                prioritizeGrowthTasks: s.prioritizeGrowthTasks,
                 intervals: s.intervals,
                 friendQuietHours: s.friendQuietHours,
                 autoCodeRefresh: s.autoCodeRefresh,
-                stealDelaySeconds: s.stealDelaySeconds,
                 fertilizerBuyOrganicCount: s.fertilizerBuyOrganicCount,
                 fertilizerBuyOrganicThresholdHours: s.fertilizerBuyOrganicThresholdHours,
                 fertilizerBuyNormalCount: s.fertilizerBuyNormalCount,
@@ -284,6 +285,8 @@ function createDataProvider(deps) {
                 goldenBugKeepCount: s.goldenBugKeepCount,
                 goldenBugRoundLimit: s.goldenBugRoundLimit,
                 autoAcceptFriendMinLevel: s.autoAcceptFriendMinLevel,
+                bagSeedPriority: s.bagSeedPriority,
+                bagSeedKnownIds: s.bagSeedKnownIds,
                 bagSeedFallbackStrategy: s.bagSeedFallbackStrategy,
             };
             store.applyConfigSnapshot(patch, { accountId: id });
@@ -295,10 +298,10 @@ function createDataProvider(deps) {
             return {
                 strategy: store.getPlantingStrategy(id),
                 prioritize2x2Crops: store.getPrioritize2x2Crops(id),
+                prioritizeGrowthTasks: store.getPrioritizeGrowthTasks(id),
                 intervals: store.getIntervals(id),
                 friendQuietHours: store.getFriendQuietHours(id),
                 autoCodeRefresh: store.getAutoCodeRefresh(id),
-                stealDelaySeconds: store.getStealDelaySeconds(id),
                 fertilizerBuyOrganicCount: store.getFertilizerBuyOrganicCount(id),
                 fertilizerBuyOrganicThresholdHours: store.getFertilizerBuyOrganicThresholdHours(id),
                 fertilizerBuyNormalCount: store.getFertilizerBuyNormalCount(id),

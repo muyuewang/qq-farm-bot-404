@@ -32,6 +32,7 @@ const DOG_NAMES = {
 
 // ===== State =====
 let hasInitializedFromVisitors = false;
+let nextEmptyVisitorRetryAt = 0;
 let hasBootstrappedQqFriendGids = false;
 const invalidKnownFriendGidCooldownUntil = new Map();
 const visitTokensByGid = new Map();
@@ -298,16 +299,18 @@ function getEffectiveKnownQqFriendGids() {
 
 /**
  * On first login, seed known friend GIDs from recent visitor records.
- * Only runs once per session.
+ * Empty/failed discovery may retry on an explicit refresh, at most once per five minutes.
  */
-async function syncKnownFriendGidsFromRecentVisitorsOnce() {
-  if (hasInitializedFromVisitors) return getEffectiveKnownQqFriendGids();
+async function syncKnownFriendGidsFromRecentVisitorsOnce(retryEmpty = false) {
+  if (hasInitializedFromVisitors && (!retryEmpty || getEffectiveKnownQqFriendGids().length > 0
+    || Date.now() < nextEmptyVisitorRetryAt)) return getEffectiveKnownQqFriendGids();
+  nextEmptyVisitorRetryAt = Date.now() + 5 * 60 * 1000;
 
   const accountId = process.env.FARM_ACCOUNT_ID || '';
   const existingGids = normalizeFriendGids(getKnownFriendGids());
 
   // If we already have known GIDs, skip visitor seeding
-  if (existingGids.length > 0) {
+  if (existingGids.length > 0 && getEffectiveKnownQqFriendGids().length > 0) {
     hasInitializedFromVisitors = true;
     return getEffectiveKnownQqFriendGids();
   }
@@ -336,7 +339,7 @@ async function syncKnownFriendGidsFromRecentVisitorsOnce() {
       return getEffectiveKnownQqFriendGids();
     }
 
-    const mergedGids = normalizeFriendGids([...visitorGids]);
+    const mergedGids = normalizeFriendGids([...existingGids, ...visitorGids]);
     if (mergedGids.length > 0) {
       applyConfigSnapshot({ knownFriendGids: mergedGids }, {
         persist: false,
@@ -673,7 +676,7 @@ async function getAllFriends(forceRefresh = false) {
   const isQQ = CONFIG.platform === 'qq';
 
   if (isQQ) {
-    await syncKnownFriendGidsFromRecentVisitorsOnce();
+    await syncKnownFriendGidsFromRecentVisitorsOnce(forceRefresh);
 
     // Try new API first
     const knownFriends = await fetchQqFriendsByKnownGids();

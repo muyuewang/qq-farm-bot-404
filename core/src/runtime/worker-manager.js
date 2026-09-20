@@ -39,6 +39,15 @@ function createWorkerManager(deps) {
     const activePermits = new Map();
     const WATCHDOG_PING_MS = 30000;
     const WATCHDOG_TIMEOUT_MS = 90000;
+    const DEFAULT_API_TIMEOUT_MS = 10000;
+    // 按方法名的超时覆盖。萌宠日记单次操作要串行多次 RPC（读组 → 校验 → 操作 → 重读快照），
+    // 10 秒默认值会误判超时，取值与上游一致。
+    const METHOD_TIMEOUT_MS = {
+        getPetDiary: 90000,
+        operatePetDiary: 180000,
+        getPetDiaryRecords: 30000,
+        getPetDiaryFriend: 30000,
+    };
     const WATCHDOG_MAX_RESTARTS = 3;
 
     /** 是否支持 Thread 模式（非 pkg 打包 + Worker 可用） */
@@ -657,6 +666,22 @@ function createWorkerManager(deps) {
         return (data.accounts || []).find(account => String(account.id) === String(accountId));
     }
 
+    const persistInactiveActivities = () => {
+        try {
+            const changed = require('../models/store').persistInactiveActivityAutomation();
+            for (const accountId of changed) {
+                const wrk = workers[accountId];
+                if (wrk?.process && !wrk.stopping) wrk.process.send({
+                    type: 'config_sync', config: buildConfigSnapshotForAccount(accountId),
+                });
+            }
+        } catch (error) {
+            log('系统', `活动过期开关保存失败：${error.message}`);
+        }
+    };
+    persistInactiveActivities();
+    scheduler.setIntervalTask('inactive_activity_config', WATCHDOG_PING_MS, persistInactiveActivities);
+
     scheduler.setIntervalTask('watchdog_tick', WATCHDOG_PING_MS, () => {
         const now = Date.now();
         for (const [accountId, wrk] of Object.entries(workers)) {
@@ -701,8 +726,8 @@ function createWorkerManager(deps) {
         const lastArg = args.at(-1);
         const customTimeout = lastArg && typeof lastArg === 'object' && lastArg._timeoutMs;
         const timeoutMs = customTimeout
-            ? Number(lastArg._timeoutMs) || 10000
-            : 10000;
+            ? Number(lastArg._timeoutMs) || DEFAULT_API_TIMEOUT_MS
+            : METHOD_TIMEOUT_MS[method] || DEFAULT_API_TIMEOUT_MS;
 
         const actualArgs = customTimeout ? args.slice(0, -1) : args;
 

@@ -147,7 +147,8 @@ onMounted(() => {
   }, 60000)
 })
 onUnmounted(() => {
-  if (nowTimer) window.clearInterval(nowTimer)
+  if (nowTimer)
+    window.clearInterval(nowTimer)
 })
 watch(() => props.currentAccountId, loadQixiFriends)
 </script>
@@ -184,10 +185,10 @@ watch(() => props.currentAccountId, loadQixiFriends)
         <BaseSwitch v-model="settings.automation.fertilizer_gift" label="自动填充化肥" />
         <BaseSwitch v-model="settings.automation.fertilizer_buy_organic" label="自动购买有机化肥" />
         <BaseSwitch v-model="settings.automation.fertilizer_buy_normal" label="自动购买无机化肥" />
-        <div class="w-fit max-w-full inline-flex items-center gap-1.5">
+        <div class="max-w-full w-fit inline-flex items-center gap-1.5">
           <BaseSwitch v-model="settings.automation.mystery_shop_auto_buy" label="自动购买神秘商人商品" />
           <button
-            class="h-7 w-7 inline-grid shrink-0 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            class="inline-grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 dark:text-gray-500 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
             type="button"
             title="设置允许使用的货币"
             aria-label="设置神秘商人自动购买"
@@ -202,46 +203,70 @@ watch(() => props.currentAccountId, loadQixiFriends)
 
       <Transition name="fade">
         <div v-if="mysteryShopSettingsVisible" class="fixed inset-0 z-50 grid place-items-center bg-gray-950/45 p-4 backdrop-blur-[2px]" @click.self="mysteryShopSettingsVisible = false">
-          <div class="w-full max-w-lg overflow-hidden border border-gray-200 rounded-2xl bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+          <div class="max-w-lg w-full overflow-hidden border border-gray-200 rounded-2xl bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
             <div class="flex items-start justify-between border-b border-gray-100 px-6 py-5 dark:border-gray-700">
               <div>
                 <div class="flex items-center gap-2">
-                  <span class="h-8 w-8 inline-grid place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                  <span class="inline-grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
                     <span class="i-carbon-store text-lg" />
                   </span>
-                  <h3 class="text-lg text-gray-900 font-semibold dark:text-gray-100">神秘商人自动购买</h3>
+                  <h3 class="text-lg text-gray-900 font-semibold dark:text-gray-100">
+                    神秘商人自动购买
+                  </h3>
                 </div>
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">选择自动购买时可以使用的货币。</p>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  选择自动购买时可以使用的货币。
+                </p>
               </div>
-              <button class="h-8 w-8 inline-grid shrink-0 place-items-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" type="button" aria-label="关闭" @click="mysteryShopSettingsVisible = false">
+              <button class="inline-grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" type="button" aria-label="关闭" @click="mysteryShopSettingsVisible = false">
                 <span class="i-carbon-close text-xl" />
               </button>
             </div>
-            <div class="space-y-2 px-6 py-5">
+            <div class="px-6 py-5 space-y-2">
               <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
-                <div class="flex min-w-0 items-center gap-3">
-                  <span class="h-9 w-9 inline-grid shrink-0 place-items-center rounded-full bg-yellow-50 text-yellow-600 dark:bg-yellow-900/25 dark:text-yellow-300"><span class="i-carbon-currency-dollar text-lg" /></span>
-                  <div><div class="text-sm text-gray-800 font-medium dark:text-gray-100">金币</div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">允许使用金币自动购买</div></div>
+                <div class="min-w-0 flex items-center gap-3">
+                  <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-yellow-50 text-yellow-600 dark:bg-yellow-900/25 dark:text-yellow-300"><span class="i-carbon-currency-dollar text-lg" /></span>
+                  <div>
+                    <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
+                      金币
+                    </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      允许使用金币自动购买
+                    </div>
+                  </div>
                 </div>
                 <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold" />
               </div>
               <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
-                <div class="flex min-w-0 items-center gap-3">
-                  <span class="h-9 w-9 inline-grid shrink-0 place-items-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-300"><span class="i-carbon-ticket text-lg" /></span>
-                  <div><div class="text-sm text-gray-800 font-medium dark:text-gray-100">点券</div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">允许使用点券自动购买</div></div>
+                <div class="min-w-0 flex items-center gap-3">
+                  <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-300"><span class="i-carbon-ticket text-lg" /></span>
+                  <div>
+                    <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
+                      点券
+                    </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      允许使用点券自动购买
+                    </div>
+                  </div>
                 </div>
                 <BaseSwitch v-model="settings.automation.mystery_shop_allow_coupon" />
               </div>
               <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
-                <div class="flex min-w-0 items-center gap-3">
-                  <span class="h-9 w-9 inline-grid shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300"><span class="i-carbon-crop-health text-lg" /></span>
-                  <div><div class="text-sm text-gray-800 font-medium dark:text-gray-100">金豆豆</div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">允许使用金豆豆自动购买</div></div>
+                <div class="min-w-0 flex items-center gap-3">
+                  <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300"><span class="i-carbon-crop-health text-lg" /></span>
+                  <div>
+                    <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
+                      金豆豆
+                    </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      允许使用金豆豆自动购买
+                    </div>
+                  </div>
                 </div>
                 <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold_bean" />
               </div>
             </div>
             <div class="flex justify-end border-t border-gray-100 bg-gray-50/70 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/20">
-              <BaseButton class="min-w-24" size="sm" @click="mysteryShopSettingsVisible = false">完成</BaseButton>
+              <BaseButton class="min-w-24" size="sm" @click="mysteryShopSettingsVisible = false">
+                完成
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -249,12 +274,16 @@ watch(() => props.currentAccountId, loadQixiFriends)
 
       <div class="border border-gray-200 rounded-lg bg-gray-50/70 p-4 dark:border-gray-700 dark:bg-gray-900/20">
         <div class="mb-3 flex items-center gap-2">
-          <span class="h-8 w-8 inline-grid place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300">
+          <span class="inline-grid h-8 w-8 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300">
             <span class="i-carbon-events text-lg" />
           </span>
           <div>
-            <h4 class="text-sm text-gray-900 font-semibold dark:text-gray-100">活动控制</h4>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">自动检查并领取活动中可领取的奖励。</p>
+            <h4 class="text-sm text-gray-900 font-semibold dark:text-gray-100">
+              活动控制
+            </h4>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              自动检查并领取活动中可领取的奖励。
+            </p>
           </div>
         </div>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -303,49 +332,33 @@ watch(() => props.currentAccountId, loadQixiFriends)
           <div v-if="showCharityFlowerActivity" class="border border-rose-200 rounded-lg bg-white px-4 py-3 dark:border-rose-900/50 dark:bg-gray-800">
             <BaseSwitch v-model="settings.automation.charity_flower_public_fund_claim" label="自动领取并送出 1 元公益金（活动期仅一次）" />
           </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_adopt" label="萌宠·自动领养比熊" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_feed" label="萌宠·自动投喂" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_draw" label="萌宠·自动寻宝" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_story_claim" label="萌宠·自动领取手记" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_seed_claim" label="萌宠·自动领取种子礼包" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_solar_claim" label="萌宠·自动领取节令小礼" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_treasure_open" label="萌宠·自动领取宝藏" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_compensation_claim" label="萌宠·自动领取夺宝补偿" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_charm_equip" label="萌宠·自动选择锦囊" />
-          </div>
-          <div class="border border-amber-200 rounded-lg bg-white px-4 py-3 dark:border-amber-900/50 dark:bg-gray-800">
-            <BaseSwitch v-model="settings.automation.pet_diary_battle" label="萌宠·自动好友夺宝（会掠夺好友宝藏）" />
-          </div>
         </div>
-        <div v-if="SHOW_QIXI_ACTIVITY && settings.automation.qixi_sachet_gift" class="mt-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-          <div class="mb-3"><div class="text-sm font-medium text-gray-900 dark:text-white">香囊好友优先级</div><div class="mt-1 text-xs text-gray-500">只向所选好友赠送；序号越小优先级越高，名单外好友不会自动获赠。</div></div>
+        <div v-if="SHOW_QIXI_ACTIVITY && settings.automation.qixi_sachet_gift" class="mt-3 border border-gray-200 rounded-lg bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+          <div class="mb-3">
+            <div class="text-sm text-gray-900 font-medium dark:text-white">
+              香囊好友优先级
+            </div><div class="mt-1 text-xs text-gray-500">
+              只向所选好友赠送；序号越小优先级越高，名单外好友不会自动获赠。
+            </div>
+          </div>
           <div v-if="qixiPriority().length" class="mb-3 space-y-2">
             <div v-for="(gid, index) in qixiPriority()" :key="gid" class="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900/40">
               <span class="w-6 text-gray-400">{{ index + 1 }}</span><span class="min-w-0 flex-1 truncate">{{ qixiFriendName(gid) }}</span>
-              <button type="button" class="text-gray-500 disabled:opacity-30" :disabled="index === 0" @click="moveQixiFriend(index, -1)"><span class="i-carbon-arrow-up" /></button>
-              <button type="button" class="text-gray-500 disabled:opacity-30" :disabled="index === qixiPriority().length - 1" @click="moveQixiFriend(index, 1)"><span class="i-carbon-arrow-down" /></button>
-              <button type="button" class="text-red-500" @click="toggleQixiFriend(gid)"><span class="i-carbon-close" /></button>
+              <button type="button" class="text-gray-500 disabled:opacity-30" :disabled="index === 0" @click="moveQixiFriend(index, -1)">
+                <span class="i-carbon-arrow-up" />
+              </button>
+              <button type="button" class="text-gray-500 disabled:opacity-30" :disabled="index === qixiPriority().length - 1" @click="moveQixiFriend(index, 1)">
+                <span class="i-carbon-arrow-down" />
+              </button>
+              <button type="button" class="text-red-500" @click="toggleQixiFriend(gid)">
+                <span class="i-carbon-close" />
+              </button>
             </div>
           </div>
-          <div class="flex max-h-44 flex-wrap gap-2 overflow-y-auto">
-            <button v-for="friend in qixiFriends.filter(item => !qixiPriority().includes(item.gid))" :key="friend.gid" type="button" class="rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:border-violet-400 dark:border-gray-700 dark:text-gray-200" @click="toggleQixiFriend(friend.gid)">+ {{ friend.name }}</button>
+          <div class="max-h-44 flex flex-wrap gap-2 overflow-y-auto">
+            <button v-for="friend in qixiFriends.filter(item => !qixiPriority().includes(item.gid))" :key="friend.gid" type="button" class="border border-gray-200 rounded-full px-3 py-1.5 text-xs text-gray-700 dark:border-gray-700 hover:border-violet-400 dark:text-gray-200" @click="toggleQixiFriend(friend.gid)">
+              + {{ friend.name }}
+            </button>
             <span v-if="!qixiFriends.length" class="text-xs text-gray-500">账号运行后可加载好友列表。</span>
           </div>
         </div>

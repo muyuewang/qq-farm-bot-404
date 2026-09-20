@@ -25,6 +25,12 @@ const L = {
 function itemImage(item: any) {
   return Array.isArray(item.images) ? item.images[0] : ''
 }
+
+function currencyIcon(item: any) {
+  const icons: Record<number, string> = { 1001: 'gold', 1002: 'coupon', 1004: 'diamond', 1005: 'gold-bean' }
+  const icon = icons[Number(item.currencyId || 1002)]
+  return icon ? `/game-config/resource-icons/${icon}.png` : ''
+}
 </script>
 
 <template>
@@ -34,7 +40,9 @@ function itemImage(item: any) {
         #{{ item.goodsId }}
       </span>
       <span class="absolute right-0 top-0 rounded-bl-lg bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 font-semibold dark:bg-blue-900/20 dark:text-blue-300">
-        {{ item.isFree ? L.free : (item.currencyName || L.coupon) }}
+        <span v-if="item.isFree">{{ L.free }}</span>
+        <img v-else-if="currencyIcon(item)" :src="currencyIcon(item)" :alt="item.currencyName || L.coupon" :title="item.currencyName || L.coupon" class="h-5 w-5 object-contain">
+        <span v-else>{{ item.currencyName || L.coupon }}</span>
       </span>
       <img v-if="itemImage(item)" :src="itemImage(item)" :alt="item.name" class="max-h-14 max-w-14 object-contain">
       <div v-else class="grid h-14 w-14 place-items-center rounded-lg bg-white text-sm text-gray-500 font-semibold dark:bg-gray-800">

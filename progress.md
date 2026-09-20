@@ -8,14 +8,15 @@
 
 # 当前状态
 
-- TSDK/ACE 安全链路已升级到 QQ Mac 客户端 2026-08-20 10:32 包内的官方
-  `v3.9.0.1787057219` WASM（161114 字节，SHA-256
-  `98cc5301cff10f5b87a014d0a4af92630e4a6e91292cc7de5eb86422275f0070`）。
-  同包 `game.js` 和 WASM 静态检查确认 22 个 imports、导出映射、
-  `SdkInitEx(3167, 0)`、17 个 mergewasm 数据段及解密密钥均与现有 Node 宿主兼容；
-  默认运行文件已切换为 `tsdk-v3.9.0.wasm`，保留 `tsdk-v3.8.6.wasm` 用于回退。
-  语法检查、定向 ESLint 和 6/6 TSDK/网关测试通过；完整后端套件中 TSDK 项通过，
-  总计 152/153 通过，既有 `capture-core` 代理启动用例在当前环境失败，未改动该模块。
+- TSDK/ACE 安全链路已升级到 2026-09-14 上游已验证的官方
+  `v3.9.0.1789137379` WASM（161084 字节，SHA-256
+  `1744e339d43425f9f24834fd49b3239f824f57fe76242d5b3128ac55b3110ac5`）。
+  静态检查确认 22 个 imports、61 个 exports、17 个 mergewasm 数据段及解密密钥
+  均与现有 Node 宿主兼容；默认运行文件已切换为
+  `tsdk-v3.9.0.1789137379.wasm`，保留 `tsdk-v3.9.0.1788935757.wasm` 用于回退。
+  登录与心跳请求已按 `1.14.0.4_20260911` 官方抓包逐字节锁定；自定义设备
+  协议仍保留扩展设备字段。本机最新 QQ 展开包仍为 2026-09-10 版，受控在线验收待完成。
+  语法检查、定向 ESLint 和 TSDK/网关协议测试通过；完整后端测试 360/360 通过。
   调用映射和内存所有权见 `core/docs/tsdk-ace-runtime.md`；受控在线 5/30 分钟好友
   操作仍需测试账号实测。
 - WASM 后续更新已标准化：新增 `core/scripts/inspect-tsdk-update.js` 和
@@ -23,10 +24,14 @@
   segments、解密高频常量、`game.js` 版本/关键标记及基线兼容性；完整发现、快照、
   差异分级、更新、离线/在线验收和回退流程见
   `core/docs/tsdk-update-runbook.md`。
+- 宠物页已支持通用手工激活：后端复用 `DogService.ActivateDog` 及同一串行化校验，
+  以服务端 `field_6` 或背包中未锁定的同 ID 宠物卡判断可激活；worker/provider/API/
+  Pinia/页面入口已贯通，激活后会刷新宠物快照。
 - 技术栈：后端 `core` 是 Node.js/CommonJS + Express + Socket.IO；前端 `web` 是 Vue 3 + Vite + TypeScript + Pinia + UnoCSS。
 - 最新快速体检结果：`web/src` 全量 ESLint 通过，`web` 生产构建通过；`core/src/**/*.js` 全量 `node --check` 通过。源码扫描未发现真实替换字符类乱码、孤立 `undefined` 行或 `_v###` 反编译变量残留；`core` ESLint 因本地 `core/node_modules` 缺少 `@antfu/eslint-config` 未作为源码失败处理。
 - UTF-8 源码扫描未发现 `core/src`、`web/src` 存在真实替换字符类乱码；PowerShell 仍可能把中文显示成乱码，不能据此改源码。
 - 已完成第一批低风险前端规范清理：背包空态分支、主题读取空块、确认框无意义绑定、微信扫码调试输出、静态正则、`Friends.vue` 定义顺序、`Login.vue` 换行格式。
+- 已完成前端全站 ESLint 清理：对 `web/src` 全量 `eslint --fix` 收敛缩进/换行/CSS 与 UnoCSS class 排序/import 顺序等自动可修项，并手工修复 4 处无法自动修复的问题（`AccountModal.vue` 的 `stopWxCheck` 定义顺序、`CharityFlowerActivityPanel.vue` 单行双语句、`StrategyTimingPanel.vue` 未使用的 `props`）；`web/src` 全量 ESLint 现为 0 error 0 warning，`web` 生产构建通过。
 - `Renewal.vue` 已修复登录态入口与续费分支：`/renewal` 不再因有效 token 被路由守卫强制跳回 dashboard；已登录用户进入续费页会预填并锁定当前用户名，提交走 `/api/user/renew` 并同步本地用户信息；未登录用户仍走 `/api/public/renew`。旧版 `D:\github\qq-farm-2.3.1` 仅作为接口行为参考，未照搬产物。
 - 登录页“账号续费”闭环已补齐：`Login.vue` 会把当前输入用户名带到 `/renewal`，`Renewal.vue` 公共续费成功后带用户名回 `/login`，登录页会在输入框为空时从 query 回填用户名；已登录用户续费仍走当前账号锁定流程。
 - `Login.vue` 已开始结构瘦身：卡密领取结果弹窗、找回密码验证弹窗和设置新密码弹窗已抽到 `web/src/components/login/LoginModals.vue`，父页面保留登录/注册/找回密码请求与状态 wiring，行为不变。
@@ -47,6 +52,7 @@
 - 左侧导航菜单已简化为短标签：概览、个人、好友、活动、商城、图鉴、分析、设置、后台；后台仍保留管理员可见限制。
 - 活动页荷露抽奖点完后疑似掉线的问题已做保守防护：`core/src/services/activity.js` 对活动 Operate 增加连接状态检查，免费多抽改为串行节流请求并延迟刷新活动状态；`web/src/views/Activity.vue` 防止抽奖请求重复提交。服务已重启，`/api/health` 返回 200。
 - “雨落成诗”已接入活动页与后端接口：支持天气状态、天气采集瓶购买、好友雷雨采集、雷雨召唤瓶使用、气象研究解锁、气象任务展示和闪电变异类型 12 识别；活动有效期为 2026-08-26 10:00:00 至 2026-09-08 23:59:59（Asia/Shanghai）。已补齐 4002/4003 闪电感应、2159 雨落成诗头像框等活动物品名称/图标映射，避免气象研究后段奖励显示“未知物品”。账号设置 → 日常与活动已新增雨落成诗二级卡片，可配置自动买瓶、自动采集、自动召唤和自动研究；活动过期后后端会压关，前端二级卡片和活动入口会随时间窗隐藏。活动页雨落成诗面板已改为只读展示，手动操作入口不再显示。
+- 萌宠日记（S3 比熊萌宠主题赛季，`2026090100`）已接入为只读活动状态展示：`activitypb.proto` 为 `ActivityNode` 字段 115 新增 `ActivityBodyPetDiary` 及比熊成长/寻宝/照片墙/锦囊子消息；`services/activity.js` 新增只读归一化与 `getPetDiaryActivity`，worker RPC/`data-provider`/`/api/activity/pet-diary` 路由与活动卡背景均已接通；前端 `Activity.vue` 接入 `PetDiaryActivityPanel.vue` 只读面板（比熊之家、爪印手记、拾物小铺、比熊赠礼），不提供投喂/寻宝/兑换/领取操作入口。协议字段来自 2026-09-10 官方 List/Operate 明文响应，子字段语义为推断（置信度见文档），证据与待确认项见 `core/docs/pet-diary-protocol-recovery.md`；`core/test/pet-diary-activity.test.js` 4/4 通过，后端 `node --check`/`require` 与前端构建通过。
 - 蹲守与飞升/秒偷功能已完全去除：前端设置 tab、独立蹲守页、相关组件、setting store 字段、后端 `/api/instant-steal`/`/api/stakeout` 路由、worker RPC/自动启动、runtime provider/config snapshot、store 配置模型和对应 service 文件均已删除；源码残留扫描无匹配。
 - `core/src/controllers/admin-bag-routes.js` 已从 `_v###`/逗号表达式风格清理为命名 helper + 清晰路由处理；接口路径、主要返回结构和旧版缺账号行为保持对齐。
 - `core/src/controllers/admin-farm-resource-routes.js` 已清理为命名 helper + 清晰路由处理；`/api/status` 缺账号 200 返回、其它资源接口缺账号 400 的旧行为保持对齐。

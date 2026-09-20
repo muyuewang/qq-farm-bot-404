@@ -12,6 +12,7 @@ function registerAdminPetRoutes({ app, provider, store, getAccountIdFromRequest,
     catch (error) { sendProviderError(res, error); }
   });
   route('get', '/api/dog/info', id => provider.getPetOverview(id));
+  route('post', '/api/dog/activate', (id, body) => provider.activateDog(id, Number(body.dogId)));
   route('post', '/api/dog/deploy', (id, body) => provider.deployDog(id, Number(body.dogId)));
   route('post', '/api/dog/withdraw', id => provider.withdrawDog(id));
   route('post', '/api/dog/feed', (id, body) => provider.feedDog(id, Number(body.foodId), Number(body.count) || 1));

@@ -85,6 +85,7 @@ function buildSettingsPayload(store, accountId, currentUser) {
   return {
     intervals: accountId ? store.getIntervals(accountId) : {},
     plantingStrategy: accountId ? store.getPlantingStrategy(accountId) : null,
+    prioritizeGrowthTasks: accountId ? store.getPrioritizeGrowthTasks(accountId) : false,
     prioritize2x2Crops:
       accountId && typeof store.getPrioritize2x2Crops === "function"
         ? store.getPrioritize2x2Crops(accountId)
@@ -95,10 +96,6 @@ function buildSettingsPayload(store, accountId, currentUser) {
       accountId && typeof store.getAutoCodeRefresh === "function"
         ? store.getAutoCodeRefresh(accountId)
         : { enabled: false, intervalMinutes: 60 },
-    stealDelaySeconds:
-      accountId && typeof store.getStealDelaySeconds === "function"
-        ? store.getStealDelaySeconds(accountId)
-        : 0,
     fertilizerBuyOrganicCount:
       accountId && typeof store.getFertilizerBuyOrganicCount === "function"
         ? store.getFertilizerBuyOrganicCount(accountId)

@@ -36,7 +36,7 @@ function formatDateTime(seconds?: number) {
   <section class="space-y-4">
     <header class="storm-header relative overflow-hidden rounded-lg p-4 text-white shadow-sm sm:p-5">
       <img src="/activity/rain-poem/day-rain-bg.jpg" alt="" class="pointer-events-none absolute inset-0 h-full w-full object-cover object-center">
-      <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#081824]/90 via-[#102b3c]/72 to-[#173445]/45" />
+      <div class="pointer-events-none absolute inset-0 from-[#081824]/90 via-[#102b3c]/72 to-[#173445]/45 bg-gradient-to-r" />
       <div class="relative flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2 text-xs text-cyan-100/80">

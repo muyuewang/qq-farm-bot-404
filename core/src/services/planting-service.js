@@ -152,7 +152,7 @@ const PLANTING_STRATEGY_LABELS = {
   max_fert_profit: '最大普通肥净利润/时',
   bag_priority: '背包种子优先',
   task_priority: '任务作物优先',
-  seed_priority: '优先种植指定种子',
+  seed_priority: '优先种植指定种子'
 };
 
 function getPlantingStrategyLabel(strategy) {

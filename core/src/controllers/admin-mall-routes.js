@@ -1,5 +1,7 @@
 const { getItemById, getItemImageById } = require("../config/gameConfig");
 const { parseMallPriceInfo, parseMallLimitInfo, parseMallItemIds } = require("../services/mall");
+const mallImageSupplement = require('../gameConfig/MallImageSupplement.json');
+const mallImageByGoodsId = new Map(mallImageSupplement.entries.map(entry => [entry.goodsId, entry]));
   const { toNum } = require("../utils/utils");
 
 const FEATURED_MALL_GOODS_ORDER = [1002, 1003, 1006];
@@ -150,8 +152,10 @@ function registerAdminMallRoutes({
         }
 
         const isSoldOut = limitCount > 0 && boughtNum >= limitCount;
-        const itemIds = (Array.isArray(discount.item_ids) ? discount.item_ids : [discount.item_ids])
+        const parsedItemIds = (Array.isArray(discount.item_ids) ? discount.item_ids : [discount.item_ids])
           .flatMap(parseMallItemIds);
+        const imageMeta = mallImageByGoodsId.get(id);
+        const itemIds = parsedItemIds.length ? parsedItemIds : (imageMeta?.itemIds || []);
         const dynamicImages = itemIds.map(getItemImageById).filter(Boolean);
         goods.push({
           id,
@@ -172,9 +176,11 @@ function registerAdminMallRoutes({
           sourceOrder,
           endTime,
           discount: discount.discount || "",
-          images: meta.images || dynamicImages,
+          images: meta.images || (imageMeta?.file
+            ? [`/game-config/seed_images_named/${encodeURIComponent(imageMeta.file)}`]
+            : dynamicImages),
           layout: meta.layout || "single",
-          canBuy: !isSoldOut && (isFree || !currencyMeta.balanceKnown || currencyMeta.currencyBalance >= price),
+          canBuy: !isSoldOut,
         });
       }
 

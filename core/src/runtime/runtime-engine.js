@@ -3,7 +3,7 @@ const path = require('node:path');
 const process = require('node:process');
 const { Worker } = require('node:worker_threads');
 const store = require('../models/store');
-const { updateRuntimeConfig } = require('../config/config');
+const { getRuntimeConfig, updateRuntimeConfig } = require('../config/config');
 const { sendPushooMessage, sendSmtpEmail } = require('../services/push');
 const { MiniProgramLoginSession } = require('../services/qrlogin');
 const { createAutoCodeRefreshService } = require('./auto-code-refresh');
@@ -237,8 +237,12 @@ function createRuntimeEngine(options = {}) {
         const sysConfig = store.getSystemConfig();
         if (sysConfig) {
             updateRuntimeConfig(sysConfig);
+            const runtimeSystemConfig = getRuntimeConfig();
+            if (runtimeSystemConfig.clientVersion !== sysConfig.clientVersion) {
+                store.setSystemConfig({ ...sysConfig, clientVersion: runtimeSystemConfig.clientVersion });
+            }
             log('系统', `已加载系统配置: serverUrl=${  sysConfig.serverUrl
-                 }, clientVersion=${  sysConfig.clientVersion
+                 }, clientVersion=${  runtimeSystemConfig.clientVersion
                  }, platform=${  sysConfig.platform}`);
         }
 

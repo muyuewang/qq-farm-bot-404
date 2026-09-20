@@ -3,8 +3,6 @@ import { marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 
-const updateReadme = '暂无更新日志。'
-
 defineProps<{
   show: boolean
 }>()
@@ -12,6 +10,8 @@ defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+const updateReadme = '暂无更新日志。'
 
 const appStore = useAppStore()
 

@@ -28,6 +28,7 @@ const ACTIVITY_CARD_ASSET_RULES = [
   { ids: [2026080100, 2026081200], title: '青酿换万金', paths: ['gui/texture/activity/liqueur/bigImg/img_liqueur_share_bg'] },
   { ids: [2026081800], title: '鹊桥寄情', paths: ['gui/texture/activity/qixi/img_qixi_bg'] },
   { ids: [2026090900], title: '公益小红花', paths: ['gui/texture/icon/icon_banner_redFlower'] },
+  { ids: [2026090100], title: '萌宠日记', paths: ['gui/texture/Season/S3/S3BigImg/img_S3_rule1'] },
 ];
 
 function getDefaultMiniappRoot() {

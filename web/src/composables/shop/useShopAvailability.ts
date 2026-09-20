@@ -58,7 +58,18 @@ export function createShopAvailability(context: ShopAvailabilityContext) {
       return true
     if (Number(item?.currencyId) === 1004)
       return context.currentDiamond() >= priceOf(item)
+    if (Number(item?.currencyId) === 1005)
+      return context.userGoldBean() >= priceOf(item)
+    if (Number(item?.currencyId) === 1001)
+      return context.currentGold() >= priceOf(item)
     return context.currentCoupon() >= priceOf(item)
+  }
+
+  function mallBalanceMessage(item: any, hint = false) {
+    const messages: Record<number, string> = hint
+      ? { 1001: L.goldInsufficient, 1002: L.couponInsufficient, 1004: L.diamondInsufficient, 1005: L.goldBeanInsufficient }
+      : { 1001: L.goldLow, 1002: L.couponLow, 1004: L.diamondLow, 1005: L.goldBeanLow }
+    return messages[Number(item?.currencyId || 1002)] || (hint ? '当前所需道具不足。' : '所需道具不足')
   }
 
   function getSeedHint(item: any) {
@@ -97,7 +108,7 @@ export function createShopAvailability(context: ShopAvailabilityContext) {
     if (!item.canBuy)
       return L.unavailable
     if (!canAffordMall(item))
-      return Number(item?.currencyId) === 1004 ? L.diamondInsufficient : L.couponInsufficient
+      return mallBalanceMessage(item, true)
     const limitCount = Number(item.limitCount || 0)
     const boughtNum = Number(item.boughtNum || 0)
     if (limitCount > 0) {
@@ -147,7 +158,7 @@ export function createShopAvailability(context: ShopAvailabilityContext) {
     if (!item.canBuy)
       return L.notBuyable
     if (!canAffordMall(item))
-      return Number(item?.currencyId) === 1004 ? L.diamondLow : L.couponLow
+      return mallBalanceMessage(item)
     return item.isFree ? L.canClaimFree : L.canBuy
   }
 

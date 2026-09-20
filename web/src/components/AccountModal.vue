@@ -124,6 +124,8 @@ const captureNextStep = computed(() => {
   return `即将自动${props.editData ? '更新' : '添加'}账号`
 })
 
+const { pause: stopWxCheck, resume: startWxCheck } = useIntervalFn(pollWxLogin, 2000, { immediate: false })
+
 async function pollWxLogin(refreshExpired = true) {
   if (!props.show || document.hidden || activeTab.value !== 'wx' || wxLoginStore.isLoading || wxChecking.value)
     return
@@ -159,8 +161,6 @@ async function pollWxLogin(refreshExpired = true) {
     wxChecking.value = false
   }
 }
-
-const { pause: stopWxCheck, resume: startWxCheck } = useIntervalFn(pollWxLogin, 2000, { immediate: false })
 
 useEventListener(document, 'visibilitychange', () => {
   // 先检查原二维码，避免切回时丢弃已在微信确认的登录。

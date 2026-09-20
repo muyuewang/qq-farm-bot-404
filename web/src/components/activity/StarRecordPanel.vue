@@ -60,7 +60,7 @@ function stateLabel(item: StarActivityData['starRecord']['records'][number]) {
         <img
           src="/activity/star-festival/constellation-glow.png"
           alt=""
-          class="pointer-events-none absolute -right-8 -top-8 h-28 w-28 object-contain transition"
+          class="pointer-events-none absolute h-28 w-28 object-contain transition -right-8 -top-8"
           :class="item.claimed || item.claimable ? 'opacity-35' : 'grayscale opacity-10'"
         >
         <div class="relative flex items-center justify-between gap-2">

@@ -408,9 +408,7 @@ const DEFAULT_INTERVALS = {
     farmMin: 2,
     farmMax: 5,
     helpMin: 30,
-    helpMax: 35,
-    stealMin: 25,
-    stealMax: 30
+    helpMax: 35
 };
 
 /** 默认静默时段 */
@@ -648,11 +646,7 @@ function normalizeIntervals(raw) {
     let helpMax = toInt(input.helpMax, 35);
     if (helpMin > helpMax) [helpMin, helpMax] = [helpMax, helpMin];
 
-    let stealMin = toInt(input.stealMin, 25);
-    let stealMax = toInt(input.stealMax, 30);
-    if (stealMin > stealMax) [stealMin, stealMax] = [stealMax, stealMin];
-
-    return { ...input, farm, farmMin, farmMax, helpMin, helpMax, stealMin, stealMax };
+    return { ...input, farm, farmMin, farmMax, helpMin, helpMax };
 }
 
 // ==================== 配置克隆/合并 ====================
