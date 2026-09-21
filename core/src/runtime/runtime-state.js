@@ -61,6 +61,7 @@ function createRuntimeState(deps) {
             knownFriendGids: store.getKnownFriendGids(accountId),
             bagSeedPriority: store.getBagSeedPriority(accountId),
             bagSeedKnownIds: store.getConfigSnapshot(accountId).bagSeedKnownIds,
+            bagSeedExcludedIds: store.getBagSeedExcludedIds(accountId),
             bagSeedFallbackStrategy: store.getBagSeedFallbackStrategy(accountId),
             autoAcceptFriendMinLevel: store.getAutoAcceptFriendMinLevel(accountId),
             capitalMode: store.getCapitalMode(accountId),

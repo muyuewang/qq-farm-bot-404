@@ -1,7 +1,6 @@
 const { sendMsgAsync, getUserState, getWsErrorState } = require('../utils/network');
 const { types } = require('../utils/proto');
 const { toNum, toLong, toTimeSec, getServerTimeSec, log, logWarn, sleep } = require('../utils/utils');
-const { compareBagSeedGameOrder } = require('../utils/bag-seed-order');
 const { getPlantNameBySeedId, getPlantGrowTime, formatGrowTime, getAllSeeds, getPlantBySeedId, getPlantById } = require('../config/gameConfig');
 const {
   getPlantingStrategy,
@@ -459,10 +458,13 @@ async function plantPrioritized2x2Crops(emptyLandIds, lands, accountId) {
   }
   const userState = getUserState();
   const userLevel = Number(userState && userState.level) || 0;
-  const sortedSize2Seeds = bagSeeds
-    .filter(seed => Number(seed?.count) > 0 && Number(seed?.plantSize) === 2)
-    .sort(compareBagSeedGameOrder)
-    .map(seed => ({ ...seed, count: Number(seed.count) || 0 }));
+  // 2x2 种子与 1x1 共用同一份背包优先级顺序；被移除（排除）的种子不参与种植。
+  const syncedPriority = syncBagSeedPriority(accountId, bagSeeds, { persist: false });
+  const excludedSet = new Set(syncedPriority.excluded || []);
+  const sortedSize2Seeds = sortBagSeedsForPlanting(
+    syncedPriority.seeds.filter(seed => (Number(seed.plantSize) || 1) === 2 && !excludedSet.has(seed.seedId)),
+    syncedPriority.priority
+  ).map(seed => ({ ...seed, count: Number(seed.count) || 0 }));
   const lockedByLevelSeeds = sortedSize2Seeds.filter(seed => isSeedLockedByLevel(seed, userLevel));
   const size2Seeds = sortedSize2Seeds.filter(seed => !isSeedLockedByLevel(seed, userLevel));
 
@@ -732,10 +734,13 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
     } catch { }
   }
   const seedPriority = syncedPriority.priority;
+  const excludedSet = new Set(syncedPriority.excluded || []);
 
   // The synchronized list is the same order shown in the settings page.
+  // 1x1 planter only consumes single-cell seeds; 2x2 crops are reserved by
+  // plantPrioritized2x2Crops. Excluded (removed) seeds never plant.
   const availableSeeds = sortBagSeedsForPlanting(
-    syncedPriority.seeds,
+    syncedPriority.seeds.filter(seed => (Number(seed.plantSize) || 1) === 1 && !excludedSet.has(seed.seedId)),
     seedPriority
   );
 

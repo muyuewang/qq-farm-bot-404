@@ -4,12 +4,14 @@ import api from '@/api'
 
 const props = defineProps<{ accountId: string | number }>()
 const priority = defineModel<number[]>({ required: true })
-interface Seed { seedId: number, name: string, count: number, image?: string }
+const excluded = defineModel<number[]>('excludedIds', { required: true })
+interface Seed { seedId: number, name: string, count: number, image?: string, plantSize?: number }
 const seeds = ref<Seed[]>([])
 const loading = ref(false)
 const error = ref('')
 const search = ref('')
 const expanded = ref(false)
+const excludedExpanded = ref(false)
 const dragging = ref<number | null>(null)
 const list = ref<HTMLElement>()
 const dropTarget = ref<number | null>(null)
@@ -23,15 +25,32 @@ onBeforeUnmount(() => {
   requestId += 1
   cancelDrag()
 })
+const excludedSet = computed(() => new Set(excluded.value))
 const ordered = computed(() => {
-  const ids = [...priority.value, ...seeds.value.map(s => s.seedId).filter(id => !priority.value.includes(id))]
-  return ids.map(id => seeds.value.find(s => s.seedId === id)).filter((s): s is Seed => !!s)
+  const ids = [...priority.value, ...seeds.value.map(s => s.seedId).filter(id => !priority.value.includes(id) && !excludedSet.value.has(id))]
+  return ids
+    .filter(id => !excludedSet.value.has(id))
+    .map(id => seeds.value.find(s => s.seedId === id))
+    .filter((s): s is Seed => !!s)
 })
+const excludedSeeds = computed(() => excluded.value
+  .map(id => seeds.value.find(s => s.seedId === id))
+  .filter((s): s is Seed => !!s))
 const visibleSeeds = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   return ordered.value.map((seed, index) => ({ seed, rank: index + 1 }))
     .filter(({ seed }) => !query || seed.name.toLocaleLowerCase().includes(query) || String(seed.seedId).includes(query))
 })
+function excludeSeed(id: number) {
+  priority.value = priority.value.filter(x => x !== id)
+  if (!excluded.value.includes(id))
+    excluded.value = [...excluded.value, id]
+}
+function restoreSeed(id: number) {
+  excluded.value = excluded.value.filter(x => x !== id)
+  if (!priority.value.includes(id))
+    priority.value = [...priority.value, id]
+}
 async function refresh() {
   const request = ++requestId
   loading.value = true
@@ -43,7 +62,16 @@ async function refresh() {
     if (!res.data.ok)
       throw new Error(res.data.error || '读取背包失败')
     seeds.value = res.data.data.seeds
-    priority.value = [...priority.value, ...res.data.data.priority.filter((id: number) => !priority.value.includes(id))]
+    const serverExcluded: number[] = res.data.data.excluded ?? []
+    const serverExcludedSet = new Set(serverExcluded)
+    // 本地未保存的排除项也要保留，避免刷新时把已移除的种子重新加回优先级。
+    const mergedExcluded = [...new Set([...excluded.value, ...serverExcluded])]
+    excluded.value = mergedExcluded
+    const excludedNow = new Set(mergedExcluded)
+    priority.value = [
+      ...priority.value.filter(id => !excludedNow.has(id)),
+      ...res.data.data.priority.filter((id: number) => !priority.value.includes(id) && !excludedNow.has(id) && !serverExcludedSet.has(id)),
+    ]
   }
   catch (e) {
     if (request === requestId)
@@ -199,7 +227,7 @@ watch(expanded, cancelDrag)
         <button type="button" class="h-8 shrink-0 text-xs text-[var(--theme-primary)] disabled:opacity-50" :disabled="loading || dragging !== null" @click="refresh">
           {{ loading ? '读取中…' : '刷新' }}
         </button>
-        <span tabindex="0" aria-label="按从左到右、从上到下的顺序种植；拖动或置顶调整，保存设置后生效。四格作物由四格优先设置控制。" title="按从左到右、从上到下的顺序种植；拖动或置顶调整，保存设置后生效。四格作物由四格优先设置控制。" class="i-carbon-information h-4 w-4 shrink-0 text-gray-400" />
+        <span tabindex="0" aria-label="按从左到右、从上到下的顺序种植单格与四格作物；拖动或置顶调整顺序，点删除可让该种子不种植，保存设置后生效。" title="按从左到右、从上到下的顺序种植单格与四格作物；拖动或置顶调整顺序，点删除可让该种子不种植，保存设置后生效。" class="i-carbon-information h-4 w-4 shrink-0 text-gray-400" />
       </div>
     </div>
     <div v-show="expanded" class="mt-2">
@@ -210,7 +238,7 @@ watch(expanded, cancelDrag)
         正在读取背包…
       </p>
       <p v-else-if="!ordered.length" class="py-4 text-center text-sm text-gray-500">
-        暂无单格种子，将使用第二优先策略。
+        暂无可种植种子，将使用第二优先策略。
       </p>
       <template v-else>
         <div ref="list" class="seed-priority-list max-h-96 overflow-y-auto overscroll-contain px-2">
@@ -225,12 +253,22 @@ watch(expanded, cancelDrag)
                 'border-gray-200 dark:border-gray-700': dragging !== seed.seedId,
               }">
               <div class="flex items-center justify-between gap-1">
-                <span class="text-xs text-gray-500 tabular-nums">#{{ rank }}</span>
-                <button type="button" class="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded text-[var(--theme-primary)] hover:bg-gray-200 disabled:cursor-default disabled:text-gray-400 disabled:opacity-40 dark:hover:bg-gray-700" :disabled="rank === 1" :aria-label="`置顶${seed.name}`" :title="rank === 1 ? '已置顶' : '置顶'" @pointerdown.stop @keydown.stop @click.stop="move(seed.seedId, ordered[0]!.seedId)">
-                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
-                    <path d="M5 4h14M12 20V8m-5 5 5-5 5 5" />
-                  </svg>
-                </button>
+                <span class="flex min-w-0 items-center gap-1">
+                  <span class="text-xs text-gray-500 tabular-nums">#{{ rank }}</span>
+                  <span v-if="(seed.plantSize || 1) >= 2" class="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium leading-4 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">四格</span>
+                </span>
+                <span class="flex shrink-0 items-center">
+                  <button type="button" class="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded text-[var(--theme-primary)] hover:bg-gray-200 disabled:cursor-default disabled:text-gray-400 disabled:opacity-40 dark:hover:bg-gray-700" :disabled="rank === 1" :aria-label="`置顶${seed.name}`" :title="rank === 1 ? '已置顶' : '置顶'" @pointerdown.stop @keydown.stop @click.stop="move(seed.seedId, ordered[0]!.seedId)">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                      <path d="M5 4h14M12 20V8m-5 5 5-5 5 5" />
+                    </svg>
+                  </button>
+                  <button type="button" class="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10" :aria-label="`不种植${seed.name}`" title="不种植" @pointerdown.stop @keydown.stop @click.stop="excludeSeed(seed.seedId)">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
               </div>
               <div class="flex flex-col items-center gap-1 pb-2">
                 <div class="grid h-10 w-10 place-items-center">
@@ -245,6 +283,35 @@ watch(expanded, cancelDrag)
           </div>
         </div>
       </template>
+      <div v-if="excludedSeeds.length" class="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+        <button type="button" class="min-h-8 flex items-center gap-2 text-sm font-medium" :aria-expanded="excludedExpanded" @click="excludedExpanded = !excludedExpanded">
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="h-3 w-3 transition-transform" :class="{ 'rotate-90': excludedExpanded }"><path d="m6 3 5 5-5 5" /></svg>
+          已排除（不种植）
+          <span class="text-xs text-gray-500 font-normal">共 {{ excludedSeeds.length }} 种</span>
+        </button>
+        <div v-show="excludedExpanded" class="seed-priority-grid mt-2">
+          <div v-for="seed in excludedSeeds" :key="`excluded-${seed.seedId}`" class="relative min-w-0 border border-dashed rounded-lg bg-gray-50 p-2 opacity-70 dark:bg-gray-800">
+            <div class="flex items-center justify-between gap-1">
+              <span class="flex min-w-0 items-center gap-1">
+                <span v-if="(seed.plantSize || 1) >= 2" class="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium leading-4 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">四格</span>
+              </span>
+              <button type="button" class="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded text-[var(--theme-primary)] hover:bg-gray-200 dark:hover:bg-gray-700" :aria-label="`恢复种植${seed.name}`" title="恢复种植" @click.stop="restoreSeed(seed.seedId)">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+                  <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" />
+                </svg>
+              </button>
+            </div>
+            <div class="flex flex-col items-center gap-1 pb-2">
+              <div class="grid h-10 w-10 place-items-center">
+                <img v-if="seed.image" :src="seed.image" alt="" class="h-10 w-10 object-contain" draggable="false">
+                <span v-else class="i-carbon-sprout text-2xl text-gray-400" />
+              </div>
+              <div class="w-full truncate text-center text-sm font-medium" :title="seed.name">{{ seed.name }}</div>
+              <span class="text-xs text-gray-500">库存 {{ seed.count }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <Teleport to="body">
       <div v-if="draggedSeed" aria-hidden="true" class="seed-drag-preview fixed border rounded-lg bg-gray-50 p-2 text-gray-900 dark:bg-gray-800 dark:text-gray-100" :style="{ left: `${pointer.x - pointer.offsetX}px`, top: `${pointer.y - pointer.offsetY}px`, width: `${pointer.width}px`, height: `${pointer.height}px` }">

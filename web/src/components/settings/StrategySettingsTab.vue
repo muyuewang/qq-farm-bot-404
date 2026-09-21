@@ -17,6 +17,7 @@ interface StrategySettings {
   auto2x2SyncBuy: boolean
   prioritizeGrowthTasks: boolean
   bagSeedPriority: number[]
+  bagSeedExcludedIds: number[]
   plantSeedPriority: number[]
   bagSeedFallbackStrategy: string
   intervals: {
@@ -156,7 +157,7 @@ function isBagFallbackStrategySelected(value: string | number) {
         </div>
       </div>
 
-      <BagSeedPriority v-if="settings.plantingStrategy === 'bag_priority'" :key="currentAccountId" v-model="settings.bagSeedPriority" :account-id="currentAccountId" />
+      <BagSeedPriority v-if="settings.plantingStrategy === 'bag_priority'" :key="currentAccountId" v-model="settings.bagSeedPriority" v-model:excluded-ids="settings.bagSeedExcludedIds" :account-id="currentAccountId" />
 
       <div v-if="['bag_priority', 'task_priority'].includes(settings.plantingStrategy)" class="flex flex-col gap-2">
         <label class="text-sm text-gray-700 font-medium dark:text-gray-300">

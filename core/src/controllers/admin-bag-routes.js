@@ -199,6 +199,7 @@ function registerAdminBagRoutes({
           seeds: result.seeds,
           priority: result.priority,
           knownIds: result.knownIds,
+          excluded: result.excluded,
         },
       });
     }

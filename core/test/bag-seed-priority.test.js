@@ -112,16 +112,51 @@ test('removed preferred strategies fall back to supported defaults', () => {
   assert.equal(store.getBagSeedFallbackStrategy(accountId), 'level');
 });
 
-test('empty and 2x2 seeds are excluded from the 1x1 priority', () => {
-  const result = store.syncBagSeedPriority('one-by-one-only', [
+test('2x2 seeds join the unified priority and depleted seeds are dropped', () => {
+  const result = store.syncBagSeedPriority('unified-2x2', [
     seed(101, 1),
     seed(102, 9, { plantSize: 2 }),
     seed(103, 8, { count: 0 }),
   ], { persist: false });
 
-  assert.deepEqual(result.priority, [101]);
-  assert.deepEqual(result.knownIds, [101]);
-  assert.deepEqual(result.seeds.map(item => item.seedId), [101]);
+  assert.deepEqual(result.priority, [101, 102]);
+  assert.deepEqual(result.seeds.map(item => item.seedId), [101, 102]);
+  assert.deepEqual(result.excluded, []);
+});
+
+test('excluded seeds are removed from the priority and never re-appended', () => {
+  const accountId = 'excluded-seed';
+  store.applyConfigSnapshot({
+    bagSeedPriority: [101, 102],
+    bagSeedExcludedIds: [102],
+  }, { accountId, persist: false });
+
+  const result = store.syncBagSeedPriority(accountId, [
+    seed(101, 1),
+    seed(102, 2),
+    seed(103, 3),
+  ], { persist: false });
+
+  assert.deepEqual(result.priority, [101, 103]);
+  assert.deepEqual(result.excluded, [102]);
+});
+
+test('custom order across 1x1 and 2x2 is preserved and 2x2 can be excluded', () => {
+  const accountId = 'mixed-order';
+  store.applyConfigSnapshot({
+    bagSeedPriority: [202, 101],
+    bagSeedExcludedIds: [201],
+  }, { accountId, persist: false });
+
+  const result = store.syncBagSeedPriority(accountId, [
+    seed(101, 1),
+    seed(201, 5, { plantSize: 2 }),
+    seed(202, 7, { plantSize: 2 }),
+  ], { persist: false });
+
+  // 202 (2x2) stays first, 101 second; excluded 201 never enters the priority list.
+  assert.deepEqual(result.priority, [202, 101]);
+  assert.equal(result.priority.includes(201), false);
 });
 
 test('depleted seeds retain their position and new seeds are appended', () => {
