@@ -209,7 +209,7 @@ function createCaptureApi({ config, ca, sessionStore, proxyManager, log = () => 
   app.get('/api/sessions/:id/state', wrap(req => handleApiRequest('GET', `/api/sessions/${req.params.id}/state`, {}, { sessionId: getSessionIdFromReq(req) })));
   app.delete('/api/sessions/:id', wrap(req => handleApiRequest('DELETE', `/api/sessions/${req.params.id}`, {}, { sessionId: getSessionIdFromReq(req) })));
   app.get('/api/info', wrap(req => handleApiRequest('GET', '/api/info', {}, { sessionId: getSessionIdFromReq(req) })));
-  app.get('/cert/mitmproxy-ca-cert.cer', wrap(() => ({ status: 200, buffer: getCaCertDer() })));
+  app.get('/cert/mitmproxy-ca-cert.cer', checkAuth, wrap(() => ({ status: 200, buffer: getCaCertDer() })));
 
   function start() {
     return new Promise((resolve, reject) => {
