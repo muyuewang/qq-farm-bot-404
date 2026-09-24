@@ -136,7 +136,11 @@ function registerAdminBagRoutes({
       const usedItemName = getItemName(usedItemId);
       const bagBefore = await provider.getBag(accountId);
 
-      await provider.useItem(accountId, usedItemId, usedCount, toNum(uid));
+      const useResult = await provider.useItem(accountId, usedItemId, usedCount, toNum(uid));
+      const actualUsedCount = useResult?.resumed ? 0 : usedCount;
+      const message = useResult?.firework
+        ? (useResult.resumed ? '已点燃上次放置的烟花' : '已使用并点燃一枚烟花')
+        : buildUseItemMessage(usedItemName, usedCount, []);
       await wait(500);
 
       const bagAfter = await provider.getBag(accountId);
@@ -146,7 +150,7 @@ function registerAdminBagRoutes({
         accountId,
         time: new Date().toISOString().replace("T", " ").slice(0, 19),
         tag: "背包",
-        msg: buildUseItemMessage(usedItemName, usedCount, newItems),
+        msg: useResult?.firework ? message : buildUseItemMessage(usedItemName, usedCount, newItems),
         module: "warehouse",
         event: "use_item",
       });
@@ -156,11 +160,14 @@ function registerAdminBagRoutes({
         data: {
           items: newItems,
           usedItemName,
-          usedCount,
+          usedCount: actualUsedCount,
+          message,
         },
       });
     }
     catch (error) {
+      if (String(error.message).startsWith('烟花：'))
+        return res.json({ ok: false, error: error.message });
       sendProviderError(res, error);
     }
   });

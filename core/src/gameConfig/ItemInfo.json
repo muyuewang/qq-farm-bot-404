@@ -16759,4 +16759,19 @@
     "to_see": null,
     "extra_show": null
   }
+  ,{
+    "id": 1046030,
+    "type": 17,
+    "name": "黄金·月下美人",
+    "sells": "1005:6",
+    "level": 200,
+    "asset_name": "gold/Crop_6030",
+    "max_count": 99999,
+    "max_own": 999990,
+    "desc": "黄金变异获得的果实，卖给商人后，可以获得金豆豆。",
+    "effectDesc": "卖给商人后，可以获得金豆豆。",
+    "rarity": 3,
+    "rarity_color": "B09DED",
+    "jumps": "[97]"
+  }
 ]

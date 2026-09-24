@@ -1,4 +1,6 @@
 [
+  { "id": 1026030, "seed_id": 26030, "fruit_id": 46030, "asset_name": "Crop_6030", "name": "月下美人", "size": 1, "seasons": 1, "grow_phases": "种子:8640;发芽:8640;小叶子:8640;大叶子:8640;花蕾:8640;盛开:0;", "exp": 1680, "fruit_count": 48 },
+  { "id": 1020435, "seed_id": 20435, "fruit_id": 40435, "asset_name": "Crop_435", "name": "山丹丹", "size": 1, "seasons": 1, "grow_phases": "种子:8640;发芽:8640;小叶子:8640;大叶子:8640;花蕾:8640;盛开:0;", "exp": 1680, "fruit_count": 48 },
   { "id": 1020522, "seed_id": 20522, "fruit_id": 40522, "asset_name": "Crop_522", "name": "金币果", "size": 1, "seasons": 1, "grow_phases": "种子:8640;发芽:8640;小叶子:8640;大叶子:8640;初熟:8640;成熟:0;", "exp": 336, "fruit_count": 48 },
   { "id": 1020523, "seed_id": 20523, "fruit_id": 40523, "asset_name": "Crop_523", "name": "经验蘑菇", "size": 1, "seasons": 1, "grow_phases": "种子:8640;发菌:8640;出菇:8640;幼菇:8640;初熟:8640;成熟:0;", "exp": 3024, "fruit_count": 48 },
   {"id": 1020516, "seed_id": 20516, "fruit_id": 40516, "asset_name": "Crop_516", "name": "狗尾草", "size": 1, "seasons": 1, "grow_phases": "种子:8640;发芽:8640;小叶子:8640;大叶子:8640;初熟:8640;成熟:0;", "exp": 1440, "fruit_count": 48},

@@ -75,6 +75,74 @@ message TechTreeSubmitNodeRsp {
     repeated int64 unlocked_node_ids = 3;
 }
 
+message WishSignDrawReq { int32 choose_id = 1; }
+message WishSignClaimReq { int32 choose_id = 1; }
+message WishSignPending {
+    int32 choose_id = 1;
+    int32 text_id = 2;
+    int32 day_id = 3;
+    repeated corepb.Item rewards = 4;
+}
+message ActivityBodyWishSign {
+    int32 remaining_count = 1;
+    int32 activity_day = 2;
+    WishSignPending pending = 3;
+}
+message WishSignDrawRsp {
+    int32 text_id = 1;
+    int32 day_id = 2;
+    repeated corepb.Item rewards = 3;
+}
+message WishSignClaimRsp { repeated corepb.Item awards = 1; }
+
+message ShareRewardDailyView {
+    int32 claimed_count = 1;
+    bool first_share_awarded = 2;
+    bool daily_reward_claimed = 3;
+    int32 claim_limit = 4;
+}
+message ShareRewardPoolView { int32 claimed_count = 1; int32 claim_limit = 2; }
+message ShareRewardMilestoneView {
+    int32 tier_id = 1;
+    int32 threshold = 2;
+    repeated corepb.Item rewards = 3;
+    int32 state = 4;
+}
+message ShareRewardRedDots {
+    bool daily = 1;
+    bool milestone = 2;
+    bool unread_host_log = 3;
+    bool first_share = 4;
+    bool unread_guest_log = 5;
+}
+message ShareRewardSummary {
+    int64 score_item_id = 1;
+    int32 current_score = 2;
+    ShareRewardDailyView daily = 3;
+    ShareRewardPoolView my_pool = 4;
+    repeated ShareRewardMilestoneView milestones = 5;
+    int32 daily_reward = 6;
+    int32 first_share_reward = 7;
+    ShareRewardRedDots red_dots = 8;
+}
+message ActivityBodyShareReward { ShareRewardSummary summary = 1; }
+message ShareRewardArk {
+    int64 host_gid = 1;
+    string share_key = 2;
+    string share_open_id = 3;
+    int32 ark_biz_type = 4;
+    bytes ark_biz_param = 5;
+}
+message ShareRewardShareRsp { ShareRewardArk ark = 1; int32 granted_score = 2; }
+message ShareRewardClaimMilestonesRsp {
+    repeated int32 claimed_tier_ids = 1;
+    repeated corepb.Item rewards = 2;
+}
+message ShareRewardClaimDailyRsp {
+    repeated corepb.Item rewards = 1;
+    int32 granted_score = 2;
+}
+
 message CharityFlowerClaimShareReq {}
 message CharityFlowerDonateAllReq {}
 message CharityFlowerClaimRewardReq { int64 need_personal_score = 1; }
@@ -99,7 +167,16 @@ message OperateRequest {
     CharityFlowerClaimXhhReq charity_flower_claim_xhh = 137;
     CharityFlowerSetComplianceAgreedReq charity_flower_set_compliance_agreed = 138;
     TechTreeSubmitNodeReq tech_tree_submit_node = 140;
+    WishSignDrawReq wish_sign_draw = 151;
+    WishSignClaimReq wish_sign_claim = 152;
+    ShareRewardShareReq share_reward_share = 153;
+    ShareRewardClaimMilestonesReq share_reward_claim_milestones = 154;
+    ShareRewardClaimDailyReq share_reward_claim_daily = 157;
 }
+
+message ShareRewardShareReq {}
+message ShareRewardClaimMilestonesReq {}
+message ShareRewardClaimDailyReq {}
 
 message RandomShopItem {
     int32 id = 1;
@@ -245,6 +322,8 @@ message ActivityNode {
     WeatherResearchInfo weather_research = 118;
     ActivityBodyCharityFlower charity_flower = 116;
     ActivityBodyPetDiary pet_diary = 115;
+    ActivityBodyWishSign wish_sign = 119;
+    ActivityBodyShareReward share_reward = 120;
 }
 
 enum CharityFlowerShareStatus {
@@ -386,6 +465,11 @@ message OperateReply {
     CharityFlowerClaimXhhRsp charity_flower_claim_xhh = 138;
     CharityFlowerSetComplianceAgreedRsp charity_flower_set_compliance_agreed = 139;
     TechTreeSubmitNodeRsp tech_tree_submit_node = 140;
+    WishSignDrawRsp wish_sign_draw = 151;
+    WishSignClaimRsp wish_sign_claim = 152;
+    ShareRewardShareRsp share_reward_share = 153;
+    ShareRewardClaimMilestonesRsp share_reward_claim_milestones = 154;
+    ShareRewardClaimDailyRsp share_reward_claim_daily = 157;
 }
 
 // 萌宠日记（S3 比熊萌宠主题赛季，uid = SEASON_BEAR_CAMPAIGN）活动体，

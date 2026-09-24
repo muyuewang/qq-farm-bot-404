@@ -273,6 +273,12 @@ const DEFAULT_AUTOMATION = {
     charity_flower_donate: false,
     charity_flower_reward_claim: false,
     charity_flower_public_fund_claim: false,
+    wish_sign_draw: false,
+    wish_sign_choice: 1,
+    wish_sign_claim: false,
+    share_reward_share: false,
+    share_reward_daily: false,
+    share_reward_milestones: false,
     // 萌宠成长日记（S3）。刻意不提供的开关：
     // 拾物小铺兑换（exchange，需用户指定商品）、锦囊付费刷新（花点券）、
     // markStories（纯 UI 状态无奖励）、skipBattle（是设置项不是任务）。
@@ -340,11 +346,15 @@ const PET_DIARY_AUTOMATION_KEYS = [
     'pet_diary_battle',
     'pet_diary_charm_equip'
 ];
+const WISH_SIGN_AUTOMATION_KEYS = ['wish_sign_draw', 'wish_sign_claim'];
+const SHARE_REWARD_AUTOMATION_KEYS = ['share_reward_share', 'share_reward_daily', 'share_reward_milestones'];
 
 // 注意：这里的时间窗与 web/src/constants/activity-windows.ts 是手工同步的两份字面量
 // （core 是 CommonJS、web 是 TS，无法共享模块）。改一处必须改另一处，
 // 否则前端会显示后端已强制关闭的开关。
 const TIMED_ACTIVITY_AUTOMATION_GROUPS = [
+    { startTime: 1790179200, endTime: 1791388799, keys: WISH_SIGN_AUTOMATION_KEYS },
+    { startTime: 1790179200, endTime: 1791820799, keys: SHARE_REWARD_AUTOMATION_KEYS },
     {
         startTime: 1788192000,
         endTime: 1788969599,
@@ -779,6 +789,9 @@ function normalizeAccountConfig(raw, fallbackConfig = accountFallbackConfig) {
                 cfg.automation[key] = Math.max(60, Math.min(7200, Number(value) || 300));
             } else if (key === 'qixi_friend_priority') {
                 cfg.automation[key] = normalizeKnownFriendGids(value, []);
+            } else if (key === 'wish_sign_choice') {
+                const choice = Number(value);
+                cfg.automation[key] = Number.isInteger(choice) && choice >= 1 && choice <= 6 ? choice : 1;
             } else {
                 cfg.automation[key] = !!value;
             }
@@ -1295,6 +1308,9 @@ function applyConfigSnapshot(patch = {}, opts = {}) {
                 cfg.automation[key] = Math.max(60, Math.min(7200, Number(value) || 300));
             } else if (key === 'qixi_friend_priority') {
                 cfg.automation[key] = normalizeKnownFriendGids(value, []);
+            } else if (key === 'wish_sign_choice') {
+                const choice = Number(value);
+                cfg.automation[key] = Number.isInteger(choice) && choice >= 1 && choice <= 6 ? choice : 1;
             } else {
                 cfg.automation[key] = !!value;
             }

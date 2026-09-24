@@ -74,7 +74,7 @@ stat -f '%z bytes, %Sm' -t '%Y-%m-%d %H:%M:%S' "$TSDK_SNAPSHOT/tsdk.wasm"
 npm run inspect:tsdk -- \
   --wasm "$TSDK_SNAPSHOT/tsdk.wasm" \
   --game-js "$TSDK_SNAPSHOT/game.js" \
-  --baseline src/utils/tsdk-v3.9.0.1789137379.wasm
+  --baseline src/utils/tsdk-v3.9.0.1790160550.wasm
 ```
 
 需要保存机器可读结果时追加 `--json`：
@@ -83,7 +83,7 @@ npm run inspect:tsdk -- \
 npm run --silent inspect:tsdk -- \
   --wasm "$TSDK_SNAPSHOT/tsdk.wasm" \
   --game-js "$TSDK_SNAPSHOT/game.js" \
-  --baseline src/utils/tsdk-v3.9.0.1789137379.wasm \
+  --baseline src/utils/tsdk-v3.9.0.1790160550.wasm \
   --json
 ```
 

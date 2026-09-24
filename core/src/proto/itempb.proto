@@ -28,6 +28,13 @@ message SellReply {
 
 message UseRequest {
     corepb.Item item = 1;
+    UseTarget target = 2;
+}
+
+message UseTarget {
+    int64 host_gid = 1;
+    repeated int64 land_ids = 2;
+    int64 use_config_id = 3;
 }
 
 message UseReply {

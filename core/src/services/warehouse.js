@@ -21,7 +21,8 @@ const {
 const { isAutomationOn } = require('../models/store');
 const { sendMsgAsync, networkEvents, getUserState } = require('../utils/network');
 const { types } = require('../utils/proto');
-const { toLong, toNum, log, logWarn, sleep } = require('../utils/utils');
+const { toLong, toNum, log, logWarn, sleep, getServerTimeSec } = require('../utils/utils');
+const { FIREWORK_ITEM_ID, createFireworkUse } = require('./firework-use');
 const { compareBagSeedGameOrder } = require('../utils/bag-seed-order');
 const { updateStatusGold } = require('./status');
 
@@ -104,6 +105,31 @@ async function sellItems(items) {
  * 使用背包物品。官方请求要求携带物品 UID；未显式传入时从背包查找。
  */
 async function useItem(itemId, count = 1, uid = 0) {
+  if (toNum(itemId) === FIREWORK_ITEM_ID) return useFirework(count, uid);
+  return useBagItem(itemId, count, uid);
+}
+
+const useFirework = createFireworkUse({
+  now: getServerTimeSec,
+  getFarm: async () => {
+    const request = types.AllLandsRequest.encode(types.AllLandsRequest.create({})).finish();
+    const { body } = await sendMsgAsync('gamepb.plantpb.PlantService', 'AllLands', request);
+    return types.AllLandsReply.decode(body);
+  },
+  place: uid => useBagItem(FIREWORK_ITEM_ID, 1, uid, {
+    host_gid: toLong(getUserState().gid), use_config_id: 0,
+  }),
+  ignite: async () => {
+    const request = types.FarmingRequest.encode(types.FarmingRequest.create({
+      host_gid: toLong(getUserState().gid), host_type: 0, reason: 0,
+      clear_farm_social_item_ids: [toLong(FIREWORK_ITEM_ID)],
+    })).finish();
+    const { body } = await sendMsgAsync('gamepb.plantpb.PlantService', 'Farming', request);
+    return types.FarmingReply.decode(body);
+  },
+});
+
+async function useBagItem(itemId, count, uid, target) {
   let itemUid = toNum(uid);
   if (itemUid <= 0) {
     const bag = await getBag();
@@ -120,6 +146,7 @@ async function useItem(itemId, count = 1, uid = 0) {
         count: toLong(count),
         uid: toLong(itemUid),
       },
+      ...(target ? { target } : {}),
     })
   ).finish();
   const { body } = await sendMsgAsync('gamepb.itempb.ItemService', 'Use', request);

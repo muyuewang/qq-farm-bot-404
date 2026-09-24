@@ -20,6 +20,18 @@ export const PET_DIARY_ACTIVITY_WINDOW = {
   updatedMs: 1789005600 * 1000,
 }
 
+export const WISH_SIGN_ACTIVITY_WINDOW = {
+  startMs: 1790179200 * 1000,
+  endMs: 1791388799 * 1000,
+  updatedMs: 1790179200 * 1000,
+}
+
+export const SHARE_REWARD_ACTIVITY_WINDOW = {
+  startMs: 1790179200 * 1000,
+  endMs: 1791820799 * 1000,
+  updatedMs: 1790179200 * 1000,
+}
+
 export function isWithinActivityWindowMs(window: { startMs: number, endMs: number }, nowMs = Date.now()) {
   return nowMs >= window.startMs && nowMs <= window.endMs
 }

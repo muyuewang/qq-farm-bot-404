@@ -28,6 +28,12 @@ export interface AutomationConfig {
   charity_flower_donate?: boolean
   charity_flower_reward_claim?: boolean
   charity_flower_public_fund_claim?: boolean
+  wish_sign_draw?: boolean
+  wish_sign_choice?: number
+  wish_sign_claim?: boolean
+  share_reward_share?: boolean
+  share_reward_daily?: boolean
+  share_reward_milestones?: boolean
   pet_diary_adopt?: boolean
   pet_diary_feed?: boolean
   pet_diary_draw?: boolean

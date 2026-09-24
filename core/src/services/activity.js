@@ -16,7 +16,8 @@ const { getItemImageById, getItemById } = require('../config/gameConfig');
 const { getDataDir } = require('../config/runtime-paths');
 const { createModuleLogger } = require('./logger');
 const { readJsonFile, writeJsonFileAtomic } = require('./json-db');
-const { getBag, getBagItems } = require('./warehouse');
+const { getBag, getBagItems, useItem } = require('./warehouse');
+const wishSignRewards = require('../gameConfig/WishSignRewards.json');
 
 const activityLogger = createModuleLogger('activity');
 
@@ -53,6 +54,57 @@ const CHARITY_FLOWER_CLAIM_SHARE_CMD = 35;
 const CHARITY_FLOWER_DONATE_ALL_CMD = 36;
 const CHARITY_FLOWER_CLAIM_REWARD_CMD = 37;
 const CHARITY_FLOWER_CLAIM_XHH_CMD = 38;
+const WISH_SIGN_GROUP_ID = 2026092400;
+const WISH_SIGN_ACTIVITY_ID = 2026092401;
+const WISH_SIGN_ACTIVITY_UID = 'WishSignMainUI';
+const WISH_SIGN_START_TIME = 1790179200;
+const WISH_SIGN_END_TIME = 1791388799;
+const SHARE_REWARD_GROUP_ID = 2026092500;
+const SHARE_REWARD_ACTIVITY_ID = 2026092501;
+const SHARE_REWARD_ACTIVITY_UID = 'HappySharePanel';
+const SHARE_REWARD_START_TIME = 1790179200;
+const SHARE_REWARD_END_TIME = 1791820799;
+const WISH_SIGN_CHOICES = ['财运', '感情', '前程', '生活', '农耕', '人际'];
+// 萌宠日记（S3 比熊萌宠主题赛季）。协议字段与文案来自 2026-09-10 官方客户端
+// List/Operate 明文响应，详见 core/docs/pet-diary-protocol-recovery.md。
+const PET_DIARY_ACTIVITY_UID = 'SEASON_BEAR_CAMPAIGN';
+const PET_DIARY_GROUP_ACTIVITY_ID = 2026090100;
+const PET_DIARY_ACTIVITY_ID = 2026090101;       // 比熊主体，承载 ActivityNode 字段 115
+const PET_DIARY_GIFT_ACTIVITY_ID = 2026090102;  // 比熊赠礼（star_record）
+const PET_DIARY_SHOP_ACTIVITY_ID = 2026090103;  // 拾物小铺（exchange_shop）
+const PET_DIARY_START_TIME = 1789005600;
+const PET_DIARY_END_TIME = 1791820799;
+const PET_DIARY_ITEM_IDS = { cake: 1028, star: 1029 };
+const PET_DIARY_ITEM_NAMES = new Map([
+  [1028, '萌宠元气糕'], [1029, '幸运星'], [1030, '待护送宝藏'],
+]);
+
+function getPetDiaryItemName(itemId) {
+  const id = toNum(itemId);
+  if (!id) return '';
+  return PET_DIARY_ITEM_NAMES.get(id) || '';
+}
+
+function normalizePetDiaryItem(item) {
+  if (!item) return null;
+  const id = toNum(item.id);
+  const count = toNum(item.count);
+  if (!id && !count) return null;
+  return { itemId: id, count, name: getPetDiaryItemName(id) };
+}
+
+function parsePetDiaryPhotoContent(content) {
+  if (typeof content !== 'string' || !content) return { photo: '', say: '' };
+  try {
+    const parsed = JSON.parse(content);
+    return {
+      photo: String(parsed?.photo || ''),
+      say: String(parsed?.say || ''),
+    };
+  } catch {
+    return { photo: '', say: '' };
+  }
+}
 const RAIN_POEM_ITEM_NAMES = new Map([
   [1027, '雷电徽章'], [5001, '天气采集瓶'], [5002, '雷雨召唤瓶'],
   [5005, '青蛙使坏瓶'], [5006, '乌云使坏瓶'],
@@ -390,6 +442,11 @@ async function operateActivity(activityId, cmd, options = {}) {
     };
   }
   if (options?.charityFlowerClaimXhh) payload.charity_flower_claim_xhh = {};
+  if (options?.wishSignDraw) payload.wish_sign_draw = { choose_id: toNum(options.wishSignDraw.chooseId) };
+  if (options?.wishSignClaim) payload.wish_sign_claim = { choose_id: toNum(options.wishSignClaim.chooseId) };
+  if (options?.shareRewardShare) payload.share_reward_share = {};
+  if (options?.shareRewardClaimMilestones) payload.share_reward_claim_milestones = {};
+  if (options?.shareRewardClaimDaily) payload.share_reward_claim_daily = {};
 
   const request = types.ActivityOperateRequest.encode(
     types.ActivityOperateRequest.create(payload)
@@ -867,6 +924,106 @@ function normalizeCoreItem(item) {
 
 function isCharityFlowerActive(nowSeconds = Math.floor(Date.now() / 1000)) {
   return nowSeconds >= CHARITY_FLOWER_START_TIME && nowSeconds <= CHARITY_FLOWER_END_TIME;
+}
+
+function isWishSignActive(nowSeconds = Math.floor(Date.now() / 1000)) {
+  return nowSeconds >= WISH_SIGN_START_TIME && nowSeconds <= WISH_SIGN_END_TIME;
+}
+
+function isShareRewardActive(nowSeconds = Math.floor(Date.now() / 1000)) {
+  return nowSeconds >= SHARE_REWARD_START_TIME && nowSeconds <= SHARE_REWARD_END_TIME;
+}
+
+function normalizeWishSignActivity(node, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const body = node?.wish_sign || {};
+  const pending = body.pending;
+  return {
+    title: '秋祈良愿', activityId: WISH_SIGN_ACTIVITY_ID,
+    startTime: WISH_SIGN_START_TIME, endTime: WISH_SIGN_END_TIME,
+    active: isWishSignActive(nowSeconds),
+    remainingCount: toNum(body.remaining_count),
+    activityDay: toNum(body.activity_day),
+    pending: pending ? {
+      chooseId: toNum(pending.choose_id), textId: toNum(pending.text_id),
+      dayId: toNum(pending.day_id), rewards: (pending.rewards || []).map(normalizeCoreItem),
+    } : null,
+    choices: WISH_SIGN_CHOICES.map((name, index) => ({ id: index + 1, name })),
+    rewardPool: wishSignRewards.map(({ dayId, itemId, count }) => ({
+      dayId, ...normalizeCoreItem({ id: itemId, count }),
+    })),
+  };
+}
+
+function normalizeShareRewardActivity(node, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const summary = node?.share_reward?.summary || {};
+  const daily = summary.daily || {};
+  return {
+    title: '快乐不独享', activityId: SHARE_REWARD_ACTIVITY_ID,
+    startTime: SHARE_REWARD_START_TIME, endTime: SHARE_REWARD_END_TIME,
+    active: isShareRewardActive(nowSeconds),
+    scoreItemId: toNum(summary.score_item_id), currentScore: toNum(summary.current_score),
+    daily: {
+      claimedCount: toNum(daily.claimed_count), claimLimit: toNum(daily.claim_limit),
+      rewardClaimed: !!daily.daily_reward_claimed,
+      firstShareAwarded: !!daily.first_share_awarded,
+      dailyReward: toNum(summary.daily_reward), firstShareReward: toNum(summary.first_share_reward),
+      poolClaimed: toNum(summary.my_pool?.claimed_count), poolLimit: toNum(summary.my_pool?.claim_limit),
+    },
+    milestones: (summary.milestones || []).map(tier => ({
+      id: toNum(tier.tier_id), threshold: toNum(tier.threshold), state: toNum(tier.state),
+      rewards: (tier.rewards || []).map(normalizeCoreItem),
+    })),
+  };
+}
+
+async function getWishSignActivity() {
+  const group = await getActivityGroup(WISH_SIGN_GROUP_ID, WISH_SIGN_ACTIVITY_UID);
+  const node = findActivityNodeById([group?.group], WISH_SIGN_ACTIVITY_ID);
+  if (!node?.wish_sign) throw new Error('秋祈良愿活动数据未下发');
+  return normalizeWishSignActivity(node);
+}
+
+async function getShareRewardActivity() {
+  const group = await getActivityGroup(SHARE_REWARD_GROUP_ID, SHARE_REWARD_ACTIVITY_UID);
+  const node = findActivityNodeById([group?.group], SHARE_REWARD_ACTIVITY_ID);
+  if (!node?.share_reward?.summary) throw new Error('快乐不独享活动数据未下发');
+  return normalizeShareRewardActivity(node);
+}
+
+async function operateWishSign(action, chooseId) {
+  if (!isWishSignActive()) throw new Error('秋祈良愿未开始或已结束');
+  const choice = Number(chooseId);
+  if (!Number.isInteger(choice) || choice < 1 || choice > WISH_SIGN_CHOICES.length) throw new Error('祈愿选择无效');
+  const before = await getWishSignActivity();
+  if (action === 'draw') {
+    if (before.pending || before.remainingCount <= 0) throw new Error('当前没有可祈愿次数，或尚有奖励待领取');
+  } else if (action === 'claim') {
+    if (!before.pending || before.pending.chooseId !== choice) throw new Error('没有与该签文匹配的待领奖励');
+  } else throw new Error('不支持的祈愿操作');
+  const reply = await operateActivityReply(WISH_SIGN_ACTIVITY_ID, action === 'draw' ? 51 : 52,
+    action === 'draw' ? { wishSignDraw: { chooseId: choice } } : { wishSignClaim: { chooseId: choice } });
+  const rewards = action === 'draw' ? reply.wish_sign_draw?.rewards : reply.wish_sign_claim?.awards;
+  return { ok: true, rewards: (rewards || []).map(normalizeCoreItem) };
+}
+
+async function operateShareReward(action) {
+  if (!isShareRewardActive()) throw new Error('快乐不独享未开始或已结束');
+  const before = await getShareRewardActivity();
+  if (action === 'daily' && before.daily.rewardClaimed) throw new Error('今日快乐值已领取');
+  if (action === 'share' && before.daily.firstShareAwarded) throw new Error('今日首次分享奖励已领取');
+  if (action === 'milestones' && !before.milestones.some(tier => tier.state === 2 && before.currentScore >= tier.threshold)) {
+    throw new Error('没有可领取的快乐值档位');
+  }
+  const commands = { daily: 73, share: 69, milestones: 70 };
+  if (!commands[action]) throw new Error('不支持的快乐不独享操作');
+  const reply = await operateActivityReply(SHARE_REWARD_ACTIVITY_ID, commands[action]);
+  const result = action === 'daily' ? reply.share_reward_claim_daily
+    : action === 'share' ? reply.share_reward_share : reply.share_reward_claim_milestones;
+  return {
+    ok: true, grantedScore: toNum(result?.granted_score),
+    claimedTierIds: (result?.claimed_tier_ids || []).map(toNum),
+    rewards: (result?.rewards || []).map(normalizeCoreItem),
+  };
 }
 
 function normalizeCharityFlowerActivity(node, nowSeconds = Math.floor(Date.now() / 1000)) {
@@ -2994,43 +3151,12 @@ const operatePetDiary = (action, params, options) => getPetDiaryService().operat
 const getPetDiaryRecords = (kind) => getPetDiaryService().getPetDiaryRecords(kind);
 const getPetDiaryFriend = (gid) => getPetDiaryService().getPetDiaryFriend(gid);
 
-// ---- 萌宠日记字段 115（ActivityBodyPetDiary）只读解码 ----
+// ---- 萌宠日记字段 115（ActivityBodyPetDiary）扩展只读解码 ----
 // 上游同步保留：ActivityNode 字段 115 的 pet/home/escort/photo_wall/pouch 子结构归一化，
 // 与上面 pet_treasure_hunt 富读模型并行存在。此处仅提供官方明文响应的回归解码，
 // 不臆造 Operate 命令字。协议证据见 core/docs/pet-diary-protocol-recovery.md。
-
-const PET_DIARY_START_TIME = 1789005600;
-const PET_DIARY_END_TIME = 1791820799;
-const PET_DIARY_ITEM_NAMES = new Map([
-  [1028, '萌宠元气糕'], [1029, '幸运星'], [1030, '待护送宝藏'],
-]);
-
-function getPetDiaryItemName(itemId) {
-  const id = toNum(itemId);
-  if (!id) return '';
-  return PET_DIARY_ITEM_NAMES.get(id) || '';
-}
-
-function normalizePetDiaryItem(item) {
-  if (!item) return null;
-  const id = toNum(item.id);
-  const count = toNum(item.count);
-  if (!id && !count) return null;
-  return { itemId: id, count, name: getPetDiaryItemName(id) };
-}
-
-function parsePetDiaryPhotoContent(content) {
-  if (typeof content !== 'string' || !content) return { photo: '', say: '' };
-  try {
-    const parsed = JSON.parse(content);
-    return {
-      photo: String(parsed?.photo || ''),
-      say: String(parsed?.say || ''),
-    };
-  } catch {
-    return { photo: '', say: '' };
-  }
-}
+// PET_DIARY_START_TIME/END_TIME/ITEM_NAMES 及 getPetDiaryItemName/normalizePetDiaryItem/
+// parsePetDiaryPhotoContent 已上移到文件顶部与上游 wish-share 常量并列，此处不再重复定义。
 
 function isPetDiaryWithinWindow(nowSeconds) {
   const now = typeof nowSeconds === 'number' && Number.isFinite(nowSeconds)
@@ -3128,6 +3254,22 @@ module.exports = {
   RAIN_POEM_RESEARCH_ACTIVITY_ID,
   RAIN_POEM_TASK_ACTIVITY_ID,
   CHARITY_FLOWER_ACTIVITY_ID,
+  WISH_SIGN_ACTIVITY_ID,
+  SHARE_REWARD_ACTIVITY_ID,
+  isWishSignActive,
+  isShareRewardActive,
+  normalizeWishSignActivity,
+  normalizeShareRewardActivity,
+  getWishSignActivity,
+  getShareRewardActivity,
+  operateWishSign,
+  operateShareReward,
+  PET_DIARY_ACTIVITY_ID,
+  PET_DIARY_GIFT_ACTIVITY_ID,
+  PET_DIARY_SHOP_ACTIVITY_ID,
+  PET_DIARY_START_TIME,
+  PET_DIARY_END_TIME,
+  PET_DIARY_ITEM_IDS,
   HELU_SUB_ACTIVITY_KEYS,
   NANGUA_SHOP_BUY_CMD,
   NANGUA_SHOP_REFRESH_CMD,

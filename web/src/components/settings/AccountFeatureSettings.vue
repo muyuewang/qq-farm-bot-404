@@ -7,7 +7,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 
 type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity'
 
@@ -40,6 +40,8 @@ let nowTimer: ReturnType<typeof window.setInterval> | null = null
 const showRainPoemActivity = computed(() => isWithinActivityWindowMs(RAIN_POEM_ACTIVITY_WINDOW, nowMs.value))
 const showCharityFlowerActivity = computed(() => isWithinActivityWindowMs(CHARITY_FLOWER_ACTIVITY_WINDOW, nowMs.value))
 const showPetDiaryActivity = computed(() => isWithinActivityWindowMs(PET_DIARY_ACTIVITY_WINDOW, nowMs.value))
+const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
+const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
 
 const moduleInfo: Record<ModuleKey, { title: string, description: string, icon: string, image: string, tone: string }> = {
   planting: { title: '种植与收获', description: '选种、收获、出售和巡田节奏', icon: 'i-carbon-sprout', image: '/game-config/module_icons/planting.png', tone: 'emerald' },
@@ -64,6 +66,8 @@ const activityKeys = computed(() => [
   ...(showPetDiaryActivity.value
     ? ['pet_diary_adopt', 'pet_diary_feed', 'pet_diary_draw', 'pet_diary_story_claim', 'pet_diary_seed_claim', 'pet_diary_solar_claim', 'pet_diary_treasure_open', 'pet_diary_compensation_claim', 'pet_diary_charm_equip', 'pet_diary_battle']
     : []),
+  ...(showWishSignActivity.value ? ['wish_sign_draw', 'wish_sign_claim'] : []),
+  ...(showShareRewardActivity.value ? ['share_reward_share', 'share_reward_daily', 'share_reward_milestones'] : []),
 ])
 const activityEnabledCount = computed(() => activityKeys.value.filter(key => automation.value.automation[key]).length)
 const starFestivalEnabled = computed(() => ['star_passport_claim', 'star_solar_claim', 'star_record_claim'].some(key => automation.value.automation[key]))
@@ -73,6 +77,8 @@ const qixiActivityEnabled = computed(() => ['qixi_dew_use', 'qixi_bridge_build',
 const rainPoemActivityEnabled = computed(() => ['rain_poem_bottle_buy', 'rain_poem_weather_collect', 'rain_poem_summon_use', 'rain_poem_prank_use', 'rain_poem_research_unlock'].some(key => automation.value.automation[key]))
 const charityFlowerActivityEnabled = computed(() => ['charity_flower_share_claim', 'charity_flower_donate', 'charity_flower_reward_claim', 'charity_flower_public_fund_claim'].some(key => automation.value.automation[key]))
 const petDiaryActivityEnabled = computed(() => ['pet_diary_adopt', 'pet_diary_feed', 'pet_diary_draw', 'pet_diary_story_claim', 'pet_diary_seed_claim', 'pet_diary_solar_claim', 'pet_diary_treasure_open', 'pet_diary_compensation_claim', 'pet_diary_charm_equip', 'pet_diary_battle'].some(key => automation.value.automation[key]))
+const wishSignActivityEnabled = computed(() => ['wish_sign_draw', 'wish_sign_claim'].some(key => automation.value.automation[key]))
+const shareRewardActivityEnabled = computed(() => ['share_reward_share', 'share_reward_daily', 'share_reward_milestones'].some(key => automation.value.automation[key]))
 
 function intervalTag(min: number, max: number) {
   return `${min}-${max} 秒`
@@ -138,6 +144,8 @@ function summaryTags(key: ModuleKey) {
     showRainPoemActivity.value && rainPoemActivityEnabled.value && '雨落成诗',
     showCharityFlowerActivity.value && charityFlowerActivityEnabled.value && '公益小红花',
     showPetDiaryActivity.value && petDiaryActivityEnabled.value && '萌宠成长日记',
+    showWishSignActivity.value && wishSignActivityEnabled.value && '秋祈良愿',
+    showShareRewardActivity.value && shareRewardActivityEnabled.value && '快乐不独享',
     activityEnabledCount.value === 0 && !starFestivalEnabled.value
     && (!SHOW_QIXI_ACTIVITY || !qixiActivityEnabled.value) && '未开启活动',
   ].filter(Boolean)
@@ -633,6 +641,39 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 <p class="text-xs text-amber-600 dark:text-amber-400">
                   该开关会执行真实的 1 元公益助力，每个角色活动期仅一次；仅在官方状态可领取且账号已同意腾讯公益平台协议时执行。
                 </p>
+              </section>
+
+              <section v-if="showWishSignActivity" class="border border-amber-100 rounded-lg p-4 space-y-3 dark:border-amber-900/40">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-sm text-gray-700 font-medium dark:text-gray-300">秋祈良愿</div>
+                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">每日祈愿和领取好运奖励。烟花可在个人背包使用。</div>
+                  </div>
+                  <span class="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">2026-09-24 00:00 — 2026-10-07 23:59</span>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <BaseSwitch v-model="automation.automation.wish_sign_draw" label="自动祈愿" />
+                  <BaseSwitch v-model="automation.automation.wish_sign_claim" label="自动领取祈愿奖励" />
+                </div>
+                <BaseSelect v-model="automation.automation.wish_sign_choice" label="自动祈愿方向" :options="[
+                  { label: '财运', value: 1 }, { label: '感情', value: 2 }, { label: '前程', value: 3 },
+                  { label: '生活', value: 4 }, { label: '农耕', value: 5 }, { label: '人际', value: 6 },
+                ]" />
+              </section>
+
+              <section v-if="showShareRewardActivity" class="border border-orange-100 rounded-lg p-4 space-y-3 dark:border-orange-900/40">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-sm text-gray-700 font-medium dark:text-gray-300">快乐不独享</div>
+                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">自动分享领取首次分享快乐值，无需好友点击；自动领取每日快乐值和已达成的档位奖励。</div>
+                  </div>
+                  <span class="rounded-full bg-orange-100 px-2 py-1 text-xs text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">2026-09-24 00:00 — 2026-10-12 23:59</span>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <BaseSwitch v-model="automation.automation.share_reward_share" label="自动分享" />
+                  <BaseSwitch v-model="automation.automation.share_reward_daily" label="自动领取每日快乐值" />
+                  <BaseSwitch v-model="automation.automation.share_reward_milestones" label="自动领取档位奖励" />
+                </div>
               </section>
 
               <section v-if="showPetDiaryActivity" class="border border-violet-100 rounded-lg p-4 space-y-3 dark:border-violet-900/40">

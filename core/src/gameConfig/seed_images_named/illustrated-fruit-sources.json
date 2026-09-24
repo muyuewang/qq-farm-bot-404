@@ -2,6 +2,30 @@
   "source": "1112386029_3_7a848d2182f9352fe969854ee7ac1de1",
   "items": [
     {
+      "id": 1046030,
+      "name": "黄金·月下美人",
+      "file": "1046030.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/e9/e900e5cb-61a8-40cc-968d-bd84ac0523af.e239a.png",
+      "assetPath": "model/v4/gold/Crop_6030_Seed/spriteFrame",
+      "sha256": "c865163b4ae47baec018a21f1358111127772e85b857e8270c673ab174ad6570"
+    },
+    {
+      "id": 40435,
+      "name": "山丹丹",
+      "file": "40435.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/33/3374044a-21d9-4b33-889a-bbe6c72c0724.45389.png",
+      "assetPath": "model/v4/Crop_435_Seed/spriteFrame",
+      "sha256": "40a37caa1e73c186b9085515fd35021784af7eea98423bd4ef2046d08216f291"
+    },
+    {
+      "id": 46030,
+      "name": "月下美人",
+      "file": "46030.png",
+      "url": "https://cdn-resource.nqf.qq.com/release/remote/plant/native/e4/e447b335-97cc-497e-9329-01fd722c4c56.d561b.png",
+      "assetPath": "model/v4/Crop_6030_Seed/spriteFrame",
+      "sha256": "92e5bf5b3c7b399f9ef5968c9122ea9e088d8351df4dfc0733f7e40735278898"
+    },
+    {
       "id": 1040516,
       "name": "黄金·狗尾草",
       "file": "1040516.png",

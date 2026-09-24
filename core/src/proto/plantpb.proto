@@ -154,6 +154,17 @@ message AllLandsRequest {
 message AllLandsReply {
     repeated LandInfo lands = 1;
     repeated OperationLimit operation_limits = 2;
+    repeated FarmSocialEventInfo farm_social_events = 3;
+}
+
+message FarmSocialEventInfo {
+    int64 item_id = 1;
+    int64 owner_id = 2;
+    int64 put_time = 3;
+    int64 expire_at = 4;
+    int32 phase = 5;
+    int64 state_at = 6;
+    int64 state_until = 7;
 }
 
 // --- 收获 ---
@@ -185,6 +196,9 @@ message WaterLandReply {
 message FarmingRequest {
     repeated int64 land_ids = 1;
     int64 host_gid = 2;
+    int32 host_type = 3;
+    int32 reason = 4;
+    repeated int64 clear_farm_social_item_ids = 5;
 }
 
 message FarmingReply {
