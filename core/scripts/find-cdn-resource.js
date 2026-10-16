@@ -60,6 +60,15 @@ function parseArgs(argv) {
   return result;
 }
 
+function resolveDownloadTarget(target) {
+  const baseDir = process.cwd();
+  const resolved = path.resolve(baseDir, target);
+  if (resolved !== baseDir && !resolved.startsWith(baseDir + path.sep)) {
+    throw new Error(`--download 目标必须位于当前工作目录内：${resolved}`);
+  }
+  return resolved;
+}
+
 async function download(url, target, refresh = false) {
   if (!refresh && fs.existsSync(target)) return;
   const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(90000) });
@@ -143,8 +152,8 @@ async function main() {
   if (args.path) {
     const image = resolveAssetPath(settings, configs, args.path);
     if (!image) throw new Error(`无法解析资源路径：${args.path}`);
-    if (args.download) await download(image.imageUrl, path.resolve(args.download), true);
-    console.log(JSON.stringify({ source, ...image, downloadedTo: args.download ? path.resolve(args.download) : null }, null, 2));
+    if (args.download) await download(image.imageUrl, resolveDownloadTarget(args.download), true);
+    console.log(JSON.stringify({ source, ...image, downloadedTo: args.download ? resolveDownloadTarget(args.download) : null }, null, 2));
     return;
   }
 
@@ -159,13 +168,13 @@ async function main() {
   const resolved = firstResolvable(settings, configs, rows);
   if (args.download) {
     if (!resolved) throw new Error('匹配的配置行没有可下载图片');
-    await download(resolved.image.imageUrl, path.resolve(args.download), true);
+    await download(resolved.image.imageUrl, resolveDownloadTarget(args.download), true);
   }
   console.log(JSON.stringify({
     source,
     count: outputRows.length,
     results: outputRows,
-    downloadedTo: args.download ? path.resolve(args.download) : null,
+    downloadedTo: args.download ? resolveDownloadTarget(args.download) : null,
   }, null, 2));
 }
 
