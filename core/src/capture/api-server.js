@@ -112,7 +112,9 @@ function createCaptureApi({ config, ca, sessionStore, proxyManager, log = () => 
       }
 
       if (key === 'GET /api/sessions') {
-        return { status: 200, body: { ok: true, data: { sessions: sessionStore.listSessions() } } };
+        // 出于隔离考虑，不对外暴露具体会话 ID 列表，避免调用方枚举、
+        // 猜测他人会话 ID 后越权操作（查询状态 / 删除）其会话。
+        return { status: 200, body: { ok: true, data: { count: sessionStore.listSessions().length } } };
       }
 
       if (key.startsWith('GET /api/sessions/') && key.endsWith('/state')) {
