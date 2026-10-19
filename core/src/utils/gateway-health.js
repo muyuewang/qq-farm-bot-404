@@ -24,4 +24,21 @@ function nextBusinessBackoffMs(previousMs = 0, minimumMs = 30000, maximumMs = 60
   return previous > 0 ? Math.min(max, previous * 2) : min;
 }
 
-module.exports = { getOldestPendingAgeMs, evaluateGatewayHealth, nextBusinessBackoffMs };
+const HEARTBEAT_STALE_AFTER_MS = 30000;
+const MAX_HEARTBEAT_MISSES = 3;
+
+// 终止判定只看"入站静默 + 连续心跳失败"两个条件，绝不因心跳应答单独超时触发，
+// 否则会误杀业务流量正常、只是 Heartbeat 回得慢的健康连接（频繁掉线根因）。
+function shouldTerminateForHeartbeat(missCount, inboundSilenceMs) {
+  return Number(missCount) >= MAX_HEARTBEAT_MISSES
+    && Number(inboundSilenceMs) > HEARTBEAT_STALE_AFTER_MS;
+}
+
+module.exports = {
+  getOldestPendingAgeMs,
+  evaluateGatewayHealth,
+  nextBusinessBackoffMs,
+  HEARTBEAT_STALE_AFTER_MS,
+  MAX_HEARTBEAT_MISSES,
+  shouldTerminateForHeartbeat,
+};

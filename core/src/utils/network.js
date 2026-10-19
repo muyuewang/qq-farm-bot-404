@@ -21,7 +21,7 @@ const { types } = require('./proto');
 const { toLong, toNum, syncServerTime, log, logWarn } = require('./utils');
 const cryptoWasm = require('./crypto-wasm');
 const { createGatewayToken, GatewayTokenProvider } = require('./gateway-token');
-const { evaluateGatewayHealth, getOldestPendingAgeMs } = require('./gateway-health');
+const { evaluateGatewayHealth, getOldestPendingAgeMs, shouldTerminateForHeartbeat, MAX_HEARTBEAT_MISSES } = require('./gateway-health');
 const {
     resolveRequestClass,
     selectDispatchIndex,
@@ -948,8 +948,6 @@ async function sendLogin(context, onLoginSuccess, deviceProtocol) {
 // ============ 心跳 ============
 let lastHeartbeatResponse = Date.now();
 let heartbeatMissCount = 0;
-const HEARTBEAT_TIMEOUT = 15000;
-const MAX_HEARTBEAT_MISS = 2;
 const HEARTBEAT_REQUEST_TIMEOUT = 20000;
 
 function getGatewayHealth() {
@@ -1011,27 +1009,18 @@ function startHeartbeat() {
             const heartbeatSilenceMs = Math.max(0, now - lastHeartbeatResponse);
             logWarn(
                 '心跳',
-                `心跳未响应 (miss=${heartbeatMissCount}/${MAX_HEARTBEAT_MISS}, `
+                `心跳未响应 (miss=${heartbeatMissCount}/${MAX_HEARTBEAT_MISSES}, `
                 + `heartbeat=${Math.round(heartbeatSilenceMs / 1000)}s, inbound=${Math.round(inboundSilenceMs / 1000)}s, `
                 + `pending=${pendingCallbacks.size}, queued=${requestQueue.length}, active=${describePendingRequests()})`,
             );
-            // 双重终止条件：心跳连续失联 AND 连接无入站数据
-            if (heartbeatMissCount >= MAX_HEARTBEAT_MISS && inboundSilenceMs > HEARTBEAT_TIMEOUT * 2) {
-                log('心跳', '连续心跳超时且连接无入站数据，账号将停止运行...');
+            // 单一终止条件：连续心跳失败 AND 连接完全无入站数据（对齐官方心跳语义）。
+            // 只看心跳应答会误杀"业务流量正常、只是 Heartbeat 回得慢或排队超时"的健康连接，造成频繁掉线。
+            if (shouldTerminateForHeartbeat(heartbeatMissCount, inboundSilenceMs)) {
+                log('心跳', `${Math.round(inboundSilenceMs / 1000)}s 无入站数据，连续 ${heartbeatMissCount} 次心跳失败，账号将停止运行...`);
                 networkEvents.emit('disconnect', { code: 'heartbeat_timeout' });
                 rejectAllPendingRequests('心跳超时，已清理');
                 rejectAllQueuedRequests('心跳超时，已清理');
                 try { if (ws) ws.close(); } catch { }
-                return;
-            }
-            // 硬超时：心跳失联超过 45s 无条件强制重连
-            if (heartbeatSilenceMs > 45000) {
-                logWarn('心跳', '心跳失联超过 45s，强制重连...');
-                try { if (ws) ws.close(); } catch { }
-                networkEvents.emit('disconnect', { code: 'heartbeat_hard_timeout' });
-                rejectAllPendingRequests('心跳硬超时，已清理');
-                rejectAllQueuedRequests('心跳硬超时，已清理');
-                reconnect(null);
                 return;
             }
         }
