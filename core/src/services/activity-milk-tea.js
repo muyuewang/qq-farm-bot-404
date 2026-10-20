@@ -34,6 +34,62 @@ function selectHireCandidate(candidates, input, now) {
   return friends.find(entry => !talentId || Number(entry.talent_id) === talentId)
     || friends[0] || robots[0];
 }
+const cleanText = value => String(value == null ? '' : value).replace(/<[^>]+>/g, '').trim();
+// 官方打工图标只下发 Cocos 资源路径，去掉尾段 spriteFrame 才是本地素材文件名。
+function interactionIcon(iconUrl) {
+  const parts = String(iconUrl || '').split('/').filter(Boolean);
+  if (parts[parts.length - 1] === 'spriteFrame') parts.pop();
+  const name = parts[parts.length - 1] || '';
+  return /^[\w.-]+$/.test(name) ? `/activity/milk-tea/${name}.png` : '';
+}
+function interactionResult(interact, itemDto) {
+  const type = Number(interact?.type);
+  const definition = catalog.MilkTeaInteractionType.find(x => x.interaction_id === type);
+  if (!definition || !Number(interact?.interaction_id)) return null;
+  const success = interact.success === true;
+  let reward = itemDto({ id: 1041, count: Number(interact.friend?.bonus_amount || 0) });
+  if (type === 4 && success) reward = itemDto({ id: 1042, count: 1 });
+  else if (type === 3 && success) {
+    const recipe = catalog.MilkTeaRecipeConfig.find(x => Number(x.recipe_id) === Number(interact.friend?.taste_recipe_id));
+    reward = { id: '', count: String(Number(interact.friend?.taste_cups || 0)), name: recipe?.recipe_name || '高级奶茶', image: recipe?.image || '', rarity: 0 };
+  }
+  const text = success ? definition.interact_win_word : definition.interact_lose_word;
+  return { name: definition.name, success, reward, text: cleanText(text) };
+}
+/** 官方按完整班次时长匹配工资和试饮数量；未知时长不套用四小时档。 */
+function normalizeMilkTeaWork(work, itemDto) {
+  const shift = work.my_shift;
+  const duration = shift && catalog.MilkTeaHireDurationConfig
+    .find(x => Number(x.duration_sec) === Number(shift.end_at) - Number(shift.begin_at));
+  const talent = catalog.MilkTeaTalentConfig.find(x => x.talent_id === Number((shift && shift.talent_id) || work.talent_id));
+  const promote = shift && Array.isArray(shift.interact_previews)
+    ? shift.interact_previews.find(x => Number(x.interaction_type) === 1) : null;
+  const interactions = catalog.MilkTeaInteractionType.map(definition => {
+    const detail = catalog.MilkTeaInteractionConfig.find(x => x.duration_id === (duration && duration.duration_id)
+      && x.interaction_type === definition.interaction_id);
+    const count = definition.interaction_id === 1 ? promote?.promote_cups : detail?.random_drink_count;
+    const numeric = Number(count);
+    return {
+      interaction_id: definition.interaction_id,
+      name: definition.name,
+      image: interactionIcon(definition.icon_url),
+      description: cleanText(definition.des).replace('{0}', count == null || !Number.isFinite(numeric) ? '—' : String(numeric)),
+      // 描述里的 {0} 需要服务端排期数据才能填实，缺数据时不显示半成品文案。
+      ready: !String(definition.des || '').includes('{0}') || (count != null && Number.isFinite(numeric)),
+    };
+  });
+  return {
+    ...work,
+    talentDescription: cleanText(talent && talent.des),
+    interactions,
+    my_shift: shift ? {
+      ...shift,
+      baseWage: duration ? Number(String(duration.duration_cost).split(':')[1]) || 0 : null,
+      interactionResult: interactionResult(shift.interact, itemDto),
+    } : null,
+    slips: (Array.isArray(work.slips) ? work.slips : []).map(slip => ({ ...slip, interactionResult: interactionResult(slip.interact, itemDto) })),
+  };
+}
 function createMilkTeaService({ types, sendMsgAsync, getBag, getBagItems, getServerTimeSec, itemDto, getUserState = () => ({}), log = require('../utils/utils').log }) {
   const fail = message => { throw businessError('MILK_TEA_UNAVAILABLE', message); };
   const list = value => Array.isArray(value) ? value : [];
@@ -91,6 +147,7 @@ function createMilkTeaService({ types, sendMsgAsync, getBag, getBagItems, getSer
     goods.sort(compareShopGoods);
     // QQ native subscription URLs contain signatures; never expose them to web or logs.
     delete work.hire_subscribe_qq_jump_url; delete work.hire_subscribe_template_id;
+    const workView = normalizeMilkTeaWork(work, itemDto);
     const share = children.find(x => x.head?.id === '2026110104')?.share_reward?.summary;
     const fund = children.find(x => x.head?.id === '2026110103')?.growth_fund;
     const levels = catalog.MilkTeaStoreLevelConfig.map(level => ({ ...level,
@@ -99,7 +156,7 @@ function createMilkTeaService({ types, sendMsgAsync, getBag, getBagItems, getSer
     }));
     const shareView = share ? { ...share, milestones: list(share.milestones).map(tier => ({ ...tier, rewards: list(tier.rewards).map(itemDto) })) } : null;
     const fundView = fund ? { ...fund, unlock_cost: list(fund.unlock_cost).map(itemDto), tiers: list(fund.tiers).map(tier => ({ ...tier, reward: list(tier.reward).map(itemDto) })) } : null;
-    return { ...state, share: shareView, fund: fundView, shop: shop.shop, recipes, work, goods, balances: ['1001', '1004', '1041', '1042'].map(id => itemDto({ id, count: inventory.filter(x => String(x.id) === id).reduce((n, x) => n + BigInt(String(x.count || 0)), 0n).toString() })), levels, durations: catalog.MilkTeaHireDurationConfig, interactions: catalog.MilkTeaInteractionType };
+    return { ...state, share: shareView, fund: fundView, shop: shop.shop, recipes, work: workView, goods, balances: ['1001', '1004', '1041', '1042'].map(id => itemDto({ id, count: inventory.filter(x => String(x.id) === id).reduce((n, x) => n + BigInt(String(x.count || 0)), 0n).toString() })), levels, durations: catalog.MilkTeaHireDurationConfig, interactions: workView.interactions };
   }
   function getMilkTea() { if (!pendingRead) pendingRead = read().finally(() => { pendingRead = null; }); return pendingRead; }
   async function mutate(action, input = {}) {
@@ -217,4 +274,4 @@ function createMilkTeaService({ types, sendMsgAsync, getBag, getBagItems, getSer
 function reserveMilkTeaFruit(itemId, enabled, now) {
   return enabled === true && phase(now) === 'business' && catalog.MilkTeaRecipeConfig.some(recipe => Number(recipe.fruit_item_id?.split(':')[0]) === Number(itemId));
 }
-module.exports = { createMilkTeaService, WINDOW, ACTIONS, AUTO_ACTIONS, phase, normalizeWireMaps, reserveMilkTeaFruit, compareShopGoods, normalizeHireOptions, selectHireCandidate };
+module.exports = { createMilkTeaService, WINDOW, ACTIONS, AUTO_ACTIONS, phase, normalizeWireMaps, reserveMilkTeaFruit, compareShopGoods, normalizeHireOptions, selectHireCandidate, normalizeMilkTeaWork, interactionResult, interactionIcon };

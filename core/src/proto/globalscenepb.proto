@@ -1,0 +1,15 @@
+syntax = "proto3";
+package gamepb.globalscenepb;
+
+message PlayerSceneLoginRequest {
+    int32 global_scene_id = 1;
+    repeated string experiment_keys = 2;
+}
+
+message PlayerSceneLoginReply {
+    int32 global_scene_id = 1;
+    int64 server_time = 2;
+    // These initial snapshots are refreshed through existing farm services.
+    bytes farm_scene_ext_data = 10;
+    bytes big_farm_scene_ext_data = 11;
+}

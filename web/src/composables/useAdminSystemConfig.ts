@@ -4,6 +4,7 @@ import api from '@/api'
 export interface SystemConfig {
   serverUrl: string
   clientVersion: string
+  wxClientVersion: string
   platform: string
   os: string
   napcatLoginEnabled: boolean
@@ -34,7 +35,8 @@ interface UseAdminSystemConfigOptions {
 
 const defaultSystemConfigValues: SystemConfig = {
   serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
-  clientVersion: '1.13.0.5_20260723',
+  clientVersion: '1.15.0.2_20261001',
+  wxClientVersion: '1.15.0.2_20261001',
   platform: 'qq',
   os: 'iOS',
   napcatLoginEnabled: false,
@@ -262,7 +264,7 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
         confirmed: true,
       })
       if (data?.ok)
-        options.showAlert('系统配置已保存并立即生效，无需重启项目', 'primary')
+        options.showAlert('系统配置已保存，连接参数在下次登录时生效', 'primary')
       else
         options.showAlert(data?.error || '保存失败', 'danger')
     }
@@ -283,7 +285,7 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
       })
       if (data?.ok) {
         localSystemConfig.value = { ...data.data.saved }
-        options.showAlert('系统配置已重置为默认值', 'primary')
+        options.showAlert('系统配置已重置，连接参数在下次登录时生效', 'primary')
       }
       else {
         options.showAlert(data?.error || '重置失败', 'danger')

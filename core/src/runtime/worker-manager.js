@@ -591,7 +591,7 @@ function createWorkerManager(deps) {
         } else if (msg.type === 'client_version_update') {
             const clientVersion = cleanText(msg.clientVersion);
             if (clientVersion && typeof updateSystemClientVersion === 'function') {
-                const changed = updateSystemClientVersion(clientVersion);
+                const changed = updateSystemClientVersion(clientVersion, cleanText(msg.platform) || 'qq');
                 if (changed) {
                     log('系统', `已根据服务端 WebSocket 回包更新游戏版本: ${clientVersion}`, {
                         accountId: String(accountId), accountName: wrk.name

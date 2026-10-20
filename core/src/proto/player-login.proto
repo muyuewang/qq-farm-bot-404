@@ -1,0 +1,39 @@
+syntax = "proto3";
+package gamepb.userpb;
+import "userpb.proto";
+
+// QQ and WeChat 1.15 separate player login from farm scene login.
+// Historical client profiles retain the separate legacy Login messages.
+message PlayerLoginRequest {
+    int64 sharer_id = 1;
+    string sharer_open_id = 2;
+    DeviceInfo device_info = 3;
+    int64 share_cfg_id = 4;
+    string scene_id = 5;
+    ReportData report_data = 6;
+    string share_key = 7;
+    repeated string experiment_keys = 8;
+    int32 ark_biz_type = 11;
+    bytes ark_biz_param = 12;
+    int32 game_scene_id = 13;
+}
+
+message PlayerLoginReply {
+    BasicInfo basic = 1;
+    int64 time_now_millis = 2;
+    bool is_first_login = 3;
+    VersionInfo version_info = 4;
+    int64 qq_friend_recommend_authorized = 5;
+    repeated PlayerPolicySwitch policy_switches = 6;
+    int32 global_scene_id = 7;
+    // Scene-independent guide/unlock payloads are not consumed by this client.
+    bytes guide_info = 8;
+    repeated bytes unlocked_items = 9;
+    repeated int32 unlocked_scene_ids = 10;
+    repeated QQGroupInfo qq_group_infos = 11;
+}
+
+message PlayerPolicySwitch {
+    string name = 1;
+    bool enabled = 2;
+}

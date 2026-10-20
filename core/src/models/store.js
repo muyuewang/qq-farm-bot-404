@@ -1108,6 +1108,7 @@ function loadGlobalConfig() {
             globalConfig.systemConfig = {
                 serverUrl: String(data.systemConfig.serverUrl || '').trim(),
                 clientVersion: String(data.systemConfig.clientVersion || '').trim(),
+                wxClientVersion: String(data.systemConfig.wxClientVersion || '').trim(),
                 platform: String(data.systemConfig.platform || 'qq').trim(),
                 os: String(data.systemConfig.os || 'iOS').trim()
             };
@@ -1927,11 +1928,15 @@ function getSystemConfig() {
 
 function setSystemConfig(config) {
     if (!config || typeof config !== 'object') return null;
+    const current = globalConfig.systemConfig || {};
+    // 旧的调用方（含抓包版本同步）只带自己关心的字段，缺省字段沿用当前值，
+    // 否则一次保存就会把另一个平台的版本号抹掉。
     globalConfig.systemConfig = {
-        serverUrl: String(config.serverUrl || '').trim(),
-        clientVersion: String(config.clientVersion || '').trim(),
-        platform: String(config.platform || 'qq').trim(),
-        os: String(config.os || 'iOS').trim()
+        serverUrl: String(config.serverUrl ?? current.serverUrl ?? '').trim(),
+        clientVersion: String(config.clientVersion ?? current.clientVersion ?? '').trim(),
+        wxClientVersion: String(config.wxClientVersion ?? current.wxClientVersion ?? '').trim(),
+        platform: String(config.platform ?? current.platform ?? 'qq').trim(),
+        os: String(config.os ?? current.os ?? 'iOS').trim()
     };
     saveGlobalConfig();
     return { ...globalConfig.systemConfig };

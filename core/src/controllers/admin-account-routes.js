@@ -50,16 +50,19 @@ function parseOfficialGatewayUrl(value) {
   const code = String(url.searchParams.get("code") || "").trim();
   const clientVersion = String(url.searchParams.get("ver") || "").trim();
   if (!code || !CLIENT_VERSION_RE.test(clientVersion)) return null;
-  return { code, clientVersion };
+  const platform = String(url.searchParams.get("platform") || "").trim().toLowerCase();
+  return { code, clientVersion, wechat: platform === "wx" || platform === "wechat" };
 }
 
 function syncGatewayClientVersion(gateway, store, updateRuntimeConfig) {
   if (!gateway || !store || typeof store.getSystemConfig !== "function") return false;
   const currentSystemConfig = store.getSystemConfig() || {};
-  if (String(currentSystemConfig.clientVersion || "") === gateway.clientVersion) return false;
+  // 抓包来自哪个平台就只更新哪个平台的版本号，避免微信 1.15 覆盖 QQ 的自定义版本（反之亦然）。
+  const field = gateway.wechat ? "wxClientVersion" : "clientVersion";
+  if (String(currentSystemConfig[field] || "") === gateway.clientVersion) return false;
   const savedSystemConfig = store.setSystemConfig({
     ...currentSystemConfig,
-    clientVersion: gateway.clientVersion,
+    [field]: gateway.clientVersion,
   });
   if (savedSystemConfig && typeof updateRuntimeConfig === "function") {
     updateRuntimeConfig(savedSystemConfig);

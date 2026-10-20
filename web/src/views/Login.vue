@@ -18,6 +18,7 @@ const userStore = useUserStore()
 const appStore = useAppStore()
 const route = useRoute()
 const gameVersion = ref('')
+const wxGameVersion = ref('')
 const loginLinks = computed(() => appStore.loginPageConfig)
 const showUpdateLog = ref(false)
 const logoLoadFailed = ref(false)
@@ -461,6 +462,7 @@ async function fetchGameVersion() {
     const res = await api.get('/api/game-version')
     if (res.data.ok) {
       gameVersion.value = res.data.clientVersion
+      wxGameVersion.value = res.data.wxClientVersion || ''
     }
   }
   catch (e) {
@@ -648,8 +650,11 @@ async function fetchGameVersion() {
             更新日志
           </button>
         </div>
-        <div v-if="gameVersion" class="game-version">
-          当前游戏版本：{{ gameVersion }}
+        <div v-if="gameVersion || wxGameVersion" class="game-version">
+          <span>当前游戏版本：</span>
+          <span v-if="gameVersion">QQ {{ gameVersion }}</span>
+          <span v-if="gameVersion && wxGameVersion"> · </span>
+          <span v-if="wxGameVersion">微信 {{ wxGameVersion }}</span>
         </div>
       </div>
     </main>

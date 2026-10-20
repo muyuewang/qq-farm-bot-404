@@ -5,6 +5,7 @@ import { isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW } from '@/constants/
 import { useAccountStore } from '@/stores/account'
 import MilkTeaCraftDialog from './MilkTeaCraftDialog.vue'
 import MilkTeaShopDialogs from './MilkTeaShopDialogs.vue'
+import MilkTeaRewardIcon from './MilkTeaRewardIcon.vue'
 
 const emit = defineEmits<{ back: [] }>()
 const accounts = useAccountStore()
@@ -315,10 +316,21 @@ onUnmounted(() => {
           </div>
         </div>
         <template v-if="state.work.my_shift">
-          <h3>{{ state.work.my_shift.shop_name }}</h3><p>{{ state.work.my_shift.talent_name }} · {{ duration(Number(state.work.my_shift.end_at) - now / 1000) }}后下班</p><div class="interactions">
-            <button v-for="interaction in state.interactions" :key="interaction.interaction_id" class="gold-button" :disabled="busy || state.work.interact_done || state.phase !== 'business'" @click="act('interact', { interactionType: interaction.interaction_id })">
-              {{ interaction.name }}
+          <h3>{{ state.work.my_shift.shop_name }}</h3><p>{{ state.work.my_shift.talent_name }} · {{ duration(Number(state.work.my_shift.end_at) - now / 1000) }}后下班</p>
+          <p v-if="state.work.talentDescription" class="talent-desc">{{ state.work.talentDescription }}</p>
+          <div class="shift-meta">
+            <span v-if="state.work.my_shift.baseWage != null" class="wage-chip"><img :src="currencyIcon({ id: '1041' })" alt="奶茶券">本班基础工资 {{ state.work.my_shift.baseWage }}</span>
+            <span class="interact-count">互动 {{ state.work.my_shift.interact_count }}/{{ state.work.my_shift.interact_limit }}</span>
+          </div>
+          <div class="interactions">
+            <button v-for="interaction in state.interactions" :key="interaction.interaction_id" class="interact" :disabled="busy || state.work.interact_done || Number(state.work.my_shift.interact_count) >= Number(state.work.my_shift.interact_limit) || state.phase !== 'business'" @click="act('interact', { interactionType: interaction.interaction_id })">
+              <img v-if="interaction.image" :src="interaction.image" :alt="interaction.name"><strong>{{ interaction.name }}</strong><small>{{ interaction.description }}</small>
             </button>
+          </div>
+          <div v-if="state.work.my_shift.interactionResult" class="interact-result">
+            <strong>{{ state.work.my_shift.interactionResult.name }} · {{ state.work.my_shift.interactionResult.success ? '大成功' : '未成功' }}</strong>
+            <p v-if="state.work.my_shift.interactionResult.text">{{ state.work.my_shift.interactionResult.text }}</p>
+            <MilkTeaRewardIcon v-if="state.work.my_shift.interactionResult.reward && Number(state.work.my_shift.interactionResult.reward.count) > 0" :item="state.work.my_shift.interactionResult.reward" :named="true" />
           </div>
         </template>
         <button v-else class="gold-button invite" @click="open('invite')">
@@ -330,6 +342,8 @@ onUnmounted(() => {
           <img :src="img('img_s4_null1')" alt=""><p>暂无工作记录</p>
         </div><div v-for="slip in state.work.slips" :key="slip.shift_id" class="work-record">
           <strong>{{ slip.shop_name }}</strong><p>{{ date(Number(slip.begin_at)) }} — {{ date(Number(slip.end_at)) }}</p>
+          <p v-if="Number(slip.wages?.final_wage) > 0" class="slip-wage"><img :src="currencyIcon({ id: '1041' })" alt="奶茶券">结算工资 {{ slip.wages.final_wage }}</p>
+          <p v-if="slip.interactionResult" class="slip-result">{{ slip.interactionResult.name }} · {{ slip.interactionResult.success ? '大成功' : '未成功' }}</p>
         </div><button v-if="state.summary.has_unclaimed_wage" class="gold-button" :disabled="busy" @click="act('wages')">
           领取工资
         </button>
@@ -1039,10 +1053,102 @@ onUnmounted(() => {
   padding: 10px;
 }
 .interactions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5cqw;
+}
+.interact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4cqw;
+  padding: 1.6cqw 1cqw;
+  border: none;
+  border-radius: 2cqw;
+  background: #fff3d6;
+  box-shadow: 0 0.3cqw 0.3cqw #9c7b4a55;
+  font-size: 2.6cqw;
+  color: #68482f;
+}
+.interact img {
+  width: 40%;
+  height: 40%;
+  object-fit: contain;
+}
+.interact strong {
+  font-size: 2.9cqw;
+}
+.interact small {
+  font-size: 2.1cqw;
+  line-height: 1.25;
+  font-weight: 400;
+  opacity: 0.85;
+}
+.interact:disabled {
+  opacity: 0.5;
+}
+.talent-desc {
+  margin: 0.4cqw 0 0;
+  font-size: 2.5cqw;
+  color: #8a6a45;
+}
+.shift-meta {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 2cqw;
+  margin: 0.8cqw 0;
+  font-size: 2.7cqw;
+}
+.wage-chip,
+.interact-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6cqw;
+  font-weight: 800;
+  color: #68482f;
+}
+.wage-chip img {
+  width: 4cqw;
+  height: 4cqw;
+  object-fit: contain;
+}
+.interact-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6cqw;
+  max-width: 80%;
+  margin: 2cqw auto 0;
+  padding: 1.5cqw;
+  border-radius: 2cqw;
+  background: #fdf0cf;
+}
+.interact-result strong {
+  font-size: 2.9cqw;
+  color: #a4581f;
+}
+.interact-result p {
+  margin: 0;
+  font-size: 2.5cqw;
+  color: #68482f;
+}
+.interact-result :deep(.tea-reward) {
+  width: 34%;
+}
+.slip-wage,
+.slip-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5cqw;
+  margin: 0.4cqw 0 0;
+  font-size: 2.4cqw;
+  color: #68482f;
+}
+.slip-wage img {
+  width: 3.4cqw;
+  height: 3.4cqw;
+  object-fit: contain;
 }
 .milk-tabs {
   position: absolute;

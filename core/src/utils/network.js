@@ -13,10 +13,12 @@ const EventEmitter = require('node:events');
 const process = require('node:process');
 const WebSocket = require('ws');
 const { CONFIG } = require('../config/config');
+const { isWechatPlatform, getClientVersion } = require('./client-profile');
 const { AceService } = require('../services/ace-service');
 const { createScheduler } = require('../services/scheduler');
 const { updateStatusFromLogin, updateStatusGold, updateStatusLevel } = require('../services/status');
 const { recordOperation, recordTongQiGift, getTongQiGiftCount } = require('../services/stats');
+const { invalidateLandForecast } = require('../services/level-forecast');
 const { types } = require('./proto');
 const { toLong, toNum, syncServerTime, log, logWarn } = require('./utils');
 const cryptoWasm = require('./crypto-wasm');
@@ -47,11 +49,18 @@ function extractServerClientVersion(versionInfo) {
 
 function applyServerVersionInfo(versionInfo) {
     const clientVersion = extractServerClientVersion(versionInfo);
-    if (!clientVersion || clientVersion === CONFIG.clientVersion) return false;
-    const previous = CONFIG.clientVersion;
-    CONFIG.clientVersion = clientVersion;
+    if (!clientVersion) return false;
+    // 服务端回包只更新当前平台自己的版本号，微信账号不能改写 QQ 的版本配置。
+    const field = isWechatPlatform() ? 'wxClientVersion' : 'clientVersion';
+    if (clientVersion === CONFIG[field]) return false;
+    const previous = CONFIG[field];
+    CONFIG[field] = clientVersion;
     log('系统', `服务端版本信息已自动更新客户端版本: ${previous} -> ${clientVersion}`);
-    networkEvents.emit('client_version_update', { clientVersion, previous });
+    networkEvents.emit('client_version_update', {
+        clientVersion,
+        previous,
+        platform: isWechatPlatform() ? 'wx' : 'qq',
+    });
     return true;
 }
 
@@ -149,6 +158,7 @@ function buildTsdkDeviceInfo(deviceProtocol) {
 function createTsdkRuntime(deviceProtocol) {
     return new TsdkRuntime({
         accountId: process.env.FARM_ACCOUNT_ID,
+        platform: CONFIG.platform,
         gameId: CONFIG.tsdkGameId,
         appKey: CONFIG.tsdkAppKey,
         deviceInfo: buildTsdkDeviceInfo(deviceProtocol),
@@ -612,6 +622,11 @@ function handleMessage(data) {
                     if (errorCode !== 0) {
                         fn(new Error(`${meta.service_name}.${meta.method_name} 错误: code=${errorCode} ${meta.error_message || ''}`));
                     } else {
+                        // 种植写操作和道具使用会改变地块成熟时间，旧快照立即作废，避免预测继续用收割前的地块。
+                        if ((meta.service_name === 'gamepb.plantpb.PlantService' && meta.method_name !== 'AllLands')
+                            || (meta.service_name === 'gamepb.itempb.ItemService' && meta.method_name === 'Use')) {
+                            invalidateLandForecast();
+                        }
                         fn(null, msg.body, meta);
                     }
                 }
@@ -661,6 +676,7 @@ function handleNotify(msg) {
                 const lands = notify.lands || [];
                 if (lands.length > 0) {
                     if (hostGid === userState.gid || hostGid === 0) {
+                        invalidateLandForecast();
                         networkEvents.emit('landsChanged', lands);
                     } else {
                         networkEvents.emit('friendLandsObserved', {
@@ -834,18 +850,24 @@ function handleNotify(msg) {
 let currentConnection = null;
 let wsErrorState = { code: 0, at: 0, message: '' };
 
-function buildLoginDeviceInfo(deviceProtocol) {
+// QQ 与微信 1.15 起都是“玩家登录 + 场景登录”两段式；更早的历史版本用单段 Login。
+function usesPlayerSceneLogin(clientVersion = getClientVersion()) {
+    const version = /^(\d+)\.(\d+)/.exec(String(clientVersion || ''));
+    return !!version && (Number(version[1]) > 1 || (Number(version[1]) === 1 && Number(version[2]) >= 15));
+}
+
+function buildLoginDeviceInfo(deviceProtocol, clientVersion = getClientVersion()) {
     const custom = deviceProtocol && deviceProtocol.enabled ? deviceProtocol : null;
     if (!custom) {
         return {
-            client_version: CONFIG.clientVersion,
+            client_version: clientVersion,
             sys_software: 'Windows',
         };
     }
 
     const device = resolveDeviceFingerprint(custom);
     return {
-        client_version: CONFIG.clientVersion,
+        client_version: clientVersion,
         sys_software: device.sysSoftware,
         sys_hardware: `${device.deviceBrand} ${device.deviceModel}`,
         network: 'wifi',
@@ -854,25 +876,35 @@ function buildLoginDeviceInfo(deviceProtocol) {
     };
 }
 
-function buildLoginBody(deviceProtocol) {
-    return Buffer.from(types.LoginRequest.encode(types.LoginRequest.create({
+function buildLoginBody(deviceProtocol, clientVersion = getClientVersion()) {
+    const modern = usesPlayerSceneLogin(clientVersion);
+    const wechat = isWechatPlatform();
+    const requestType = modern ? types.PlayerLoginRequest : types.LoginRequest;
+    return Buffer.from(requestType.encode(requestType.create({
         sharer_id: toLong(0),
         sharer_open_id: '',
-        device_info: buildLoginDeviceInfo(deviceProtocol),
+        device_info: buildLoginDeviceInfo(deviceProtocol, clientVersion),
         share_cfg_id: toLong(0),
-        scene_id: '1234567',
+        // 独立抓取的微信 Code 拿不到入口相关的启动场景，官方此时不写该字段。
+        scene_id: wechat ? undefined : '1234567',
         report_data: {
-            callback: '', cd_extend_info: '', click_id: '', clue_token: '',
-            minigame_channel: 'other-qq', minigame_platid: 2, req_id: '', trackid: '',
+            // 1.15 的 PlayerLogin 不再回填那批空字符串字段，字段集合必须和官方抓包一致。
+            ...(modern ? {} : {
+                callback: '', cd_extend_info: '', click_id: '', clue_token: '', req_id: '', trackid: '',
+            }),
+            minigame_channel: wechat ? 'other' : 'other-qq',
+            minigame_platid: 2,
         },
-        extra: Buffer.alloc(0),
+        ...(modern ? { share_key: '', game_scene_id: 1 } : { extra: Buffer.alloc(0) }),
     })).finish());
 }
 
 async function sendLogin(context, onLoginSuccess, deviceProtocol) {
-    const body = buildLoginBody(deviceProtocol);
+    const clientVersion = context.clientVersion || getClientVersion();
+    const modern = usesPlayerSceneLogin(clientVersion);
+    const body = buildLoginBody(deviceProtocol, clientVersion);
 
-    await sendMsg(context, 'gamepb.userpb.UserService', 'Login', body, {
+    await sendMsg(context, 'gamepb.userpb.UserService', modern ? 'PlayerLogin' : 'Login', body, {
         expectedErrorCodes: new Set(),
         requestClass: 'critical',
         callback(err, bodyBytes, _meta) {
@@ -886,7 +918,7 @@ async function sendLogin(context, onLoginSuccess, deviceProtocol) {
                 return;
             }
             try {
-                const reply = types.LoginReply.decode(bodyBytes);
+                const reply = (modern ? types.PlayerLoginReply : types.LoginReply).decode(bodyBytes);
                 applyServerVersionInfo(reply.version_info);
                 if (reply.basic) {
                     clearWsErrorState();
@@ -931,12 +963,30 @@ async function sendLogin(context, onLoginSuccess, deviceProtocol) {
                 context.phase = 'online';
                 startAceService();
                 loginReady = true;
-                startHeartbeat();
+                startHeartbeat(context);
                 // 登录后同步用户设置（串行），无论成功失败都调用 onLoginSuccess
                 (async () => {
-                    try { await fetchUserSettings(); } catch { /* 忽略 */ }
-                    if (!isCurrentConnection(context)) return;
-                    if (onLoginSuccess) onLoginSuccess();
+                    try {
+                        try { await fetchUserSettings(); } catch { /* 忽略 */ }
+                        if (!isCurrentConnection(context)) return;
+                        if (modern) {
+                            const sceneBody = types.PlayerSceneLoginRequest.encode({ global_scene_id: 1 }).finish();
+                            const sceneResponse = await sendMsgAsync(
+                                'gamepb.globalscenepb.GlobalSceneService', 'PlayerSceneLogin', sceneBody
+                            );
+                            if (!isCurrentConnection(context)) return;
+                            const scene = types.PlayerSceneLoginReply.decode(sceneResponse.body);
+                            // 场景登录没建成时农场侧请求一律不会有正确响应，直接断开比带着半个会话跑任务更安全。
+                            if (scene.global_scene_id !== 1 || !scene.farm_scene_ext_data?.length) {
+                                throw new Error('农场场景登录回包不完整');
+                            }
+                        }
+                        if (onLoginSuccess) onLoginSuccess();
+                    } catch (e) {
+                        logWarn('登录', `登录初始化失败: ${e.message}`);
+                        finalizeConnection(context, { source: 'login_init_failed', reason: e.message });
+                        try { context.socket.terminate(); } catch { /* 忽略 */ }
+                    }
                 })();
             } catch (e) {
                 log('登录', `解码失败: ${e.message}`);
@@ -964,24 +1014,27 @@ function getGatewayHealth() {
     };
 }
 
-function buildHeartbeatBody(gid) {
+function buildHeartbeatBody(gid, clientVersion = getClientVersion()) {
     return Buffer.from(types.HeartbeatRequest.encode(types.HeartbeatRequest.create({
         gid: toLong(gid),
-        client_version: CONFIG.clientVersion,
+        client_version: clientVersion,
         field_3: toLong(0),
     })).finish());
 }
 
-function startHeartbeat() {
+function startHeartbeat(context) {
     networkScheduler.clear('heartbeat_interval');
     lastHeartbeatResponse = Date.now();
     lastInboundAt = Date.now();
     heartbeatMissCount = 0;
+    // 连接期间的版本号在握手时已经确定；服务端回包更新全局配置后，旧连接也不能改口，
+    // 否则心跳会和已建立的会话版本不一致而被网关拒绝。
+    const clientVersion = context?.clientVersion || getClientVersion();
 
     networkScheduler.setIntervalTask('heartbeat_interval', CONFIG.heartbeatInterval, async () => {
         if (!userState.gid) return;
 
-        const body = buildHeartbeatBody(userState.gid);
+        const body = buildHeartbeatBody(userState.gid, clientVersion);
         try {
             const { body: replyBody } = await sendMsgAsync(
                 'gamepb.userpb.UserService',
@@ -1033,8 +1086,8 @@ let savedCode = null;
 let reconnectAttempts = 0;
 let networkStopped = false;
 
-function buildWebSocketHeaders(deviceProtocol) {
-    const resourceVersion = String(CONFIG.clientVersion || '').split('_')[0];
+function buildWebSocketHeaders(deviceProtocol, clientVersion = getClientVersion()) {
+    const resourceVersion = String(clientVersion || '').split('_')[0];
     const headers = {
         'Origin': 'https://gate-obt.nqf.qq.com',
         'Referer': `https://appservice.qq.com/1112386029/${resourceVersion}/page-frame.html`,
@@ -1110,7 +1163,10 @@ function connect(code, onLoginSuccess) {
         networkEvents.emit('security_error', { message: error.message });
         return;
     }
-    const url = `${CONFIG.serverUrl}?platform=${CONFIG.platform}&os=${deviceFingerprint.os}&ver=${CONFIG.clientVersion}&code=${savedCode}&openID=`;
+    // 握手起就固定本次连接使用的版本号与平台参数，后续登录、心跳都沿用这份快照。
+    const clientVersion = getClientVersion();
+    const platformParam = isWechatPlatform() ? 'wx' : CONFIG.platform;
+    const url = `${CONFIG.serverUrl}?platform=${platformParam}&os=${deviceFingerprint.os}&ver=${clientVersion}&code=${savedCode}&openID=`;
     closeCurrentWs({ terminate: true });
 
     if (deviceProtocol && deviceProtocol.enabled) {
@@ -1129,7 +1185,8 @@ function connect(code, onLoginSuccess) {
     }
 
     const socket = new WebSocket(url, {
-        headers: buildWebSocketHeaders(deviceProtocol),
+        handshakeTimeout: 20000,
+        headers: buildWebSocketHeaders(deviceProtocol, clientVersion),
     });
     ws = socket;
     const context = {
@@ -1139,6 +1196,7 @@ function connect(code, onLoginSuccess) {
         intentionalClose: false,
         finalized: false,
         loginInitialized: false,
+        clientVersion,
     };
     currentConnection = context;
 
@@ -1211,6 +1269,7 @@ function cleanup(reason = '网络清理') {
     rejectAllPendingRequests(`请求已中断: ${reason}`);
     rejectAllQueuedRequests(`请求已中断: ${reason}`);
     networkScheduler.clearAll();
+    invalidateLandForecast();
 }
 
 function reconnect(newCode) {
@@ -1232,6 +1291,7 @@ function stopNetwork(reason = '停止网络') {
     rejectAllQueuedRequests(`请求已中断: ${reason}`);
     networkScheduler.clearAll();
     gatewayTokens.clear();
+    invalidateLandForecast();
     closeCurrentWs({ terminate: true });
     userState.gid = 0;
 }

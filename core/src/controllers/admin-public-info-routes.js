@@ -24,7 +24,11 @@ function registerAdminPublicInfoRoutes({
 
   app.get("/api/game-version", (req, res) => {
     const runtimeConfig = getRuntimeConfig();
-    res.json({ ok: true, clientVersion: runtimeConfig.clientVersion });
+    res.json({
+      ok: true,
+      clientVersion: runtimeConfig.clientVersion,
+      wxClientVersion: runtimeConfig.wxClientVersion,
+    });
   });
 
   app.get("/api/changelog", async (req, res) => {

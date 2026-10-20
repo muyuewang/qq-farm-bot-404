@@ -120,11 +120,16 @@ function createRuntimeEngine(options = {}) {
         deleteAccount: store.deleteAccount,
         scheduleAutoRelogin: autoCodeRefresh.scheduleRelogin,
         refreshAccountCode: autoCodeRefresh.refreshAccountCode,
-        updateSystemClientVersion: (clientVersion) => {
+        updateSystemClientVersion: (clientVersion, platform = 'qq') => {
             const value = String(clientVersion || '').trim();
             const current = store.getSystemConfig() || store.DEFAULT_SYSTEM_CONFIG || {};
-            if (!value || current.clientVersion === value) return false;
-            const saved = store.setSystemConfig({ ...current, clientVersion: value });
+            if (!value) return false;
+            // 微信与 QQ 各记各的版本号，服务端回包只落到发起连接的那个平台。
+            const field = ['wx', 'wechat'].includes(String(platform || '').trim().toLowerCase())
+                ? 'wxClientVersion'
+                : 'clientVersion';
+            if (current[field] === value) return false;
+            const saved = store.setSystemConfig({ ...current, [field]: value });
             if (saved) updateRuntimeConfig(saved);
             return !!saved;
         },

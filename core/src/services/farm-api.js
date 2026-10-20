@@ -1,6 +1,7 @@
 const { sendMsgAsync, getUserState } = require('../utils/network');
 const { types, waitForProtoReady } = require('../utils/proto');
 const { toLong, sleep, log } = require('../utils/utils');
+const { getLandForecastRevision, rememberLandForecast } = require('./level-forecast');
 
 /** 普通化肥 ID */
 const NORMAL_FERTILIZER_ID = 1011;
@@ -30,9 +31,11 @@ async function sendPlantRequest(ReqType, ReplyType, method, landIds, hostGid) {
 
 /** 获取所有地块数据 */
 async function getAllLands() {
+  const revision = getLandForecastRevision();
   const payload = types.AllLandsRequest.encode(types.AllLandsRequest.create({})).finish();
   const { body } = await sendMsgAsync('gamepb.plantpb.PlantService', 'AllLands', payload);
   const reply = types.AllLandsReply.decode(body);
+  rememberLandForecast(reply.lands, getUserState(), revision);
   if (reply.operation_limits && onOperationLimitsUpdate) {
     onOperationLimitsUpdate(reply.operation_limits);
   }

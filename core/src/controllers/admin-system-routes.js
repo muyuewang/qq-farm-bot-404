@@ -107,10 +107,11 @@ function registerAdminSystemRoutes({
     (req, res) => {
       try {
         if (!requireDangerConfirmation(req, res, "UPDATE_SYSTEM_CONFIG")) return;
-        const { serverUrl, clientVersion, platform, os, napcatLoginEnabled } = req.body || {};
+        const { serverUrl, clientVersion, wxClientVersion, platform, os, napcatLoginEnabled } = req.body || {};
         const saved = store.setSystemConfig({
           serverUrl,
           clientVersion,
+          wxClientVersion,
           platform,
           os,
           napcatLoginEnabled,
@@ -120,6 +121,7 @@ function registerAdminSystemRoutes({
           admin: req.currentUser?.username || "",
           serverUrl: saved?.serverUrl || "",
           clientVersion: saved?.clientVersion || "",
+          wxClientVersion: saved?.wxClientVersion || "",
           platform: saved?.platform || "",
           os: saved?.os || "",
           confirmation: "UPDATE_SYSTEM_CONFIG",

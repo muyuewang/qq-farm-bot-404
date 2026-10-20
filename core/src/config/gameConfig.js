@@ -19,6 +19,8 @@ const itemInfoMap = new Map();       // itemId → itemInfo
 const seedItemMap = new Map();       // seedItemId → itemInfo
 const seedImageMap = new Map();      // seedId/itemId → imageUrl
 const seedAssetImageMap = new Map(); // assetName → imageUrl
+const itemIconAliasMap = new Map();  // bundle_name:icon_res → 已落盘图片的 itemId
+const itemAssetAliasMap = new Map(); // bundle_name:asset_name → 已落盘图片的 itemId
 const plantPhaseImageMap = new Map();// assetName → { phase: imageUrl }
 let plantPhaseManifestPath = '';
 let plantPhaseManifestMtimeMs = -1;
@@ -90,6 +92,48 @@ const staticItemImageMap = new Map([
 let mutantEffectConfig = null;
 const mutantEffectMap = new Map();       // mutantId → mutantEffect
 const mutantEffectByIconMap = new Map(); // icon → mutantEffect
+
+/** 官方图标以 bundle 为命名空间，去掉 spriteFrame 后缀才是同一张图的稳定标识。 */
+function getItemImageKey(item, field) {
+    const resource = String((item && item[field]) || '').trim().replace(/\/spriteFrame$/, '');
+    return resource ? `${String((item && item.bundle_name) || '').trim()}:${resource}` : '';
+}
+
+/** 图片目录只在加载配置时扫描，避免列表请求为每个物品反复查索引。 */
+function buildItemImageAliases() {
+    itemIconAliasMap.clear();
+    itemAssetAliasMap.clear();
+    for (const item of itemInfoMap.values()) {
+        if (!staticItemImageMap.has(item.id) && !getOwnedItemImage(item.id)) continue;
+        const icon = getItemImageKey(item, 'icon_res');
+        if (icon) {
+            if (!itemIconAliasMap.has(icon)) itemIconAliasMap.set(icon, item.id);
+            continue;
+        }
+        // 无 icon_res 的图片由 asset_name 生成，才能作为同一物品模型的备用图。
+        const asset = getItemImageKey(item, 'asset_name');
+        if (asset && !itemAssetAliasMap.has(asset)) itemAssetAliasMap.set(asset, item.id);
+    }
+}
+
+/** 物品自己落盘的图：静态活动素材优先，其次是本地导出的名称图和 Crop_ 资产图。 */
+function getOwnedItemImage(itemId) {
+    const direct = seedImageMap.get(itemId);
+    if (direct) return direct;
+    const info = itemInfoMap.get(itemId);
+    const assetName = info && info.asset_name ? String(info.asset_name).trim() : '';
+    return (assetName && seedAssetImageMap.get(assetName)) || '';
+}
+
+/** 同一张官方图标会被多个物品 ID 复用（如解锁卡指向作物模型图），本地只落盘了主 ID 的图片。 */
+function getAliasedItemImage(itemId) {
+    const info = itemInfoMap.get(itemId);
+    if (!info) return '';
+    const aliasId = itemIconAliasMap.get(getItemImageKey(info, 'icon_res'))
+        || itemAssetAliasMap.get(getItemImageKey(info, 'asset_name'));
+    if (!aliasId || aliasId === itemId) return '';
+    return staticItemImageMap.get(aliasId) || getOwnedItemImage(aliasId);
+}
 
 /** 加载所有游戏配置文件 */
 function loadConfigs() {
@@ -282,6 +326,7 @@ function loadConfigs() {
     } catch (err) {
         console.warn('[配置] 加载 seed_images_named 失败:', err.message);
     }
+    buildItemImageAliases();
 
     // 5. 加载从官方 plant Bundle 导出的阶段图片
     plantPhaseManifestPath = path.join(basePath, 'plant_images', 'manifest.json');
@@ -495,16 +540,11 @@ function getMappedSeedImage(id) {
     const numericId = Number(id) || 0;
     if (numericId <= 0) return '';
 
-    // 先查种子图片映射
-    const directImage = seedImageMap.get(numericId);
-    if (directImage) return directImage;
+    // 活动素材覆盖优先，与道具图片查找保持同一套优先级。
+    const staticImage = staticItemImageMap.get(numericId);
+    if (staticImage) return staticImage;
 
-    // 再通过物品的 asset_name 查找
-    const itemInfo = itemInfoMap.get(numericId);
-    const assetName = itemInfo && itemInfo.asset_name ? String(itemInfo.asset_name).trim() : '';
-    if (!assetName) return '';
-
-    return seedAssetImageMap.get(assetName) || '';
+    return getOwnedItemImage(numericId) || getAliasedItemImage(numericId);
 }
 
 /** 根据种子ID获取图片 */
@@ -614,17 +654,7 @@ function getItemImageById(itemId) {
     const staticImage = staticItemImageMap.get(numericId);
     if (staticImage) return staticImage;
 
-    const tryGetImage = (targetId) => {
-        const img = seedImageMap.get(targetId);
-        if (img) return img;
-        const info = itemInfoMap.get(targetId);
-        const assetName = info && info.asset_name ? String(info.asset_name) : '';
-        if (assetName) {
-            const assetImg = seedAssetImageMap.get(assetName);
-            if (assetImg) return assetImg;
-        }
-        return '';
-    };
+    const tryGetImage = (targetId) => getOwnedItemImage(targetId) || getAliasedItemImage(targetId);
 
     // 1. 先直接查找
     let image = tryGetImage(numericId);

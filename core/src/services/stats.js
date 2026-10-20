@@ -82,6 +82,8 @@ const session = {
   lastGoldGain: 0
 };
 
+let sessionStartedAt = Date.now();
+
 let currentAccountId = null;
 let saveTimer = null;
 
@@ -161,6 +163,7 @@ function doSave() {
  * @param {number} coupon - 当前点券（默认 0）
  */
 function initStats(gold, exp, coupon = 0) {
+  sessionStartedAt = Date.now();
   const g = Number.isFinite(Number(gold)) ? Number(gold) : 0;
   const e = Number.isFinite(Number(exp)) ? Number(exp) : 0;
   const c = Number.isFinite(Number(coupon)) ? Number(coupon) : 0;
@@ -329,6 +332,7 @@ function getStats(farmUser, userState, connected, limits) {
       avatar: us.avatar || fu.avatar || fu.avatarUrl || fu.avatar_url || ''
     },
     uptime: process.uptime(),
+    sessionElapsedSeconds: Math.max(0, (Date.now() - sessionStartedAt) / 1000),
     operations: ops,
     tongQiGiftCount,
     tongQiGiftLimit: null,

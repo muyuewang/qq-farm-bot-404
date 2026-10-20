@@ -271,6 +271,64 @@ test('hire preferences retain numeric values through config patch and reload nor
   assert.equal(invalid.milk_tea_hire_talent, 0);
 });
 
+test('work page maps shift duration to base wage and unknown windows to null', () => {
+  const { normalizeMilkTeaWork } = require('../src/services/activity-milk-tea');
+  const itemDto = x => ({ id: String(x.id), count: String(x.count) });
+  for (const [span, wage] of [[14400, 40], [43200, 130], [86400, 270]]) {
+    const view = normalizeMilkTeaWork({ my_shift: { begin_at: 1000, end_at: 1000 + span, talent_id: 9001 } }, itemDto);
+    assert.equal(view.my_shift.baseWage, wage, `${span}秒班次`);
+  }
+  assert.equal(normalizeMilkTeaWork({ my_shift: { begin_at: 0, end_at: 7777 } }, itemDto).my_shift.baseWage, null);
+  assert.equal(normalizeMilkTeaWork({ my_shift: null }, itemDto).my_shift, null);
+});
+
+test('interaction results name official rewards per interaction type', () => {
+  require('../src/config/gameConfig').loadConfigs();
+  const { itemDto } = require('../src/services/activity-center-helpers');
+  const { interactionResult } = require('../src/services/activity-milk-tea');
+  const taste = interactionResult({ type: 3, interaction_id: 90003, success: true, friend: { taste_recipe_id: '2', taste_cups: '5', bonus_amount: '30' } }, itemDto);
+  assert.equal(taste.name, '招牌试饮');
+  assert.equal(taste.success, true);
+  assert.equal(taste.reward.name, '甜莓奶茶');
+  assert.equal(taste.reward.count, '5');
+  assert.equal(interactionResult({ type: 3, interaction_id: 90003, success: true, friend: { taste_recipe_id: '999999', taste_cups: '3' } }, itemDto).reward.name, '高级奶茶');
+  const slack = interactionResult({ type: 4, interaction_id: 90004, success: true, friend: { bonus_amount: '0' } }, itemDto);
+  assert.equal(slack.reward.id, '1042');
+  assert.equal(slack.reward.count, '1');
+  const lose = interactionResult({ type: 5, interaction_id: 90005, success: false, friend: { bonus_amount: '12' } }, itemDto);
+  assert.equal(lose.success, false);
+  assert.equal(lose.reward.id, '1041');
+  assert.equal(lose.reward.count, '12');
+  assert.equal(lose.text, '心痛！马内离你而去！');
+  assert.equal(interactionResult({ type: 4, success: true }, itemDto), null);
+  assert.equal(interactionResult({ type: 99, interaction_id: 1 }, itemDto), null);
+});
+
+test('interaction copy fills scheduled counts and flags incomplete previews', () => {
+  const { normalizeMilkTeaWork } = require('../src/services/activity-milk-tea');
+  const itemDto = x => ({ id: String(x.id), count: String(x.count) });
+  const view = normalizeMilkTeaWork({ my_shift: { begin_at: 0, end_at: 43200, talent_id: 9001, interact_previews: [{ interaction_type: 1, promote_cups: 18 }] } }, itemDto);
+  const byId = id => view.interactions.find(x => x.interaction_id === id);
+  assert.equal(byId(1).ready, true);
+  assert.match(byId(1).description, /卖出18杯奶茶/);
+  assert.equal(byId(3).ready, true);
+  assert.match(byId(3).description, /随机获得12杯高级奶茶/);
+  assert.equal(byId(2).ready, true);
+  assert.equal(byId(4).ready, true);
+  const empty = normalizeMilkTeaWork({ my_shift: { begin_at: 0, end_at: 100 } }, itemDto);
+  assert.equal(empty.interactions.find(x => x.interaction_id === 1).ready, false);
+  assert.match(empty.interactions.find(x => x.interaction_id === 1).description, /卖出—杯奶茶/);
+});
+
+test('interaction icons resolve to local official assets', () => {
+  const { interactionIcon, normalizeMilkTeaWork } = require('../src/services/activity-milk-tea');
+  assert.equal(interactionIcon('gui/texture/Season/S4/S4MyJob/S4interactIcon/icon_S4MyJob_interact_3/spriteFrame'), '/activity/milk-tea/icon_S4MyJob_interact_3.png');
+  assert.equal(interactionIcon(''), '');
+  assert.equal(interactionIcon('a/b/icon_S4MyJob_interact_9'), '/activity/milk-tea/icon_S4MyJob_interact_9.png');
+  for (const item of normalizeMilkTeaWork({ my_shift: { begin_at: 0, end_at: 43200 } }, x => x).interactions)
+    assert.ok(fs.existsSync(path.join(__dirname, '../../web/public', item.image)), item.image);
+});
+
 test('milk tea logs localized outcomes, hire fallback and skips without dumping payloads', async () => {
   const { service, logs } = setup({ inventory: [{ id: 1041, count: 1000 }], hireList: { wage_total: 40, friends: [employee(222, 9002)] } });
   await service.operateMilkTea('hire', { autoSelect: true, talentId: 9001 });

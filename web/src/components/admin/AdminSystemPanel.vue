@@ -77,7 +77,10 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
               默认版本
             </div>
             <div class="mt-1 font-semibold">
-              {{ defaultSystemConfig.clientVersion }}
+              QQ {{ defaultSystemConfig.clientVersion }}
+            </div>
+            <div class="font-semibold">
+              微信 {{ defaultSystemConfig.wxClientVersion }}
             </div>
           </div>
         </div>
@@ -87,7 +90,7 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
         </div>
 
         <div class="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-          保存后会立刻影响全局连接参数。若服务器地址、平台或系统版本不匹配，可能导致后续账号连接异常。
+          保存后会立刻更新全局连接参数，已在运行的账号要在下次登录才会用上新的版本号。若服务器地址、平台或系统版本不匹配，可能导致后续账号连接异常。
         </div>
 
         <div class="grid grid-cols-2 gap-3 text-sm">
@@ -100,10 +103,15 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
           />
           <BaseInput
             v-model="localSystemConfig.clientVersion"
-            label="客户端版本"
+            label="QQ 客户端版本"
             type="text"
-            placeholder="1.13.0.5_20260723"
-            class="col-span-2"
+            :placeholder="defaultSystemConfig.clientVersion"
+          />
+          <BaseInput
+            v-model="localSystemConfig.wxClientVersion"
+            label="微信客户端版本"
+            type="text"
+            :placeholder="defaultSystemConfig.wxClientVersion"
           />
           <div class="flex flex-col gap-1.5">
             <label class="text-sm text-gray-700 font-medium dark:text-gray-300">平台</label>

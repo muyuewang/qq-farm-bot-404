@@ -46,6 +46,7 @@ const {
 } = require('../services/friend');
 const { getInteractRecords } = require('../services/interact');
 const { processInviteCodes } = require('../services/invite');
+const { getLevelForecast } = require('../services/level-forecast');
 const {
     autoBuyFertilizer,
     checkAndBuyFertilizerBoth,
@@ -1523,11 +1524,12 @@ async function startBot(config) {
     networkEvents.on('kickout', onKickout);
 
     if (onClientVersionUpdate) networkEvents.off('client_version_update', onClientVersionUpdate);
-    onClientVersionUpdate = ({ clientVersion, previous }) => {
+    onClientVersionUpdate = ({ clientVersion, previous, platform }) => {
         sendToMaster({
             type: 'client_version_update',
             clientVersion: String(clientVersion || ''),
-            previous: String(previous || '')
+            previous: String(previous || ''),
+            platform: String(platform || 'qq')
         });
     };
     networkEvents.on('client_version_update', onClientVersionUpdate);
@@ -2349,10 +2351,15 @@ function syncStatus() {
     };
     stats.automation = getAutomation();
     stats.levelProgress = levelProgress;
+    stats.levelForecast = getLevelForecast(
+        userState, levelProgress, stats, stats.automation
+    );
     stats.configRevision = appliedConfigRevision;
 
     const stableStats = { ...stats };
     delete stableStats.nextChecks;
+    // 预测带秒级 generatedAt，若参与哈希每轮轮询都会判定为变化；改由定期全量同步下发。
+    delete stableStats.levelForecast;
     const hash = JSON.stringify(stableStats);
     const now2 = Date.now();
 
