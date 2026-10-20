@@ -7,6 +7,7 @@ import CharityFlowerActivityPanel from '@/components/activity/CharityFlowerActiv
 import HeluExchangePanel from '@/components/activity/HeluExchangePanel.vue'
 import HeluPassportPanel from '@/components/activity/HeluPassportPanel.vue'
 import SolarTermsActivityPanel from '@/components/activity/SolarTermsActivityPanel.vue'
+import SolarCalendarActivityPanel from '@/components/activity/SolarCalendarActivityPanel.vue'
 import HeluSolarTermsPanel from '@/components/activity/HeluSolarTermsPanel.vue'
 import QixiActivityPanel from '@/components/activity/QixiActivityPanel.vue'
 import RainPoemActivityPanel from '@/components/activity/RainPoemActivityPanel.vue'
@@ -249,6 +250,12 @@ const activityCards = computed(() => {
     image: '', imagePosition: 'center', window: { startMs: 0, endMs: 0 },
     updatedMs: Date.parse('2026-10-15T00:00:00+08:00'), status: 'active', pending: false,
     backgroundStyle: { background: '#385c46' },
+  })
+  cards.push({ permanent: true, key: 'solar-calendar', activityIds: [], adaptedKey: null,
+    title: '节令日历', description: '按季度查看节令赠礼与问答奖励', icon: 'i-carbon-calendar',
+    image: '', imagePosition: 'center', window: { startMs: 0, endMs: 0 },
+    updatedMs: Date.parse('2026-10-20T00:00:00+08:00'), status: 'active', pending: false,
+    backgroundStyle: { background: '#2f5d54' },
   })
   return cards.sort((left, right) => {
     return right.updatedMs - left.updatedMs
@@ -626,6 +633,7 @@ onUnmounted(() => {
     </section>
 
     <SolarTermsActivityPanel v-else-if="selectedActivity === 'solar-terms'" :labels="L" @back="selectedActivity = null" />
+    <SolarCalendarActivityPanel v-else-if="selectedActivity === 'solar-calendar'" @back="selectedActivity = null" />
     <div v-else-if="selectedActivityCard?.adaptedKey === 'rain-poem' && selectedActivityCard.status === 'active'" class="space-y-3">
       <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null">
         <span class="i-carbon-arrow-left" />

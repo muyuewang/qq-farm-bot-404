@@ -78,6 +78,7 @@ const selectedLandNames = computed(() => props.fertilizerLandTypeOptions.filter(
 const selectedLandTypeCount = computed(() => Array.isArray(automation.value.automation.fertilizer_land_types) ? automation.value.automation.fertilizer_land_types.length : 0)
 const activityKeys = computed(() => [
   'star_solar_claim',
+  'solar_calendar_claim',
   ...(showMilkTeaActivity.value ? ['mall_coupon_gift_buy', 'milk_tea_cashier', 'milk_tea_wages', 'milk_tea_share_daily', 'milk_tea_share_rewards', 'milk_tea_fund_rewards'] : []),
   ...(showMilkTeaBusiness.value ? ['milk_tea_upgrade', 'milk_tea_craft', 'milk_tea_boost', 'milk_tea_hire', 'milk_tea_seed_buy'] : []),
   ...(showRainPoemActivity.value
@@ -163,6 +164,7 @@ function summaryTags(key: ModuleKey) {
   return [
     automation.value.automation.task ? '自动完成日常任务' : '不做日常',
     automation.value.automation.star_solar_claim && '节令小札',
+    automation.value.automation.solar_calendar_claim && '节令日历',
     SHOW_STAR_ACTIVITY && starFestivalEnabled.value && '心许千灯星垂野',
     SHOW_QIXI_ACTIVITY && qixiActivityEnabled.value && '鹊桥寄情',
     showRainPoemActivity.value && rainPoemActivityEnabled.value && '雨落成诗',
@@ -578,6 +580,11 @@ watch(() => props.currentAccountId, loadQixiFriends)
               <section class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
                 <h3 class="text-sm font-medium">节令小札</h3>
                 <BaseSwitch v-model="automation.automation.star_solar_claim" label="自动领取节令奖励" />
+              </section>
+
+              <section class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
+                <h3 class="text-sm font-medium">节令日历</h3>
+                <BaseSwitch v-model="automation.automation.solar_calendar_claim" label="自动领取节令赠礼" />
               </section>
 
               <section v-if="SHOW_STAR_ACTIVITY" class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
