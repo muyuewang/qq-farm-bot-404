@@ -8,8 +8,8 @@ const { performance } = require('node:perf_hooks');
 
 const { ensureDataDir } = require('../config/runtime-paths');
 
-const OFFICIAL_VERSION = 'v3.9.0.1790160550';
-const OFFICIAL_SHA256 = '2c9e377ecc9a4fd9019f12191b589d543a60d6654580eb3e237b35f1fa5b1cb7';
+const OFFICIAL_VERSION = 'v3.9.0.1792070537';
+const OFFICIAL_SHA256 = '837bd271557dc9a21d5cd28b66076ea012eb39a4f4cbe298f529716469c087fc';
 const DEFAULT_APP_ID = '1112386029';
 const DEFAULT_GAME_ID = 3167;
 const DEFAULT_APP_KEY = '0';
@@ -51,12 +51,8 @@ const REQUIRED_EXPORTS = [
     'generateToken', 'encryptData', 'decryptData',
 ];
 const MERGED_DATA_KEY = 1871261153;
-const MERGED_DATA_SEGMENTS = [
-    [1024, 5541], [6580, 8989], [15585, 33], [15643, 1], [15655, 21],
-    [15701, 1], [15713, 21], [15759, 1], [15771, 30], [15826, 14],
-    [15875, 1], [15887, 21], [15933, 1], [15945, 671], [16632, 400],
-    [17040, 103], [67371008, 404],
-];
+// v3.9.0.1792070537 起只需预解密该元数据段，其余数据段由 wasm 的 decrypt_all_data 处理。
+const MERGED_DATA_METADATA = [67371008, 404];
 
 // This 64-byte table is part of the matching official JavaScript host wrapper.
 const OFFICIAL_RUNTIME_TABLE = Buffer.from([
@@ -83,7 +79,7 @@ class TsdkRuntime {
         this.appId = String(options.appId || DEFAULT_APP_ID);
         this.gameId = Number(options.gameId || process.env.FARM_TSDK_GAME_ID || DEFAULT_GAME_ID);
         this.appKey = String(options.appKey ?? process.env.FARM_TSDK_APP_KEY ?? DEFAULT_APP_KEY);
-        this.wasmPath = options.wasmPath || path.join(__dirname, 'tsdk-v3.9.0.1790160550.wasm');
+        this.wasmPath = options.wasmPath || path.join(__dirname, 'tsdk-v3.9.0.1792070537.wasm');
         this.dataDir = options.dataDir || path.join(ensureDataDir(), 'tsdk', this.accountId);
         this.deviceInfo = options.deviceInfo || {};
         this.logger = typeof options.logger === 'function' ? options.logger : () => {};
@@ -347,16 +343,21 @@ class TsdkRuntime {
             if (typeof decryptSegment !== 'function') {
                 throw new TypeError('TSDK merged-data decryptor is missing');
             }
-            // The official mergewasm loader decrypts every active data segment
-            // before running constructors. These values are verified against the
-            // v3.9.0 WASM data section and decrypt_all_data function body.
-            for (const [ptr, length] of MERGED_DATA_SEGMENTS) {
-                this.ensureBounds(ptr, length);
-                decryptSegment(ptr, length, MERGED_DATA_KEY);
+            const decryptAllData = instance.exports.decrypt_all_data;
+            if (typeof decryptAllData !== 'function') {
+                throw new TypeError('TSDK full-data decryptor is missing');
             }
-            if (typeof instance.exports.__wasm_call_ctors === 'function') {
-                instance.exports.__wasm_call_ctors();
+            // v3.9.0.1792070537 起官方 mergewasm 改由 wasm 自身解密全部数据段：
+            // 宿主只预解密元数据段 [67371008, 404]，再调用 decrypt_all_data()，
+            // 最后调用导出 x() 触发构造。与上游仓库接口保持一致，不再逐段手动解密。
+            const [metadataPtr, metadataLength] = MERGED_DATA_METADATA;
+            this.ensureBounds(metadataPtr, metadataLength);
+            decryptSegment(metadataPtr, metadataLength, MERGED_DATA_KEY);
+            decryptAllData();
+            if (typeof instance.exports.x !== 'function') {
+                throw new TypeError('TSDK runtime bootstrap export x is missing');
             }
+            instance.exports.x();
 
             const key = this.allocCString(this.appKey);
             try {

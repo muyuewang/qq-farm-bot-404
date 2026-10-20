@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package gamepb.solartermspb;
+
+import "corepb.proto";
+
+// ---- SolarTermsService (V1，节令小札)：仓库既有活动服务，字段保持与官方回包一致 ----
+
+message SolarTermReward {
+    int64 item_id = 1;
+    int64 count = 2;
+}
+
+message SolarTermInfo {
+    int64 term_id = 1;
+    int64 status = 2;
+    int64 begin_time = 3;
+    int64 end_time = 4;
+    repeated SolarTermReward rewards = 5;
+    bytes name = 6;
+}
+
+message SolarTermsConfig {
+    int64 config_id = 1;
+    int64 activity_id = 2;
+    bytes rules_json = 3;
+    bytes field_4 = 4;
+}
+
+message GetSolarTermsRequest {}
+
+message GetSolarTermsReply {
+    repeated SolarTermInfo terms = 1;
+    int64 server_time = 2;
+    SolarTermsConfig current_config = 3;
+    repeated SolarTermsConfig configs = 4;
+}
+
+message ClaimSolarTermsRequest {
+    int64 term_id = 1;
+}
+
+message ClaimSolarTermsReply {
+    repeated SolarTermReward rewards = 1;
+    SolarTermInfo term = 2;
+}
+
+// ---- SolarTermsV2Service (1.15.0.2_20261001 官方节令日历，来自上游仓库协议恢复) ----
+// 说明：协议字段依据官方编码器与抓包回包核对；AnswerSolarTerms / ClaimSolarTermsV2 /
+// ClaimSolarSeason 为写操作，尚未做实服领取成功验证，线上验收前不得放宽资源与限额校验。
+
+message GetSolarTermsV2Request {}
+
+message SolarTermsEventInfo {
+    int64 id = 1;
+    int32 window_status = 2;
+    int64 open_start_time = 3;
+    int64 open_end_time = 4;
+    repeated corepb.Item rewards = 5;
+    repeated corepb.Item question_rewards = 6;
+    bool direct_claimed = 7;
+    bool quiz_claimed = 8;
+    bool quiz_wrong_today = 9;
+    repeated int32 wrong_options = 10;
+}
+
+message SolarSeasonInfo {
+    int64 id = 1;
+    repeated int64 event_ids = 2;
+    int32 lit_count = 3;
+    int32 total_count = 4;
+    bool reward_claimable = 5;
+    bool reward_claimed = 6;
+    repeated corepb.Item rewards = 7;
+    bool current = 8;
+}
+
+message GetSolarTermsV2Reply {
+    repeated SolarTermsEventInfo events = 1;
+    int64 server_time = 2;
+    int64 default_event_id = 3;
+    repeated SolarSeasonInfo seasons = 4;
+    bool entry_red_dot = 5;
+    bool album_red_dot = 6;
+}
+
+message ClaimSolarTermsV2Request {
+    int64 id = 1;
+}
+
+message ClaimSolarTermsV2Reply {
+    repeated corepb.Item rewards = 1;
+    SolarTermsEventInfo updated_event = 2;
+}
+
+message AnswerSolarTermsRequest {
+    int64 id = 1;
+    int32 option_index = 2;
+}
+
+message AnswerSolarTermsReply {
+    bool correct = 1;
+    repeated corepb.Item rewards = 2;
+    SolarTermsEventInfo updated_event = 3;
+}
+
+message ClaimSolarSeasonRequest {
+    int64 id = 1;
+}
+
+message ClaimSolarSeasonReply {
+    repeated corepb.Item rewards = 1;
+    SolarSeasonInfo updated_season = 2;
+}

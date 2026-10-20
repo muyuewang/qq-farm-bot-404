@@ -51,6 +51,7 @@ async function loadProto() {
         getResourcePath('proto', 'acepb.proto'),
         getResourcePath('proto', 'careerpb.proto'),
         getResourcePath('proto', 'paypb.proto'),
+        getResourcePath('proto', 'solartermspb.proto'),
     ], { keepCase: true });
 
     for (const name of ['MilkTeaOperateRequest', 'MilkTeaOperateReply', 'MilkTeaGetGroupReply']) {
