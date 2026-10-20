@@ -254,6 +254,8 @@ function createDataProvider(deps) {
         claimSeasonPassportRewards: (ref) => callWorkerApi(resolveAccountId(ref), 'claimSeasonPassportRewards'),
         getSolarTermsInfo: (ref) => callWorkerApi(resolveAccountId(ref), 'getSolarTermsInfo'),
         claimSolarTermsReward: (ref, termId) => callWorkerApi(resolveAccountId(ref), 'claimSolarTermsReward', termId),
+        getSolarCalendar: (ref) => callWorkerApi(resolveAccountId(ref), 'getSolarCalendar'),
+        operateSolarCalendar: (ref, action, input) => callWorkerApi(resolveAccountId(ref), 'operateSolarCalendar', action, input || {}),
         claimQingmeiSeeds: (ref) => callWorkerApi(resolveAccountId(ref), 'claimQingmeiSeeds'),
         brewAndSellQingmeiWine: (ref, options) => callWorkerApi(resolveAccountId(ref), 'brewAndSellQingmeiWine', options || {}),
 

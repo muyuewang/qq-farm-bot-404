@@ -198,6 +198,12 @@ async function loadProto() {
     types.ActivityPetDiaryPhotoWall = root.lookupType('gamepb.activitypb.PetDiaryPhotoWall');
     types.ActivityPetDiaryPhotoEntry = root.lookupType('gamepb.activitypb.PetDiaryPhotoEntry');
 
+    // 节令日历（SolarTermsV2Service，1.15.0.2_20261001，字段号已对照上游官方编码器恢复结果）
+    for (const name of ['GetSolarTermsV2', 'ClaimSolarTermsV2', 'AnswerSolarTerms', 'ClaimSolarSeason']) {
+        types[`${name}Request`] = root.lookupType(`gamepb.solartermspb.${name}Request`);
+        types[`${name}Reply`] = root.lookupType(`gamepb.solartermspb.${name}Reply`);
+    }
+
     // 天气
     types.GetWeatherStatusRequest = root.lookupType('gamepb.weatherpb.GetWeatherStatusRequest');
     types.GetWeatherStatusReply = root.lookupType('gamepb.weatherpb.GetWeatherStatusReply');

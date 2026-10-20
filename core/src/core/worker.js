@@ -2080,6 +2080,16 @@ async function handleApiCall(msg) {
                 result = await claimSolarTermsReward(args[0]);
                 break;
             }
+            case 'getSolarCalendar': {
+                const { getSolarCalendar } = require('../services/solar-calendar');
+                result = await getSolarCalendar();
+                break;
+            }
+            case 'operateSolarCalendar': {
+                const { operateSolarCalendar } = require('../services/solar-calendar');
+                result = await operateSolarCalendar(args[0], args[1]);
+                break;
+            }
             case 'claimQingmeiSeeds': {
                 const { claimQingmeiSeeds } = require('../services/activity');
                 result = await claimQingmeiSeeds();

@@ -17,6 +17,23 @@ function registerAdminWishShareActivityRoutes({ app, provider, getAccountIdFromR
       res.json(await provider.claimSolarTermsReward(accountId, Number(req.body?.termId) || 0));
     } catch (error) { sendProviderError(res, error); }
   });
+  app.get('/api/activity/solar-calendar', async (req, res) => {
+    const accountId = getAuthorizedAccountId(req, res, { getAccountIdFromRequest, canAccessAccount });
+    if (!accountId) return;
+    try {
+      if (!requireConnectedAccount(res, provider, accountId, '账号未运行')) return;
+      res.json({ ok: true, calendar: await provider.getSolarCalendar(accountId) });
+    } catch (error) { sendProviderError(res, error); }
+  });
+  app.post('/api/activity/solar-calendar/operate', async (req, res) => {
+    const accountId = getAuthorizedAccountId(req, res, { getAccountIdFromRequest, canAccessAccount });
+    if (!accountId) return;
+    if (!['claim', 'answer', 'season'].includes(req.body?.action)) return res.status(400).json({ ok: false, error: '节令操作无效' });
+    try {
+      if (!requireConnectedAccount(res, provider, accountId, '账号未运行')) return;
+      res.json({ ok: true, ...(await provider.operateSolarCalendar(accountId, req.body.action, req.body)) });
+    } catch (error) { sendProviderError(res, error); }
+  });
   app.get('/api/activity/milk-tea', async (req, res) => {
     const accountId = getAuthorizedAccountId(req, res, { getAccountIdFromRequest, canAccessAccount });
     if (!accountId) return;
