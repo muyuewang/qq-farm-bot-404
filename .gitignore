@@ -12,6 +12,7 @@ coverage/
 .cache/
 .vite/
 .turbo/
+__pycache__/
 
 core/data/
 core/docs/
