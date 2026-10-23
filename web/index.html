@@ -1,14 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg?v=farmhouse-1" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>QQ农场智能助手</title>
+    <script>
+      // 首屏前应用主题，避免先白后黑的闪烁；与 stores/app.ts 使用同一个 theme_mode。
+      (function () {
+        try {
+          var raw = localStorage.getItem('theme_mode') || 'system'
+          var mode = raw.replace(/"/g, '')
+          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {}
+      })()
+    </script>
 </head>
 <body>
 <div id="app"></div>
-<iframe src="/icon.svg" style="display:none"></iframe>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package gamepb.guidepb;
+
+import "corepb.proto";
+
+// ============ 引导/新手任务服务 ============
+
+message GuideNode {
+    int64 node_id = 1;
+    string name = 2;
+    bool completed = 3;
+    bool reward_claimed = 4;
+    repeated corepb.Item rewards = 5;
+}
+
+// --- 完成引导节点 ---
+message SetWeakGuideNodeCompleteRequest {
+    int64 node_id = 1;
+}
+
+message SetWeakGuideNodeCompleteReply {
+    bool success = 1;
+}
+
+// --- 领取引导奖励 ---
+message ClaimWeakGuideRewardRequest {
+    int64 node_id = 1;
+}
+
+message ClaimWeakGuideRewardReply {
+    repeated corepb.Item items = 1;
+    bool success = 2;
+}

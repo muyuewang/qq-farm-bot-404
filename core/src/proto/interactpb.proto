@@ -28,3 +28,43 @@ message InteractRecordsRequest {}
 message InteractRecordsReply {
     repeated InteractRecord records = 1;
 }
+
+// --- 获取互动信息 ---
+message InteractInfo {
+    int64 visitor_gid = 1;
+    string nick = 2;
+    string avatar_url = 3;
+    int32 action_type = 4;
+    int64 server_time = 5;
+    int32 crop_id = 6;
+    int32 crop_count = 7;
+    int32 level = 8;
+}
+
+message GetInteractInfoRequest {}
+
+message GetInteractInfoReply {
+    repeated InteractInfo infos = 1;
+    int64 server_time = 2;
+}
+
+// --- 获取互动摘要 ---
+message InteractSummary {
+    int64 total_water = 1;
+    int64 total_insecticide = 2;
+    int64 total_weed = 3;
+    int64 total_steal = 4;
+    int64 total_stolen = 5;
+    int64 visitor_count = 6;
+}
+
+message GetInteractSummaryRequest {}
+
+message GetInteractSummaryReply {
+    InteractSummary summary = 1;
+}
+
+// --- 关闭互动弹窗 ---
+message DismissInteractPopupRequest {}
+
+message DismissInteractPopupReply {}

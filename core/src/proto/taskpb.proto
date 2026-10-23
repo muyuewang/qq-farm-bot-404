@@ -10,6 +10,7 @@ import "corepb.proto";
 
 // ============ 单个任务 ============
 message Task {
+    repeated corepb.Item extra_rewards = 14;
     int64 id = 1;                    // 任务ID
     int64 progress = 2;              // 当前进度
     bool is_claimed = 3;             // 是否已领取

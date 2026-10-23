@@ -2,12 +2,15 @@ syntax = "proto3";
 
 package gamepb.friendpb;
 
+import "avatarframepb.proto";
+import "weatherpb.proto";
+
 // ============ 好友农场摘要信息 ============
 message Plant {
-    int64 dry_time_sec = 1;      // 缺水时间（真实回包为 Unix 秒时间戳）
-    int64 weed_time_sec = 2;     // 长草时间（真实回包为 Unix 秒时间戳）
-    int64 insect_time_sec = 3;   // 生虫时间（真实回包为 Unix 秒时间戳）
-    int64 ripe_time_sec = 4;     // 最近成熟时间（若返回，按 Unix 秒时间戳处理）
+    int64 dry_time_sec = 1;      // 缺水倒计时秒
+    int64 weed_time_sec = 2;     // 长草倒计时秒
+    int64 insect_time_sec = 3;   // 生虫倒计时秒
+    int64 ripe_time_sec = 4;     // 成熟倒计时秒
     int64 ripe_fruit_id = 5;     // 成熟果实ID
     int64 steal_plant_num = 6;   // 可偷数量
     int64 dry_num = 7;           // 缺水地块数
@@ -33,9 +36,41 @@ message GameFriend {
     Tags tags = 8;
     Plant plant = 9;
     int32 authorized_status = 10;
+    FriendIllustrated illustrated = 12;
+    repeated gamepb.avatarframepb.AvatarFrame equip_avatar_frames = 13;
+    int64 exp = 14;
+    bool field_15 = 15;
+    FriendTitle title = 16;
+    FriendActivity activity = 18;
+    int64 last_active_time = 19;
+    gamepb.weatherpb.WeatherStatus weather = 20;
     // field 11 reserved
     // Illustrated illustrated = 12;  // 略
     // repeated AvatarFrame equip_avatar_frames = 13;  // 略
+}
+
+message FriendIllustrated {
+    int64 current = 1;
+    int64 target = 2;
+}
+
+message FriendTitle {
+    int64 title_id = 1;
+}
+
+message FriendActivity {
+    int64 activity_id = 1;
+    int64 progress = 2;
+    int64 updated_at = 3;
+}
+
+message RecommendedFriend {
+    int64 gid = 1;
+    string name = 2;
+    string avatar_url = 3;
+    int64 level = 4;
+    int64 updated_at = 5;
+    string open_id = 6;
 }
 
 // ============ 请求/回复 ============
@@ -54,6 +89,11 @@ message GetGameFriendsRequest {
     repeated int64 gids = 1;
 }
 
+message GetGameFriendsReply {
+    repeated GameFriend game_friends = 1;
+    int64 application_count = 3;
+}
+
 // --- 同步好友 (带 open_ids) ---
 message SyncAllRequest {
     // field 1 reserved
@@ -64,6 +104,7 @@ message SyncAllReply {
     repeated GameFriend game_friends = 1;
     // repeated Invitation invitations = 2;  // 略
     int64 application_count = 3;
+    repeated RecommendedFriend recommended_friends = 5;
 }
 
 // ============ 好友申请 (微信同玩) ============
@@ -118,6 +159,17 @@ message SetBlockApplicationsRequest {
 
 message SetBlockApplicationsReply {
     bool block = 1;
+}
+
+// --- 获取分享Key ---
+message GetShareKeyRequest {
+    int64 share_cfg_id = 1;
+}
+
+message GetShareKeyReply {
+    string share_key = 1;
+    string share_url = 2;
+    int64 share_cfg_id = 3;
 }
 
 // ============ 服务器推送通知 ============

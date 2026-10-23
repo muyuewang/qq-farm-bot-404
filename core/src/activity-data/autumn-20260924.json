@@ -1,0 +1,543 @@
+{
+  "sourceVersion": "1.14.2.11_20260922",
+  "choices": [
+    {
+      "activity_id": 2026092401,
+      "choose_id": 1,
+      "desc": "财运"
+    },
+    {
+      "activity_id": 2026092401,
+      "choose_id": 2,
+      "desc": "感情"
+    },
+    {
+      "activity_id": 2026092401,
+      "choose_id": 3,
+      "desc": "前程"
+    },
+    {
+      "activity_id": 2026092401,
+      "choose_id": 4,
+      "desc": "生活"
+    },
+    {
+      "activity_id": 2026092401,
+      "choose_id": 5,
+      "desc": "农耕"
+    },
+    {
+      "activity_id": 2026092401,
+      "choose_id": 6,
+      "desc": "人际"
+    }
+  ],
+  "texts": [
+    {
+      "choose_id": 1,
+      "text_id": 1,
+      "desc": "鸿运将至\n所行皆顺"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 2,
+      "desc": "云开月明\n好事渐近"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 3,
+      "desc": "时来运转\n诸事可期"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 4,
+      "desc": "福星相照\n近日多有喜事"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 5,
+      "desc": "顺风而行\n前路自有惊喜"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 6,
+      "desc": "积累已久的好运\n正在路上"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 7,
+      "desc": "万事渐入佳境\n不必急于求成"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 8,
+      "desc": "命运已悄然转向"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 9,
+      "desc": "你正在靠近属于你的答案"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 10,
+      "desc": "冥冥之中\n自有安排"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 11,
+      "desc": "此刻的等待\n皆有意义"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 12,
+      "desc": "命运会为你留下线索"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 13,
+      "desc": "不经意的选择\n或将改变未来"
+    },
+    {
+      "choose_id": 1,
+      "text_id": 14,
+      "desc": "你所经历的一切\n都在铺垫下一段旅程"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 1,
+      "desc": "近日或有好消息"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 2,
+      "desc": "缘分正在靠近"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 3,
+      "desc": "冥冥之中\n终会遇见"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 4,
+      "desc": "藏于日常\n留意身边"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 5,
+      "desc": "心存好感\n尚未言明"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 6,
+      "desc": "旧缘未散\n新缘将至"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 7,
+      "desc": "或许就在不经意间"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 8,
+      "desc": "并非无意\n仍在观望"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 9,
+      "desc": "正在升温"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 10,
+      "desc": "一个意外的消息正在靠近"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 11,
+      "desc": "或许会有意外收获"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 12,
+      "desc": "真心需要一点勇气"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 13,
+      "desc": "需重新审视"
+    },
+    {
+      "choose_id": 2,
+      "text_id": 14,
+      "desc": "不妨给一次机会"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 1,
+      "desc": "你正在经历成长的必经之路"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 2,
+      "desc": "每一步\n都算数"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 3,
+      "desc": "你走过的路\n都会成为力量"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 4,
+      "desc": "时间会证明你的选择"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 5,
+      "desc": "请保持神秘"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 6,
+      "desc": "你的付出\n正在被命运记录"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 7,
+      "desc": "等待不是停留\n而是在积蓄力量"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 8,
+      "desc": "根扎得越深\n花开得越盛"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 9,
+      "desc": "你正在成为更好的自己"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 10,
+      "desc": "答案就在答案里"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 11,
+      "desc": "你已经知道答案了"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 12,
+      "desc": "这件事\n主要看你"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 13,
+      "desc": "相信第一感觉"
+    },
+    {
+      "choose_id": 3,
+      "text_id": 14,
+      "desc": "一切都是最好的安排"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 1,
+      "desc": "一步之遥"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 2,
+      "desc": "转机往往出现在意料之外"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 3,
+      "desc": "星光已为你留下答案"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 4,
+      "desc": "你的努力不会被辜负"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 5,
+      "desc": "对未知前途的期盼"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 6,
+      "desc": "用平淡的心态去追求"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 7,
+      "desc": "一切皆有可能"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 8,
+      "desc": "控制自己的情绪"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 9,
+      "desc": "一切顺其自然"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 10,
+      "desc": "一条有鲜花的道路"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 11,
+      "desc": "不要刻意隐藏"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 12,
+      "desc": "暂且不要判断"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 13,
+      "desc": "不要一成不变"
+    },
+    {
+      "choose_id": 4,
+      "text_id": 14,
+      "desc": "星光不问赶路人\n但会照亮前方"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 1,
+      "desc": "顺应天时"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 2,
+      "desc": "种下满足\n收获幸福"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 3,
+      "desc": "现在是最好的开始"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 4,
+      "desc": "让它晒晒太阳"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 5,
+      "desc": "自然有自己的平衡"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 6,
+      "desc": "风往南吹\n再等等"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 7,
+      "desc": "深耕一寸\n多收一成"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 8,
+      "desc": "种子不会骗你"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 9,
+      "desc": "现在正是时候"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 10,
+      "desc": "水到渠成"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 11,
+      "desc": "该除草了"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 12,
+      "desc": "杂草也是信号"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 13,
+      "desc": "一个正在到来的晴天"
+    },
+    {
+      "choose_id": 5,
+      "text_id": 14,
+      "desc": "静观其变"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 1,
+      "desc": "细水长流"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 2,
+      "desc": "答案正在靠近"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 3,
+      "desc": "相信你的第一直觉"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 4,
+      "desc": "命运已经给出提示"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 5,
+      "desc": "时机尚未成熟\n请耐心等待"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 6,
+      "desc": "你心中的答案\n就是答案"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 7,
+      "desc": "这件事值得期待"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 8,
+      "desc": "不要回头\n继续前行"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 9,
+      "desc": "一切正在向好的方向发展"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 10,
+      "desc": "再坚持一下\n好消息将至"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 11,
+      "desc": "给人依赖"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 12,
+      "desc": "此刻的选择\n将开启新的篇章"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 13,
+      "desc": "缘分正在安排一场相遇"
+    },
+    {
+      "choose_id": 6,
+      "text_id": 14,
+      "desc": "未来会给你一个满意的回应"
+    }
+  ],
+  "rewards": [
+    {
+      "activity_id": 2026092401,
+      "day_id": 1,
+      "reward": "6001:20",
+      "display": 1
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 2,
+      "reward": "26030:48",
+      "display": 2
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 3,
+      "reward": "80003:2",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 4,
+      "reward": "26030:12",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 5,
+      "reward": "80013:2",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 6,
+      "reward": "26030:12",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 7,
+      "reward": "80004:1",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 8,
+      "reward": "20435:48",
+      "display": 4
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 9,
+      "reward": "6001:20",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 10,
+      "reward": "20435:12",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 11,
+      "reward": "1002:100",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 12,
+      "reward": "20435:12",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 13,
+      "reward": "80014:1",
+      "display": 0
+    },
+    {
+      "activity_id": 2026092401,
+      "day_id": 14,
+      "reward": "204010:1",
+      "display": 3
+    }
+  ]
+}

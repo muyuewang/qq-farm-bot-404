@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   dailyGifts: any
-}>()
+  emptyText?: string
+}>(), { emptyText: '暂无每日奖励数据' })
 
 const GIFT_ICONS: Record<string, string> = {
   task_claim: 'i-carbon-task-complete',
@@ -31,8 +32,16 @@ function formatTime(timestamp: number) {
 function getGiftStatusText(gift: any) {
   if (!gift)
     return '未知'
-  if (gift.key === 'vip_daily_gift' && gift.hasGift === false)
+  if (gift.result === 'error')
+    return '领取失败'
+  if (gift.result === 'partial')
+    return '部分领取失败'
+  if (gift.key === 'daily_share' && gift.mode === 'check_only')
+    return '仅检测/待人工确认'
+  if (gift.key === 'vip_daily_gift' && (gift.isVip === false || (gift.isVip == null && gift.hasGift === false)))
     return '未开通'
+  if (gift.key === 'vip_daily_gift' && gift.isVip === true && gift.hasGift === false)
+    return '暂无礼包'
   if (gift.key === 'month_card_gift' && gift.hasCard === false)
     return '未开通'
   if (gift.doneToday)
@@ -45,8 +54,23 @@ function getGiftStatusText(gift: any) {
 function formatGiftSubText(gift: any) {
   if (!gift)
     return ''
-  if (gift.key === 'vip_daily_gift' && gift.hasGift === false)
+  if (gift.result === 'error' || gift.result === 'partial')
+    return gift.lastAt ? `最近检查 ${formatTime(Number(gift.lastAt))}` : '等待下次检查'
+  if (gift.key === 'daily_share' && gift.mode === 'check_only') {
+    const checkedAt = Number(gift.lastAt || 0)
+    const timeText = checkedAt ? `，最近检测 ${formatTime(checkedAt)}` : ''
+    if (gift.checkStatus === 'entry_available')
+      return `入口可用${timeText}`
+    if (gift.checkStatus === 'entry_unavailable')
+      return `入口暂不可用${timeText}`
+    if (gift.checkStatus === 'check_failed')
+      return `检测失败，待下次重试${timeText}`
+    return '尚未检测'
+  }
+  if (gift.key === 'vip_daily_gift' && (gift.isVip === false || (gift.isVip == null && gift.hasGift === false)))
     return '未开通QQ会员或无每日礼包'
+  if (gift.key === 'vip_daily_gift' && gift.isVip === true && gift.hasGift === false)
+    return '已开通会员，当前没有可领取礼包'
   if (gift.key === 'month_card_gift' && gift.hasCard === false)
     return '未购买月卡或已过期'
   const ts = Number(gift.lastAt || 0)
@@ -63,67 +87,70 @@ function formatGiftProgress(gift: any) {
   if (!gift)
     return ''
   const total = Number(gift.totalCount || 0)
-  const reportedCurrent = Number(gift.completedCount || 0)
+  const current = Number(gift.completedCount || 0)
   if (!total)
     return ''
-  // A completed status and an incomplete fraction must never be shown together.
-  const current = gift.doneToday ? Math.max(reportedCurrent, total) : reportedCurrent
   return `进度：${current}/${total}`
 }
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <!-- Daily Gifts Grid -->
-    <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-      <h3 class="mb-3 flex items-center gap-2 font-medium">
-        <div class="i-carbon-gift text-pink-500" />
-        <span>每日礼包 & 任务</span>
-      </h3>
-
+  <section class="personal-panel__card farm-card rounded-xl p-4">
+    <h3 class="mb-3 flex shrink-0 items-center gap-2 font-medium" style="color: var(--theme-primary, #ec4899)">
+      <span class="i-carbon-gift" />
+      <span>每日礼包 & 任务</span>
+    </h3>
+    <div class="personal-panel__scroll custom-scrollbar" role="region" aria-label="每日礼包与任务列表" tabindex="0">
       <div
         v-if="!hasDailyData"
-        class="rounded-lg bg-gray-50 p-6 text-center text-sm text-gray-500 dark:bg-gray-900/40 dark:text-gray-400"
+        class="rounded-xl p-6 text-center text-sm"
+        style="background: color-mix(in srgb, var(--theme-bg, #fff) 90%, var(--theme-primary, #3b82f6)); color: var(--theme-text, #6b7280); opacity: 0.7"
       >
-        请登录账号后查看
+        {{ emptyText }}
       </div>
       <div
         v-else-if="!gifts.length"
-        class="rounded-lg bg-gray-50 p-6 text-center text-sm text-gray-500 dark:bg-gray-900/40 dark:text-gray-400"
+        class="rounded-xl p-6 text-center text-sm"
+        style="background: color-mix(in srgb, var(--theme-bg, #fff) 90%, var(--theme-primary, #3b82f6)); color: var(--theme-text, #6b7280); opacity: 0.7"
       >
-        暂无每日礼包与任务数据
+        {{ emptyText }}
       </div>
       <div v-else class="grid grid-cols-2 gap-3 2xl:grid-cols-3 sm:grid-cols-3 2xl:gap-4">
         <div
           v-for="gift in gifts"
           :key="gift.key"
-          class="flex flex-col justify-between border border-gray-100 rounded-lg p-3 dark:border-gray-700 2xl:p-4"
+          class="flex flex-col justify-between farm-card rounded-xl p-3 2xl:p-4"
         >
           <div class="mb-2 flex items-center gap-2">
             <div
-              class="h-7 w-7 flex flex-shrink-0 items-center justify-center rounded-md 2xl:h-8 2xl:w-8"
-              :class="gift.doneToday ? 'bg-green-100 dark:bg-green-900/30' : (gift.enabled ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-700')"
+              class="h-7 w-7 flex flex-shrink-0 items-center justify-center rounded-lg text-base 2xl:h-8 2xl:w-8 2xl:text-lg"
+              :class="gift.result === 'error' || gift.result === 'partial'
+                ? 'bg-red-100 dark:bg-red-900/30'
+                : gift.key === 'daily_share' && gift.mode === 'check_only'
+                  ? 'bg-blue-100 dark:bg-blue-900/30'
+                  : (gift.doneToday ? 'bg-green-100 dark:bg-green-900/30' : (gift.enabled ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-700'))"
             >
-              <div
-                class="text-base 2xl:text-lg"
-                :class="[getGiftIcon(gift.key), gift.doneToday ? 'text-green-500' : (gift.enabled ? 'text-blue-500' : 'text-gray-400')]"
-              />
+              <span :class="getGiftIcon(gift.key)" />
             </div>
-            <span class="text-sm text-gray-700 font-medium leading-tight 2xl:text-base dark:text-gray-300">
+            <span class="text-sm font-medium leading-tight 2xl:text-base" style="color: var(--theme-text, #374151)">
               {{ gift.label }}
             </span>
           </div>
 
-          <div class="flex items-end justify-between">
+          <div class="flex flex-col items-start gap-1">
             <span
               class="text-xs 2xl:text-sm"
-              :class="gift.doneToday ? 'text-green-500' : (gift.enabled ? 'text-blue-500' : 'text-gray-400')"
+              :class="gift.result === 'error' || gift.result === 'partial'
+                ? 'text-red-500'
+                : gift.key === 'daily_share' && gift.mode === 'check_only'
+                  ? 'text-blue-500'
+                  : (gift.doneToday ? 'text-green-500' : (gift.enabled ? 'text-blue-500' : 'text-gray-400'))"
             >
               {{ getGiftStatusText(gift) }}
             </span>
 
-            <div class="flex flex-col items-end">
-              <span v-if="formatGiftProgress(gift)" class="text-xs text-gray-500 font-bold 2xl:text-sm">
+            <div class="flex flex-col items-start">
+              <span v-if="formatGiftProgress(gift)" class="text-xs font-bold 2xl:text-sm" style="color: var(--theme-secondary, #6b7280)">
                 {{ formatGiftProgress(gift) }}
               </span>
               <span
@@ -134,8 +161,15 @@ function formatGiftProgress(gift: any) {
               </span>
             </div>
           </div>
+          <p
+            v-if="(gift.result === 'error' || gift.result === 'partial') && gift.lastError"
+            class="line-clamp-3 mt-2 break-all text-xs text-red-500"
+            :title="gift.lastError"
+          >
+            {{ gift.lastError }}
+          </p>
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </template>

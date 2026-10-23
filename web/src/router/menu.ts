@@ -4,8 +4,9 @@ export interface MenuItem {
   label: string
   icon: string
   component: () => Promise<any>
-  adminOnly?: boolean
-  showInNav?: boolean
+  meta?: {
+    fullBleed?: boolean
+  }
 }
 
 export const menuRoutes: MenuItem[] = [
@@ -13,15 +14,22 @@ export const menuRoutes: MenuItem[] = [
     path: '',
     name: 'dashboard',
     label: '概览',
-    icon: 'i-carbon-chart-pie',
+    icon: 'i-carbon-dashboard',
     component: () => import('@/views/Dashboard.vue'),
   },
   {
     path: 'personal',
     name: 'personal',
     label: '个人',
-    icon: 'i-carbon-user',
+    icon: 'i-carbon-sprout',
     component: () => import('@/views/Personal.vue'),
+  },
+  {
+    path: 'activity',
+    name: 'activity-center',
+    label: '活动',
+    icon: 'i-carbon-events',
+    component: () => import('@/views/ActivityCenter.vue'),
   },
   {
     path: 'friends',
@@ -31,39 +39,25 @@ export const menuRoutes: MenuItem[] = [
     component: () => import('@/views/Friends.vue'),
   },
   {
-    path: 'pet',
-    name: 'pet',
-    label: '宠物',
-    icon: 'i-fa-solid-paw',
-    component: () => import('@/views/Pet.vue'),
-  },
-  {
-    path: 'activity',
-    name: 'activity',
-    label: '活动',
-    icon: 'i-carbon-gift',
-    component: () => import('@/views/Activity.vue'),
-  },
-  {
-    path: 'shop',
-    name: 'shop',
-    label: '商城',
-    icon: 'i-carbon-shopping-cart',
-    component: () => import('@/views/Shop.vue'),
-  },
-  {
-    path: 'illustrated',
-    name: 'illustrated',
-    label: '图鉴',
-    icon: 'i-carbon-book',
-    component: () => import('@/views/Illustrated.vue'),
-  },
-  {
     path: 'analytics',
     name: 'analytics',
     label: '分析',
-    icon: 'i-carbon-analytics',
+    icon: 'i-carbon-chart-line',
     component: () => import('@/views/Analytics.vue'),
+  },
+  {
+    path: 'solar-calendar',
+    name: 'solar-calendar',
+    label: '节令日历',
+    icon: 'i-carbon-calendar',
+    component: () => import('@/views/SolarCalendar.vue'),
+  },
+  {
+    path: 'game-mall',
+    name: 'game-mall',
+    label: '游戏商城',
+    icon: 'i-carbon-shopping-cart',
+    component: () => import('@/views/GameMall.vue'),
   },
   {
     path: 'settings',
@@ -71,13 +65,5 @@ export const menuRoutes: MenuItem[] = [
     label: '设置',
     icon: 'i-carbon-settings',
     component: () => import('@/views/Settings.vue'),
-  },
-  {
-    path: 'admin',
-    name: 'admin',
-    label: '后台',
-    icon: 'i-carbon-settings-adjust',
-    component: () => import('@/views/AdminPanel.vue'),
-    adminOnly: true,
   },
 ]

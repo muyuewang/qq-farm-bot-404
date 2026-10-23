@@ -1,0 +1,182 @@
+syntax = "proto3";
+package gamepb.activitypb;
+import "corepb.proto";
+
+// Verified against official 1.14.2.11_20260922 encoders and decoded captures.
+
+message ActivityBodyWishSign {
+    int64 remaining_count = 1;
+    int64 activity_day = 2;
+    WishSignPending pending = 3;
+}
+
+message WishSignPending {
+    int64 choose_id = 1;
+    int64 text_id = 2;
+    int64 day_id = 3;
+    repeated corepb.Item rewards = 4;
+}
+
+message WishSignDrawReq {
+    int64 choose_id = 1;
+}
+
+message WishSignDrawRsp {
+    int64 text_id = 1;
+    int64 day_id = 2;
+    repeated corepb.Item rewards = 3;
+}
+
+message WishSignClaimReq {
+    int64 choose_id = 1;
+}
+
+message WishSignClaimRsp {
+    repeated corepb.Item awards = 1;
+}
+
+message ActivityBodyShareReward {
+    ShareRewardSummary summary = 1;
+}
+
+message ShareRewardSummary {
+    int64 score_item_id = 1;
+    int64 current_score = 2;
+    ShareRewardDailyView daily = 3;
+    ShareRewardPoolView my_pool = 4;
+    repeated ShareRewardMilestoneView milestones = 5;
+    int64 daily_reward = 6;
+    int64 first_share_reward = 7;
+    ShareRewardRedDots red_dots = 8;
+}
+
+message ShareRewardDailyView {
+    int32 claimed_count = 1;
+    bool first_share_awarded = 2;
+    bool daily_reward_claimed = 3;
+    int32 claim_limit = 4;
+}
+
+message ShareRewardPoolView {
+    int32 claimed_count = 1;
+    int32 claim_limit = 2;
+}
+
+message ShareRewardMilestoneView {
+    int64 tier_id = 1;
+    int64 threshold = 2;
+    repeated corepb.Item rewards = 3;
+    int32 state = 4;
+}
+
+message ShareRewardRedDots {
+    bool daily = 1;
+    bool milestone = 2;
+    bool unread_host_log = 3;
+    bool first_share = 4;
+    bool unread_guest_log = 5;
+}
+
+message ShareRewardActorView {
+    int64 gid = 1;
+    string name = 2;
+    string avatar = 3;
+    int64 avatar_frame_id = 4;
+    int64 level = 5;
+}
+
+message ShareRewardShareReq {
+
+}
+
+message ShareRewardShareRsp {
+    ShareRewardArk ark = 1;
+    int64 granted_score = 2;
+}
+
+message ShareRewardArk {
+    int64 host_gid = 1;
+    string share_key = 2;
+    string share_open_id = 3;
+    int32 ark_biz_type = 4;
+    bytes ark_biz_param = 5;
+}
+
+message ShareRewardArkClickParam {
+    int64 activity_id = 1;
+    string ark_token = 2;
+}
+
+message ShareRewardResolveArkReq {
+
+}
+
+message ShareRewardResolveArkRsp {
+    int32 result = 1;
+    bool show_popup = 2;
+    ShareRewardActorView host = 3;
+    int64 granted_score = 4;
+    ShareRewardPoolView pool = 5;
+    ShareRewardDailyView daily = 6;
+    int64 activity_id = 7;
+}
+
+message ShareRewardResolveArkNotify {
+    int32 result = 1;
+    bool show_popup = 2;
+    ShareRewardActorView host = 3;
+    int64 granted_score = 4;
+    ShareRewardPoolView pool = 5;
+    ShareRewardDailyView daily = 6;
+    int64 activity_id = 7;
+}
+
+message ShareRewardClaimMilestonesReq {
+
+}
+
+message ShareRewardClaimMilestonesRsp {
+    repeated int64 claimed_tier_ids = 1;
+    repeated corepb.Item rewards = 2;
+}
+
+message ShareRewardClaimDailyReq {
+
+}
+
+message ShareRewardClaimDailyRsp {
+    repeated corepb.Item rewards = 1;
+    int64 granted_score = 2;
+}
+
+message ShareRewardGetLogsReq {
+    int32 page = 1;
+    int32 page_size = 2;
+    int32 tab = 3;
+}
+
+message ShareRewardLogView {
+    int64 seq = 1;
+    int32 kind = 2;
+    ShareRewardActorView actor = 3;
+    int64 score = 4;
+    int64 created_at = 5;
+    string ark_token = 6;
+}
+
+message ShareRewardGetLogsRsp {
+    repeated ShareRewardLogView logs = 1;
+    int32 total = 2;
+}
+
+message AutumnOperateRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    WishSignDrawReq wish_sign_draw = 151;
+    WishSignClaimReq wish_sign_claim = 152;
+    ShareRewardShareReq share_reward_share = 153;
+    ShareRewardClaimMilestonesReq share_reward_claim_milestones = 154;
+    ShareRewardGetLogsReq share_reward_get_logs = 155;
+    ShareRewardResolveArkReq share_reward_resolve = 156;
+    ShareRewardClaimDailyReq share_reward_claim_daily = 157;
+}

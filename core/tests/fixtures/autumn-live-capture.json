@@ -1,0 +1,466 @@
+[
+  {
+    "file": "000016-recv.bin",
+    "method": "GetQQVipRewardsStatus",
+    "send": false,
+    "error": 0,
+    "hex": "2a2408011206088bf1041005120608b59706100118012801300138808bbfd20640ffb0f2d3062a0f0801120508ed0e10011801280530012a0f0801120508ee0e10011801280630012a220801120608b997061001180120f4dc8ec6072802300138808bbfd20640ffb0f2d3062a400804120608aca20c100112060893aa0c1001120608fcb10c1001120608cbc10c1001120608b3c90c10011206089cd10c100112060884d90c10011801280330012a0f0803120508c81010011801280430014007",
+    "value": {
+      "reward_statuses": [
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "80011",
+              "count": "5"
+            },
+            {
+              "id": "101301",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "1",
+          "reward_multiplier": "1",
+          "begin_time": "1783612800",
+          "end_time": "1786550399"
+        },
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "1901",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "5",
+          "reward_multiplier": "1"
+        },
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "1902",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "6",
+          "reward_multiplier": "1"
+        },
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "101305",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "activity_id": "2026090100",
+          "reward_type": "2",
+          "reward_multiplier": "1",
+          "begin_time": "1783612800",
+          "end_time": "1786550399"
+        },
+        {
+          "type": 4,
+          "rewards": [
+            {
+              "id": "201004",
+              "count": "1"
+            },
+            {
+              "id": "202003",
+              "count": "1"
+            },
+            {
+              "id": "203004",
+              "count": "1"
+            },
+            {
+              "id": "205003",
+              "count": "1"
+            },
+            {
+              "id": "206003",
+              "count": "1"
+            },
+            {
+              "id": "207004",
+              "count": "1"
+            },
+            {
+              "id": "208004",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "3",
+          "reward_multiplier": "1"
+        },
+        {
+          "type": 3,
+          "rewards": [
+            {
+              "id": "2120",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "4",
+          "reward_multiplier": "1"
+        }
+      ],
+      "days_remaining_reminder": "7"
+    }
+  },
+  {
+    "file": "000325-recv.bin",
+    "method": "GetQQVipRewardsStatus",
+    "send": false,
+    "error": 0,
+    "hex": "080118012a2408011206088bf1041005120608b59706100118012801300138808bbfd20640ffb0f2d3062a0f0801120508ed0e10011801280530012a0f0801120508ee0e10011801280630012a220801120608b997061001180120f4dc8ec6072802300138808bbfd20640ffb0f2d306389a0c40074801",
+    "value": {
+      "is_qq_vip": true,
+      "claimed_today": true,
+      "reward_statuses": [
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "80011",
+              "count": "5"
+            },
+            {
+              "id": "101301",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "1",
+          "reward_multiplier": "1",
+          "begin_time": "1783612800",
+          "end_time": "1786550399"
+        },
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "1901",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "5",
+          "reward_multiplier": "1"
+        },
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "1902",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "reward_type": "6",
+          "reward_multiplier": "1"
+        },
+        {
+          "type": 1,
+          "rewards": [
+            {
+              "id": "101305",
+              "count": "1"
+            }
+          ],
+          "is_enable": true,
+          "activity_id": "2026090100",
+          "reward_type": "2",
+          "reward_multiplier": "1",
+          "begin_time": "1783612800",
+          "end_time": "1786550399"
+        }
+      ],
+      "remaining_days": "1562",
+      "days_remaining_reminder": "7",
+      "mall_free_can_claim": true
+    }
+  },
+  {
+    "file": "000327-recv.bin",
+    "method": "GetMallListBySlotType",
+    "send": false,
+    "error": 0,
+    "hex": "0a4a089d08121653564950e59586e59f8ee6af8fe697a5e5858de8b4b9180422060881f10410012a0030013a040801180140016001788092b8c398feffffff0180018092b8c398feffffff010a57089e08121053564950e992bbe79fb3e7a4bce58c8518042206088ef104100222060884f10410022a0508ec07106e3a040802180540014a06382e36e68a986001788092b8c398feffffff0180018092b8c398feffffff010a49089f08121353564950e4b893e5b19ee5a4b4e5838fe6a1861804220508c91010012a0508ed0e101e3a040804180140016003788092b8c398feffffff0180018092b8c398feffffff010a4708a008121053564950e4b893e5b19ee993ade7898c1804220608eebc1810012a0508ee0e101e3a040804180140016003788092b8c398feffffff0180018092b8c398feffffff01109a8303",
+    "value": {
+      "goods_list": [
+        {
+          "goods_id": "1053",
+          "name": "SVIP商城每日免费",
+          "goods_type": 4,
+          "reward_items": [
+            {
+              "id": "80001",
+              "count": "1"
+            }
+          ],
+          "price": {},
+          "is_free": true,
+          "purchase_limit": {
+            "limit_type": 1,
+            "limit_count": "1"
+          },
+          "is_available": true,
+          "product_type": 1,
+          "promotion_start_time": "-62135596800",
+          "promotion_end_time": "-62135596800"
+        },
+        {
+          "goods_id": "1054",
+          "name": "SVIP钻石礼包",
+          "goods_type": 4,
+          "reward_items": [
+            {
+              "id": "80014",
+              "count": "2"
+            },
+            {
+              "id": "80004",
+              "count": "2"
+            }
+          ],
+          "price": {
+            "id": "1004",
+            "count": "110"
+          },
+          "purchase_limit": {
+            "limit_type": 2,
+            "limit_count": "5"
+          },
+          "is_available": true,
+          "discount_text": "8.6折",
+          "product_type": 1,
+          "promotion_start_time": "-62135596800",
+          "promotion_end_time": "-62135596800"
+        },
+        {
+          "goods_id": "1055",
+          "name": "SVIP专属头像框",
+          "goods_type": 4,
+          "reward_items": [
+            {
+              "id": "2121",
+              "count": "1"
+            }
+          ],
+          "price": {
+            "id": "1901",
+            "count": "30"
+          },
+          "purchase_limit": {
+            "limit_type": 4,
+            "limit_count": "1"
+          },
+          "is_available": true,
+          "product_type": 3,
+          "promotion_start_time": "-62135596800",
+          "promotion_end_time": "-62135596800"
+        },
+        {
+          "goods_id": "1056",
+          "name": "SVIP专属铭牌",
+          "goods_type": 4,
+          "reward_items": [
+            {
+              "id": "401006",
+              "count": "1"
+            }
+          ],
+          "price": {
+            "id": "1902",
+            "count": "30"
+          },
+          "purchase_limit": {
+            "limit_type": 4,
+            "limit_count": "1"
+          },
+          "is_available": true,
+          "product_type": 3,
+          "promotion_start_time": "-62135596800",
+          "promotion_end_time": "-62135596800"
+        }
+      ],
+      "refresh_countdown": "49562"
+    }
+  },
+  {
+    "file": "000514-recv.bin",
+    "method": "GetGroup",
+    "send": false,
+    "error": 0,
+    "hex": "0a98060a2808f0ee8ec6071801220ce7a78be7a588e889afe684bf3080efcfd50638ffd899d606408c01a0010112eb050ae10508f1ee8ec60710f0ee8ec6071815220ce7a78be7a588e889afe684bf2aa7057b22756964223a2022576973685369676e4d61696e5549222c2274697073223a207b227469746c65223a2022e6b4bbe58aa8e8afb4e6988e222c22747874223a205b20223c623ee38090e6b4bbe58aa8e697b6e997b4e380913c2f623e222c202232303236e5b9b439e69c883234e697a520e280942032303236e5b9b43130e69c8837e697a5222c20223c623ee38090e6b4bbe58aa8e7ae80e4bb8be380913c2f623e222c2022312e20e59ca839e69c883234e697a520e28094203130e69c8837e697a5e69c9fe997b4efbc8ce5869ce59cbae4b8bbe58fafe59ca8e6b4bbe58aa8e4b8bbe7958ce99da2e7a588e684bfefbc8ce6af8fe697a530e782b9e588b7e696b0e38082222c2022322e20e7a588e684bfe58fafe9a286e58f96e5bd93e697a5e5a5bde8bf90e5a596e58ab1efbc8ce5a596e58ab1e58685e5aeb9e58c85e68bac32e7a78de99990e5ae9ae7a78de5ad90e38081e7839fe88ab1e4ba92e58aa8e98193e585b7e5928ce79b86e6a0bde8a385e689aee38082222c22332e20e6b4bbe58aa8e69c9fe997b4efbc8ce5869ce59cbae4b8bbe88ba5e59ba0e5869ce4ba8be7b981e5bf99e99499e8bf87e7a588e684bfefbc8ce7a78be697a5e4b98be7a59ee4bc9ae7bb99e5869ce59cbae4b8bbe5ad98e582a835e697a5e5a596e58ab1efbc88e58c85e68bace5bd93e5a4a9efbc89e3808222202c22342e20e5869ce59cbae4b8bbe69caae68890e58a9fe9a286e58f96e79a84e5a596e58ab1efbc8ce59ca8e7acace4ba8ce5a4a9e68896e6b4bbe58aa8e7bb93e69d9fe5908eefbc8ce4bc9ae9809ae8bf87e982aee4bbb6e8a1a5e58f91e38082222c22352e20e7a588e684bfe7adbee69687e4bb85e4bd9ce8b6a3e591b3e58f82e88083efbc8ce684bfe5869ce59cbae4b8bbe68980e6b182e79a86e5a682e684bfe38082225d7d7d3080efcfd50638ffd899d606408d01a00101a80114b00101b80101ba070408011001",
+    "value": {
+      "group": {
+        "activity": {
+          "activity_id": "2026092400",
+          "type": "1",
+          "name": "秋祈良愿",
+          "begin_time": "1790179200",
+          "end_time": "1791388799",
+          "sort_order": "140",
+          "field_20": "1"
+        },
+        "children": [
+          {
+            "activity": {
+              "activity_id": "2026092401",
+              "group_id": "2026092400",
+              "type": "21",
+              "name": "秋祈良愿",
+              "extra": "eyJ1aWQiOiAiV2lzaFNpZ25NYWluVUkiLCJ0aXBzIjogeyJ0aXRsZSI6ICLmtLvliqjor7TmmI4iLCJ0eHQiOiBbICI8Yj7jgJDmtLvliqjml7bpl7TjgJE8L2I+IiwgIjIwMjblubQ55pyIMjTml6Ug4oCUIDIwMjblubQxMOaciDfml6UiLCAiPGI+44CQ5rS75Yqo566A5LuL44CRPC9iPiIsICIxLiDlnKg55pyIMjTml6Ug4oCUIDEw5pyIN+aXpeacn+mXtO+8jOWGnOWcuuS4u+WPr+WcqOa0u+WKqOS4u+eVjOmdoueliOaEv++8jOavj+aXpTDngrnliLfmlrDjgIIiLCAiMi4g56WI5oS/5Y+v6aKG5Y+W5b2T5pel5aW96L+Q5aWW5Yqx77yM5aWW5Yqx5YaF5a655YyF5ousMuenjemZkOWumuenjeWtkOOAgeeDn+iKseS6kuWKqOmBk+WFt+WSjOebhuagveijheaJruOAgiIsIjMuIOa0u+WKqOacn+mXtO+8jOWGnOWcuuS4u+iLpeWboOWGnOS6i+e5geW/memUmei/h+eliOaEv++8jOeni+aXpeS5i+elnuS8mue7meWGnOWcuuS4u+WtmOWCqDXml6XlpZblirHvvIjljIXmi6zlvZPlpKnvvInjgIIiICwiNC4g5Yac5Zy65Li75pyq5oiQ5Yqf6aKG5Y+W55qE5aWW5Yqx77yM5Zyo56ys5LqM5aSp5oiW5rS75Yqo57uT5p2f5ZCO77yM5Lya6YCa6L+H6YKu5Lu26KGl5Y+R44CCIiwiNS4g56WI5oS/562+5paH5LuF5L2c6Laj5ZGz5Y+C6ICD77yM5oS/5Yac5Zy65Li75omA5rGC55qG5aaC5oS/44CCIl19fQ==",
+              "begin_time": "1790179200",
+              "end_time": "1791388799",
+              "sort_order": "141",
+              "field_20": "1",
+              "field_21": "20",
+              "field_22": "1",
+              "field_23": "1"
+            },
+            "wish_sign": {
+              "remaining_count": "1",
+              "activity_day": "1"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "file": "000562-recv.bin",
+    "method": "Operate",
+    "send": false,
+    "error": 0,
+    "hex": "08f1ee8ec60710331af5050ade0508f1ee8ec60710f0ee8ec6071815220ce7a78be7a588e889afe684bf2aa7057b22756964223a2022576973685369676e4d61696e5549222c2274697073223a207b227469746c65223a2022e6b4bbe58aa8e8afb4e6988e222c22747874223a205b20223c623ee38090e6b4bbe58aa8e697b6e997b4e380913c2f623e222c202232303236e5b9b439e69c883234e697a520e280942032303236e5b9b43130e69c8837e697a5222c20223c623ee38090e6b4bbe58aa8e7ae80e4bb8be380913c2f623e222c2022312e20e59ca839e69c883234e697a520e28094203130e69c8837e697a5e69c9fe997b4efbc8ce5869ce59cbae4b8bbe58fafe59ca8e6b4bbe58aa8e4b8bbe7958ce99da2e7a588e684bfefbc8ce6af8fe697a530e782b9e588b7e696b0e38082222c2022322e20e7a588e684bfe58fafe9a286e58f96e5bd93e697a5e5a5bde8bf90e5a596e58ab1efbc8ce5a596e58ab1e58685e5aeb9e58c85e68bac32e7a78de99990e5ae9ae7a78de5ad90e38081e7839fe88ab1e4ba92e58aa8e98193e585b7e5928ce79b86e6a0bde8a385e689aee38082222c22332e20e6b4bbe58aa8e69c9fe997b4efbc8ce5869ce59cbae4b8bbe88ba5e59ba0e5869ce4ba8be7b981e5bf99e99499e8bf87e7a588e684bfefbc8ce7a78be697a5e4b98be7a59ee4bc9ae7bb99e5869ce59cbae4b8bbe5ad98e582a835e697a5e5a596e58ab1efbc88e58c85e68bace5bd93e5a4a9efbc89e3808222202c22342e20e5869ce59cbae4b8bbe69caae68890e58a9fe9a286e58f96e79a84e5a596e58ab1efbc8ce59ca8e7acace4ba8ce5a4a9e68896e6b4bbe58aa8e7bb93e69d9fe5908eefbc8ce4bc9ae9809ae8bf87e982aee4bbb6e8a1a5e58f91e38082222c22352e20e7a588e684bfe7adbee69687e4bb85e4bd9ce8b6a3e591b3e58f82e88083efbc8ce684bfe5869ce59cbae4b8bbe68980e6b182e79a86e5a682e684bfe38082225d7d7d3080efcfd50638ffd899d606408d01a00101a80114b00101ba071110011a0d080510011801220508f12e1014ba090b080110011a0508f12e1014",
+    "value": {
+      "activity_id": "2026092401",
+      "operate_type": "51",
+      "data": {
+        "activity": {
+          "activity_id": "2026092401",
+          "group_id": "2026092400",
+          "type": "21",
+          "name": "秋祈良愿",
+          "extra": "eyJ1aWQiOiAiV2lzaFNpZ25NYWluVUkiLCJ0aXBzIjogeyJ0aXRsZSI6ICLmtLvliqjor7TmmI4iLCJ0eHQiOiBbICI8Yj7jgJDmtLvliqjml7bpl7TjgJE8L2I+IiwgIjIwMjblubQ55pyIMjTml6Ug4oCUIDIwMjblubQxMOaciDfml6UiLCAiPGI+44CQ5rS75Yqo566A5LuL44CRPC9iPiIsICIxLiDlnKg55pyIMjTml6Ug4oCUIDEw5pyIN+aXpeacn+mXtO+8jOWGnOWcuuS4u+WPr+WcqOa0u+WKqOS4u+eVjOmdoueliOaEv++8jOavj+aXpTDngrnliLfmlrDjgIIiLCAiMi4g56WI5oS/5Y+v6aKG5Y+W5b2T5pel5aW96L+Q5aWW5Yqx77yM5aWW5Yqx5YaF5a655YyF5ousMuenjemZkOWumuenjeWtkOOAgeeDn+iKseS6kuWKqOmBk+WFt+WSjOebhuagveijheaJruOAgiIsIjMuIOa0u+WKqOacn+mXtO+8jOWGnOWcuuS4u+iLpeWboOWGnOS6i+e5geW/memUmei/h+eliOaEv++8jOeni+aXpeS5i+elnuS8mue7meWGnOWcuuS4u+WtmOWCqDXml6XlpZblirHvvIjljIXmi6zlvZPlpKnvvInjgIIiICwiNC4g5Yac5Zy65Li75pyq5oiQ5Yqf6aKG5Y+W55qE5aWW5Yqx77yM5Zyo56ys5LqM5aSp5oiW5rS75Yqo57uT5p2f5ZCO77yM5Lya6YCa6L+H6YKu5Lu26KGl5Y+R44CCIiwiNS4g56WI5oS/562+5paH5LuF5L2c6Laj5ZGz5Y+C6ICD77yM5oS/5Yac5Zy65Li75omA5rGC55qG5aaC5oS/44CCIl19fQ==",
+          "begin_time": "1790179200",
+          "end_time": "1791388799",
+          "sort_order": "141",
+          "field_20": "1",
+          "field_21": "20",
+          "field_22": "1"
+        },
+        "wish_sign": {
+          "activity_day": "1",
+          "pending": {
+            "choose_id": "5",
+            "text_id": "1",
+            "day_id": "1",
+            "rewards": [
+              {
+                "id": "6001",
+                "count": "20"
+              }
+            ]
+          }
+        }
+      },
+      "wish_sign_draw": {
+        "text_id": "1",
+        "day_id": "1",
+        "rewards": [
+          {
+            "id": "6001",
+            "count": "20"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "file": "000570-recv.bin",
+    "method": "Operate",
+    "send": false,
+    "error": 0,
+    "hex": "08f1ee8ec60710341ae6050ade0508f1ee8ec60710f0ee8ec6071815220ce7a78be7a588e889afe684bf2aa7057b22756964223a2022576973685369676e4d61696e5549222c2274697073223a207b227469746c65223a2022e6b4bbe58aa8e8afb4e6988e222c22747874223a205b20223c623ee38090e6b4bbe58aa8e697b6e997b4e380913c2f623e222c202232303236e5b9b439e69c883234e697a520e280942032303236e5b9b43130e69c8837e697a5222c20223c623ee38090e6b4bbe58aa8e7ae80e4bb8be380913c2f623e222c2022312e20e59ca839e69c883234e697a520e28094203130e69c8837e697a5e69c9fe997b4efbc8ce5869ce59cbae4b8bbe58fafe59ca8e6b4bbe58aa8e4b8bbe7958ce99da2e7a588e684bfefbc8ce6af8fe697a530e782b9e588b7e696b0e38082222c2022322e20e7a588e684bfe58fafe9a286e58f96e5bd93e697a5e5a5bde8bf90e5a596e58ab1efbc8ce5a596e58ab1e58685e5aeb9e58c85e68bac32e7a78de99990e5ae9ae7a78de5ad90e38081e7839fe88ab1e4ba92e58aa8e98193e585b7e5928ce79b86e6a0bde8a385e689aee38082222c22332e20e6b4bbe58aa8e69c9fe997b4efbc8ce5869ce59cbae4b8bbe88ba5e59ba0e5869ce4ba8be7b981e5bf99e99499e8bf87e7a588e684bfefbc8ce7a78be697a5e4b98be7a59ee4bc9ae7bb99e5869ce59cbae4b8bbe5ad98e582a835e697a5e5a596e58ab1efbc88e58c85e68bace5bd93e5a4a9efbc89e3808222202c22342e20e5869ce59cbae4b8bbe69caae68890e58a9fe9a286e58f96e79a84e5a596e58ab1efbc8ce59ca8e7acace4ba8ce5a4a9e68896e6b4bbe58aa8e7bb93e69d9fe5908eefbc8ce4bc9ae9809ae8bf87e982aee4bbb6e8a1a5e58f91e38082222c22352e20e7a588e684bfe7adbee69687e4bb85e4bd9ce8b6a3e591b3e58f82e88083efbc8ce684bfe5869ce59cbae4b8bbe68980e6b182e79a86e5a682e684bfe38082225d7d7d3080efcfd50638ffd899d606408d01a00101a80114b00101ba07021001c209180a1608f12e1014188092b8c398feffffff0130ac82013801",
+    "value": {
+      "activity_id": "2026092401",
+      "operate_type": "52",
+      "data": {
+        "activity": {
+          "activity_id": "2026092401",
+          "group_id": "2026092400",
+          "type": "21",
+          "name": "秋祈良愿",
+          "extra": "eyJ1aWQiOiAiV2lzaFNpZ25NYWluVUkiLCJ0aXBzIjogeyJ0aXRsZSI6ICLmtLvliqjor7TmmI4iLCJ0eHQiOiBbICI8Yj7jgJDmtLvliqjml7bpl7TjgJE8L2I+IiwgIjIwMjblubQ55pyIMjTml6Ug4oCUIDIwMjblubQxMOaciDfml6UiLCAiPGI+44CQ5rS75Yqo566A5LuL44CRPC9iPiIsICIxLiDlnKg55pyIMjTml6Ug4oCUIDEw5pyIN+aXpeacn+mXtO+8jOWGnOWcuuS4u+WPr+WcqOa0u+WKqOS4u+eVjOmdoueliOaEv++8jOavj+aXpTDngrnliLfmlrDjgIIiLCAiMi4g56WI5oS/5Y+v6aKG5Y+W5b2T5pel5aW96L+Q5aWW5Yqx77yM5aWW5Yqx5YaF5a655YyF5ousMuenjemZkOWumuenjeWtkOOAgeeDn+iKseS6kuWKqOmBk+WFt+WSjOebhuagveijheaJruOAgiIsIjMuIOa0u+WKqOacn+mXtO+8jOWGnOWcuuS4u+iLpeWboOWGnOS6i+e5geW/memUmei/h+eliOaEv++8jOeni+aXpeS5i+elnuS8mue7meWGnOWcuuS4u+WtmOWCqDXml6XlpZblirHvvIjljIXmi6zlvZPlpKnvvInjgIIiICwiNC4g5Yac5Zy65Li75pyq5oiQ5Yqf6aKG5Y+W55qE5aWW5Yqx77yM5Zyo56ys5LqM5aSp5oiW5rS75Yqo57uT5p2f5ZCO77yM5Lya6YCa6L+H6YKu5Lu26KGl5Y+R44CCIiwiNS4g56WI5oS/562+5paH5LuF5L2c6Laj5ZGz5Y+C6ICD77yM5oS/5Yac5Zy65Li75omA5rGC55qG5aaC5oS/44CCIl19fQ==",
+          "begin_time": "1790179200",
+          "end_time": "1791388799",
+          "sort_order": "141",
+          "field_20": "1",
+          "field_21": "20",
+          "field_22": "1"
+        },
+        "wish_sign": {
+          "activity_day": "1"
+        }
+      },
+      "wish_sign_claim": {
+        "awards": [
+          {
+            "id": "6001",
+            "count": "20",
+            "expire_time": "-62135596800",
+            "uid": "16684",
+            "is_new": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "file": "001343-recv.bin",
+    "method": "GetMallListBySlotType",
+    "hex": "0a4008e907120ce6af8fe697a5e7a68fe588a9180122060881f10410012a0030013a060801100118016001788092b8c398feffffff0180018092b8c398feffffff010a4f08a108120ce58886e4baabe69c89e7a4bc1801220608cce20110012a0030013a0408041801500158ff87b4d6066001788092b8c398feffffff0180018092b8c398feffffff019a01060815180120010a920108a4081212e6a182e69c88e58d8ee5baade7a4bce58c851801220608ed990610012a0608ec0710f0063a040804180140014a06382e38e68a98500158ffd899d60660026a3d6775692f746578747572652f61637469766974792f776973682f626967496d672f696d675f776973685f676966745f62672f7370726974654672616d65708c067880efcfd5068001ffe3f4d5060a9c010891081212e7bb85e5a3abe697b6e8a385e7a4bce58c851801220608b1bf051001220608e6f10410022a0508ec0710583a04080418014001500158ff87b4d60660026a416775692f746578747572652f536561736f6e2f53332f5333426967496d672f69636f6e5f72656368617267655f646f675f33315f332f7370726974654672616d65788092b8c398feffffff0180018092b8c398feffffff010a9c010892081212e7949ce5bf83e697b6e8a385e7a4bce58c851801220608b0bf051001220608e6f10410022a0508ec0710583a04080418014001500158ff87b4d60660026a416775692f746578747572652f536561736f6e2f53332f5333426967496d672f69636f6e5f72656368617267655f646f675f33315f312f7370726974654672616d65788092b8c398feffffff0180018092b8c398feffffff010aa5010893081212e68190e9be99e697b6e8a385e7a4bce58c851801220608b2bf051001220608e7f1041002220508f21010012a0608ec0710e8033a040804180140014a06382e38e68a98500158ff87b4d60660026a416775692f746578747572652f536561736f6e2f53332f5333426967496d672f69636f6e5f72656368617267655f646f675f33315f322f7370726974654672616d6570ac0378a09e88d5068001fff9aad5060a690894081212e6af94e7868ae782b9e588b8e7a4bce58c851801220608cce201100122060881f10410022206088bf10410022a0508ea0710193a060804100318034a06372e34e68a98500158ff87b4d6066001788092b8c398feffffff0180018092b8c398feffffff010a690895081212e6af94e7868ae992bbe79fb3e7a4bce58c851801220608cce201100122060881f10410022206088bf10410022a0508ec0710193a040801180240014a06372e34e68a98500158ff87b4d6066001788092b8c398feffffff0180018092b8c398feffffff010a6c0896081215e6af94e7868ae6a389e88ab1e7b396e7a4bce58c851801220608cce201100122060881f10410022206088bf10410022a0508ec0710193a040804180f40014a06372e34e68a98500158ff87b4d6066001788092b8c398feffffff0180018092b8c398feffffff010a4f089a08120fe4b8ade7baa7e68c91e68898e4b9a61801220608e6f10410012a0608ed071096013a04080118024001500158ff87b4d6066001788092b8c398feffffff0180018092b8c398feffffff010a56089b08120fe9ab98e7baa7e68c91e68898e4b9a61801220608e7f10410022a0508ec07100c3a040801180240014a06372e38e68a98500158ff87b4d6066001788092b8c398feffffff0180018092b8c398feffffff010a520889081214e7839fe88ab1c2b7e88ab1e5a5bde69c88e59c861801220508f22e10012a0508ec0710063a04080418324001500158ffd899d6066001788092b8c398feffffff0180018092b8c398feffffff010a5308ea0712143130e5b08fe697b6e69c89e69cbae58c96e882a518012206088bf10410022206088df10410012a0508ea07102a4a06392e31e68a986001788092b8c398feffffff0180018092b8c398feffffff010a4d08eb07120e3130e5b08fe697b6e58c96e882a5180122060881f104100222060883f10410012a0508ea0710224a06392e34e68a986001788092b8c398feffffff0180018092b8c398feffffff010a5b08ec0712143230e5b08fe697b6e69c89e69cbae58c96e882a518012206088df10410012206088ef10410012a0508ec0710503a040801180a40014a06392e31e68a986001788092b8c398feffffff0180018092b8c398feffffff010a5508ed07120e3230e5b08fe697b6e58c96e882a5180122060883f104100122060884f10410012a0508ec0710403a040801180a40014a06392e34e68a986001788092b8c398feffffff0180018092b8c398feffffff010a4408ef071215e69c89e69cbae58c96e882a52831e5b08fe697b62918012206088bf10410012a0508ec0710056001788092b8c398feffffff0180018092b8c398feffffff010a4408f0071215e69c89e69cbae58c96e882a52834e5b08fe697b62918012206088cf10410012a0508ec0710136001788092b8c398feffffff0180018092b8c398feffffff010a4408f1071215e69c89e69cbae58c96e882a52838e5b08fe697b62918012206088df10410012a0508ec0710246001788092b8c398feffffff0180018092b8c398feffffff010a4508f2071216e69c89e69cbae58c96e882a5283132e5b08fe697b62918012206088ef10410012a0508ec0710346001788092b8c398feffffff0180018092b8c398feffffff010a3e08f307120fe58c96e882a52831e5b08fe697b629180122060881f10410012a0508ec0710046001788092b8c398feffffff0180018092b8c398feffffff010a3e08f407120fe58c96e882a52834e5b08fe697b629180122060882f10410012a0508ec07100f6001788092b8c398feffffff0180018092b8c398feffffff010a3e08f507120fe58c96e882a52838e5b08fe697b629180122060883f10410012a0508ec07101c6001788092b8c398feffffff0180018092b8c398feffffff010a3f08f6071210e58c96e882a5283132e5b08fe697b629180122060884f10410012a0508ec0710286001788092b8c398feffffff0180018092b8c398feffffff010a4b08ee07120ce78b97e7b2aee7a4bce58c85180122060894bf05100122060895bf05100122060896bf0510012a0508ea0710216001788092b8c398feffffff0180018092b8c398feffffff010a3908f707120a31e5a4a9e78b97e7b2ae180122060894bf0510012a0508ec0710046001788092b8c398feffffff0180018092b8c398feffffff010a3908f807120a33e5a4a9e78b97e7b2ae180122060895bf0510012a0508ec07100b6001788092b8c398feffffff0180018092b8c398feffffff010a3908f907120a35e5a4a9e78b97e7b2ae180122060896bf0510012a0508ec0710126001788092b8c398feffffff0180018092b8c398feffffff0110e0e402"
+  },
+  {
+    "file": "001366-recv.bin",
+    "method": "GetQQVipRewardsStatus",
+    "hex": "2a2408011206088bf1041005120608b59706100118012801300138808bbfd20640ffb0f2d3062a0f0801120508ed0e10011801280530012a0f0801120508ee0e10011801280630012a220801120608b997061001180120f4dc8ec6072802300138808bbfd20640ffb0f2d3062a400804120608aca20c100112060893aa0c1001120608fcb10c1001120608cbc10c1001120608b3c90c10011206089cd10c100112060884d90c10011801280330012a0f0803120508c81010011801280430014007"
+  },
+  {
+    "file": "001376-recv.bin",
+    "method": "GetMallListBySlotType",
+    "hex": "0a48089d08121653564950e59586e59f8ee6af8fe697a5e5858de8b4b9180422060881f10410012a0030013a04080118016001788092b8c398feffffff0180018092b8c398feffffff010a55089e08121053564950e992bbe79fb3e7a4bce58c8518042206088ef104100222060884f10410022a0508ec07106e3a04080218054a06382e36e68a986001788092b8c398feffffff0180018092b8c398feffffff010a47089f08121353564950e4b893e5b19ee5a4b4e5838fe6a1861804220508c91010012a0508ed0e101e3a04080418016003788092b8c398feffffff0180018092b8c398feffffff010a4508a008121053564950e4b893e5b19ee993ade7898c1804220608eebc1810012a0508ee0e101e3a04080418016003788092b8c398feffffff0180018092b8c398feffffff011086e402"
+  },
+  {
+    "file": "001413-send.bin",
+    "method": "Operate",
+    "hex": "08f1ee8ec6071033ba09020803"
+  },
+  {
+    "file": "001414-recv.bin",
+    "method": "Operate",
+    "hex": "08f1ee8ec60710331af5050ade0508f1ee8ec60710f0ee8ec6071815220ce7a78be7a588e889afe684bf2aa7057b22756964223a2022576973685369676e4d61696e5549222c2274697073223a207b227469746c65223a2022e6b4bbe58aa8e8afb4e6988e222c22747874223a205b20223c623ee38090e6b4bbe58aa8e697b6e997b4e380913c2f623e222c202232303236e5b9b439e69c883234e697a520e280942032303236e5b9b43130e69c8837e697a5222c20223c623ee38090e6b4bbe58aa8e7ae80e4bb8be380913c2f623e222c2022312e20e59ca839e69c883234e697a520e28094203130e69c8837e697a5e69c9fe997b4efbc8ce5869ce59cbae4b8bbe58fafe59ca8e6b4bbe58aa8e4b8bbe7958ce99da2e7a588e684bfefbc8ce6af8fe697a530e782b9e588b7e696b0e38082222c2022322e20e7a588e684bfe58fafe9a286e58f96e5bd93e697a5e5a5bde8bf90e5a596e58ab1efbc8ce5a596e58ab1e58685e5aeb9e58c85e68bac32e7a78de99990e5ae9ae7a78de5ad90e38081e7839fe88ab1e4ba92e58aa8e98193e585b7e5928ce79b86e6a0bde8a385e689aee38082222c22332e20e6b4bbe58aa8e69c9fe997b4efbc8ce5869ce59cbae4b8bbe88ba5e59ba0e5869ce4ba8be7b981e5bf99e99499e8bf87e7a588e684bfefbc8ce7a78be697a5e4b98be7a59ee4bc9ae7bb99e5869ce59cbae4b8bbe5ad98e582a835e697a5e5a596e58ab1efbc88e58c85e68bace5bd93e5a4a9efbc89e3808222202c22342e20e5869ce59cbae4b8bbe69caae68890e58a9fe9a286e58f96e79a84e5a596e58ab1efbc8ce59ca8e7acace4ba8ce5a4a9e68896e6b4bbe58aa8e7bb93e69d9fe5908eefbc8ce4bc9ae9809ae8bf87e982aee4bbb6e8a1a5e58f91e38082222c22352e20e7a588e684bfe7adbee69687e4bb85e4bd9ce8b6a3e591b3e58f82e88083efbc8ce684bfe5869ce59cbae4b8bbe68980e6b182e79a86e5a682e684bfe38082225d7d7d3080efcfd50638ffd899d606408d01a00101a80114b00101ba071110011a0d0803100c1801220508f12e1014ba090b080c10011a0508f12e1014"
+  },
+  {
+    "file": "001419-send.bin",
+    "method": "Operate",
+    "hex": "08f1ee8ec6071034c209020803"
+  },
+  {
+    "file": "001420-recv.bin",
+    "method": "Operate",
+    "hex": "08f1ee8ec60710341ae6050ade0508f1ee8ec60710f0ee8ec6071815220ce7a78be7a588e889afe684bf2aa7057b22756964223a2022576973685369676e4d61696e5549222c2274697073223a207b227469746c65223a2022e6b4bbe58aa8e8afb4e6988e222c22747874223a205b20223c623ee38090e6b4bbe58aa8e697b6e997b4e380913c2f623e222c202232303236e5b9b439e69c883234e697a520e280942032303236e5b9b43130e69c8837e697a5222c20223c623ee38090e6b4bbe58aa8e7ae80e4bb8be380913c2f623e222c2022312e20e59ca839e69c883234e697a520e28094203130e69c8837e697a5e69c9fe997b4efbc8ce5869ce59cbae4b8bbe58fafe59ca8e6b4bbe58aa8e4b8bbe7958ce99da2e7a588e684bfefbc8ce6af8fe697a530e782b9e588b7e696b0e38082222c2022322e20e7a588e684bfe58fafe9a286e58f96e5bd93e697a5e5a5bde8bf90e5a596e58ab1efbc8ce5a596e58ab1e58685e5aeb9e58c85e68bac32e7a78de99990e5ae9ae7a78de5ad90e38081e7839fe88ab1e4ba92e58aa8e98193e585b7e5928ce79b86e6a0bde8a385e689aee38082222c22332e20e6b4bbe58aa8e69c9fe997b4efbc8ce5869ce59cbae4b8bbe88ba5e59ba0e5869ce4ba8be7b981e5bf99e99499e8bf87e7a588e684bfefbc8ce7a78be697a5e4b98be7a59ee4bc9ae7bb99e5869ce59cbae4b8bbe5ad98e582a835e697a5e5a596e58ab1efbc88e58c85e68bace5bd93e5a4a9efbc89e3808222202c22342e20e5869ce59cbae4b8bbe69caae68890e58a9fe9a286e58f96e79a84e5a596e58ab1efbc8ce59ca8e7acace4ba8ce5a4a9e68896e6b4bbe58aa8e7bb93e69d9fe5908eefbc8ce4bc9ae9809ae8bf87e982aee4bbb6e8a1a5e58f91e38082222c22352e20e7a588e684bfe7adbee69687e4bb85e4bd9ce8b6a3e591b3e58f82e88083efbc8ce684bfe5869ce59cbae4b8bbe68980e6b182e79a86e5a682e684bfe38082225d7d7d3080efcfd50638ffd899d606408d01a00101a80114b00101ba07021001c209170a1508f12e1014188092b8c398feffffff0130ca3a3801"
+  }
+]

@@ -2,10 +2,12 @@ syntax = "proto3";
 
 package gamepb.acepb;
 
+// ============ 反作弊服务 ============
+
 message AntiDataRequest {
     bytes data = 1;
 }
 
 message AntiDataReply {
-    bytes data = 1;
+    bytes result = 1;          // 结果数据 (服务端为bytes)
 }

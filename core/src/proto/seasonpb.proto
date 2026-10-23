@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package gamepb.seasonpb;
+
+// SeasonService.GetSeasonInfo 抓包中已确认的只读字段。
+message SeasonItem {
+    int64 item_id = 1;
+    int64 count = 2;
+}
+
+message SeasonRewardNode {
+    int64 node_id = 1;
+    repeated SeasonItem rewards = 2;
+    bool is_key_level = 4;
+}
+
+message SeasonActivity {
+    int64 activity_id = 1;
+    int64 type = 2;
+    bytes name = 3;
+    int64 begin_time = 4;
+    int64 end_time = 5;
+}
+
+message SeasonPass {
+    int64 activity_id = 1;
+    int64 current_level = 2;
+    int64 total_progress = 3;
+    int64 current_progress = 4;
+    int64 progress_target = 5;
+    int64 node_count = 6;
+    repeated SeasonRewardNode nodes = 8;
+    int64 claimed_through_level = 9;
+    int64 field_11 = 11;
+    int64 field_12 = 12;
+    int64 field_13 = 13;
+    repeated SeasonItem field_14 = 14;
+    bytes title = 16;
+    bytes rules_json = 17;
+    int64 field_18 = 18;
+}
+
+message SeasonInfo {
+    int64 season_id = 1;
+    bytes name = 2;
+    int64 status = 3;
+    int64 field_4 = 4;
+    int64 begin_time = 5;
+    int64 end_time = 6;
+    int64 server_time = 7;
+    repeated SeasonActivity activities = 8;
+    SeasonPass pass = 10;
+}
+
+message GetSeasonInfoRequest {}
+
+message GetSeasonInfoReply {
+    SeasonInfo season_info = 1;
+}
+
+message ClaimBattlePassRewardsRequest {}
+
+message ClaimBattlePassRewardsReply {
+    repeated SeasonItem rewards = 1;
+    repeated int64 field_2 = 2 [packed = true];
+    SeasonPass pass = 3;
+    bool field_4 = 4;
+}
+
+message BattlePassChangeNotify {
+    SeasonPass pass = 1;
+}

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package gamepb.mutantpb;
+
+// ============ 变异图鉴服务 ============
+
+service MutantService {
+    rpc ReadMutantBook(ReadMutantBookRequest) returns (ReadMutantBookReply);
+}
+
+// --- 读取变异图鉴 ---
+message ReadMutantBookRequest {}
+
+message ReadMutantBookReply {}

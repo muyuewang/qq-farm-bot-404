@@ -3,6 +3,7 @@ syntax = "proto3";
 package gamepb.itempb;
 
 import "corepb.proto";
+import "plantpb.proto";
 
 // ============ 背包/仓库 ============
 
@@ -33,12 +34,26 @@ message UseRequest {
 
 message UseTarget {
     int64 host_gid = 1;
-    repeated int64 land_ids = 2;
+    repeated int64 land_ids = 2 [packed = true];
     int64 use_config_id = 3;
 }
 
 message UseReply {
     repeated corepb.Item used_items = 1;
+    repeated corepb.Item items = 2;
+    gamepb.plantpb.LandInfo land = 4;
+    UseLandReward land_reward = 5;
+    UseSocialReward social_reward = 6;
+}
+
+message UseLandReward {
+    int64 land_id = 1;
+    repeated corepb.Item items = 2;
+}
+
+// 青蛙使坏瓶等整座好友农场道具的奖励回包。
+message UseSocialReward {
+    int64 item_id = 1;
     repeated corepb.Item items = 2;
 }
 
@@ -51,4 +66,30 @@ message BatchUseRequest {
 message BatchUseReply {
     repeated corepb.Item used_items = 1;
     repeated corepb.Item items = 2;
+}
+
+// ============ 取消"新"标记 ============
+
+message CannelNewRequest {
+    repeated corepb.Item items = 1;
+}
+
+message CannelNewReply {}
+
+// ============ 锁定/解锁物品 ============
+
+message LockItemsRequest {
+    repeated int64 item_uids = 1 [packed = true];
+}
+
+message LockItemsReply {
+    repeated int64 item_uids = 1 [packed = true];
+}
+
+message UnlockItemsRequest {
+    repeated int64 item_uids = 1 [packed = true];
+}
+
+message UnlockItemsReply {
+    repeated int64 item_uids = 1 [packed = true];
 }

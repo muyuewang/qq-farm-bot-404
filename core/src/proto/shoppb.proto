@@ -5,6 +5,15 @@ package gamepb.shoppb;
 import "corepb.proto";
 
 // ============ 商店类型: 1=道具商店, 2=种子商店, 3=宠物商店 ============
+enum ShopType {
+    SHOP_TYPE_UNKNOWN = 0;
+    ITEM = 1;
+    SEED = 2;
+    PET = 3;
+    SKIN = 4;
+    CUB = 5;
+    FEED = 6;
+}
 
 // ============ 商店概览 ============
 message ShopProfile {
@@ -23,6 +32,7 @@ message GoodsInfo {
     int64 item_id = 6;         // 物品ID (即种子ID)
     int64 item_count = 7;      // 每次购买获得数量
     repeated Cond conds = 8;   // 解锁条件
+    bool owned = 15;           // 是否已拥有（如装扮）
 }
 
 // ============ 解锁条件 ============

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package gamepb.avatarframepb;
+
+// ============ 头像框信息 ============
+message AvatarFrame {
+    int64 frame_id = 1;
+    int64 status = 2;       // 状态
+    int64 equipped = 3;     // 是否装备
+    int64 expire_time = 4;  // 过期时间
+}
+
+// ============ 请求/回复 ============
+message AvatarFramesOwnedRequest {
+    int32 frame_type = 1;
+}
+
+message AvatarFramesOwnedReply {
+    repeated AvatarFrame frames = 1;
+}
+
+// ============ 通知 ============
+message AvatarFrameRedDotNotify {
+    int32 frame_type = 2;
+    // 红点通知 (空消息体)
+}

@@ -1,19 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-type ForecastSource = 'planted' | 'ready' | 'mixed' | 'history' | 'unavailable';
-
-interface Forecast {
-  source: ForecastSource
-  generatedAt: number
-  estimatedAt: number | null
-  plotCount: number
-  scheduledExp: number
-  automatic: boolean
-}
-
-const props = defineProps<{ forecast?: Forecast }>()
-
+const props = defineProps<{ forecast: any }>()
 const timeText = computed(() => {
   const value = props.forecast
   if (!value || !value.estimatedAt)
@@ -24,18 +12,11 @@ const timeText = computed(() => {
   const duration = minutes < 60 ? `${minutes} 分钟` : `${(minutes / 60).toFixed(1)} 小时`
   return value.source === 'planted' ? `约 ${duration}后收获可升级` : `约 ${duration}后升级`
 })
-
-const basis = computed(() => ({
-  planted: '按当前作物',
-  ready: '待收获',
-  mixed: '收获排期 + 历史均值',
-  history: '历史均值估算',
-  unavailable: '',
-}[props.forecast?.source as ForecastSource] || ''))
+const basis = computed(() => ({ planted: '按当前作物', ready: '待收获', mixed: '收获排期 + 历史均值', history: '历史均值估算' }[props.forecast?.source as string] || ''))
 </script>
 
 <template>
-  <div class="mt-2 space-y-1 text-xs" aria-label="升级预测">
+  <div class="mt-2 text-xs space-y-1" aria-label="升级预测">
     <div class="flex flex-wrap items-center justify-between gap-1">
       <span class="text-gray-700 dark:text-gray-200">{{ timeText }}</span>
       <span class="text-gray-400">{{ basis }}</span>

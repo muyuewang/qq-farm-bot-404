@@ -34,28 +34,34 @@ message LandInfo {
     repeated int64 slave_land_ids = 14;
     int64 land_size = 15;
     int64 lands_level = 16;
+    int64 field_17 = 17;                       // unknown new field
 
     // 土地buff
     message Buff {
         int64 plant_yield_bonus = 1;
         int64 planting_time_reduction = 2;
         int64 plant_exp_bonus = 3;
-        int64 plant_mutant_bonus = 4;
     }
 }
 
-// 土地解锁条件 (简化)
+// 土地解锁条件
 message LandUnlockCondition {
-    int64 need_level = 1;
-    int64 need_gold = 2;
-    // ... 其他条件字段
+    int64 preceding_land_id = 1;
+    int64 need_level = 2;
+    int64 need_gold = 3;
 }
 
 // 土地升级条件 (简化)
 message LandUpgradeCondition {
-    int64 need_level = 1;
-    int64 need_gold = 2;
-    // ... 其他条件字段
+    int64 condition_type = 1;
+    int64 condition_value = 2; // condition_type=1 时已确认代表所需角色等级
+    repeated corepb.Item required_items = 3;
+}
+
+// ============ 偷菜玩家信息 ============
+message StealPlayer {
+    int64 gid = 1;                  // 偷菜者GID
+    int64 num = 2;                  // 已偷次数
 }
 
 // ============ 植物信息 ============
@@ -72,44 +78,89 @@ message PlantInfo {
     int64 fruit_num = 11;                      // 果实数量
     repeated int64 weed_owners = 12;           // 放草的人 (非空=有草)
     repeated int64 insect_owners = 13;         // 放虫的人 (非空=有虫)
-    repeated int64 stealers = 14;              // 偷菜的人
+    bytes stealers = 14;                       // 偷菜的人 (服务端格式不一致，需手动解析)
     int64 grow_sec = 15;                       // 生长秒数
     bool stealable = 16;                       // 是否可偷
-    int64 left_inorc_fert_times = 17;          // 剩余施肥次数
+    int64 left_inorc_fert_times = 17;          // 本季普通肥剩余可施次数
     int64 left_fruit_num = 18;                 // 剩余果实数
     int64 steal_intimacy_level = 19;           // 偷菜亲密度等级
     repeated int64 mutant_config_ids = 20;     // 变异配置ID
     bool is_nudged = 21;                       // 是否被催熟
-    repeated SocialItem social_items = 35;      // 好友放置的背包型社交道具
-    // 抓包确认：301103 鹊羽灵露使用后为 {奖励值, 1}。
-    PlantExtendedStatus field_40 = 40;
+    // repeated StealPlayer steal_player = 22;    // 旧版: 偷菜玩家详情 (GID+已偷次数)
+    int64 steal_player = 22;                   // 偷菜玩家相关数值 (服务端已改为varint)
+    bytes steal_num = 23;                      // 每人最大可偷次数 (服务端为bytes)
+    int64 field_24 = 24;                       // unknown new field
+    int64 field_25 = 25;                       // unknown new field
+    int64 field_26 = 26;                       // unknown new field
+    int64 field_27 = 27;                       // unknown new field
+    bytes field_32 = 32;                       // unknown (3-byte varint, 推测为某种ID)
+    PlantLimitInfo field_34 = 34;              // 植物限制信息
+    // ItemService.Use 回包中已抓包确认：道具使用记录（301101=黄金虫，301102=足球）。
+    repeated PlantInteractionUseInfo interaction_uses = 35;
+    PlantActivityInfo field_36 = 36;           // 植物活动信息
+    int64 field_37 = 37;                       // unknown new field
+    // ItemService.Use 回包中已抓包确认：道具目标记录，field 4 为目标土地 ID。
+    repeated PlantInteractionTargetInfo interaction_targets = 38;
+    // 重复的历史/扩展记录；同一土地可同时出现多条，且黄金虫/足球清理后仍会保留。
+    // 当前互动道具以 interaction_uses / interaction_targets 为准；仅七夕灵露可结合变异 13 作保守兜底。
+    repeated PlantExtendedStatus field_40 = 40;
+    // 变异扩展记录；配置 ID 可与 mutant_config_ids / phase.mutants 交叉确认。
+    repeated PlantMutationRecord extended_mutations = 41;
 }
 
-// PlantInfo.field 40：字段 1 保留服务端奖励值，字段 2 为已生效标记。
+// PlantInfo.field 35：ItemService.Use 成功回包中的道具使用信息。
+message PlantInteractionUseInfo {
+    int64 item_id = 1;
+    int64 count = 2;
+    int64 effect_type = 3;
+    int64 host_gid = 4;
+    int64 timestamp = 5;
+}
+
+// PlantInfo.field 38：ItemService.Use 成功回包中的目标信息。
+message PlantInteractionTargetInfo {
+    int64 item_id = 1;
+    int64 host_gid = 2;
+    int64 timestamp = 3;
+    int64 land_id = 4;
+}
+
+// PlantInfo.field 40：土地历史/扩展记录，字段语义尚未完全确认。
 message PlantExtendedStatus {
     int64 value_1 = 1;
     int64 value_2 = 2;
 }
 
-// 背包型社交道具。字段含义依据 2026-07-12 黄金虫抓包。
-message SocialItem {
-    int64 item_id = 1;
-    int64 count = 2;
-    int64 type = 3;
-    int64 owner_gid = 4;
-    int64 created_at = 5;
+// PlantInfo.field 41：抓包观察到的变异扩展记录。
+message PlantMutationRecord {
+    int64 timestamp = 1;
+    int64 mutant_config_id = 2;
+    int64 field_3 = 3;
+    int64 field_4 = 4;
+    int64 field_5 = 5;
+    int64 field_6 = 6;
 }
 
-message SocialItemResult {
-    int64 land_id = 1;
-    repeated corepb.Item items = 2;
+// 植物限制信息 (field 34)
+message PlantLimitInfo {
+    int64 config_id = 1;                       // 配置ID (如1001)
+    int64 limit = 2;                           // 限制值 (如300)
+    int64 value = 3;                           // 当前值 (如1020184)
+}
+
+// 植物活动信息 (field 36)
+message PlantActivityInfo {
+    int64 activity_id = 1;                     // 活动ID (如1019)
+    int64 param1 = 2;                          // 参数1 (如240)
+    int64 param2 = 3;                          // 参数2 (如191)
+    int64 date = 4;                            // 日期 (如2026060100)
 }
 
 // ============ 生长阶段详情 ============
 message PlantPhaseInfo {
-    int32 phase = 1;               // 粗状态：常见 2=生长中、6=成熟、7=枯死
+    int32 phase = 1;               // PlantPhase 枚举值
     int64 begin_time = 2;          // 阶段开始时间
-    int64 phase_id = 3;            // 详细阶段类型（如 20=初熟、19=成熟）
+    int64 phase_id = 3;            // 阶段ID
     // fields 4,5 reserved
     int64 dry_time = 6;            // 变干时间 (>0 需要浇水)
     int64 weeds_time = 7;          // 长草时间 (>0 有杂草)
@@ -136,13 +187,11 @@ message OperationLimit {
     int64 day_ex_times_lt = 6;      // 每日可获得经验上限
     int64 day_exp_share_id = 7;     // 经验分享ID
 }
-// 操作类型ID:
-//   10001 = 帮好友浇水
-//   10002 = 帮好友除虫
-//   10003 = 帮好友除草
-//   10004 = 偷菜
-//   10005 = 放虫
-//   10006 = 放草
+// 抓包已确认的捣乱操作 ID:
+//   10003 = 放草/放虫共用的每日资格额度
+//   10004 = 放虫计数（PutInsects 会同时返回 10003）
+// Farming/帮助操作回包使用 10005、10006、10007。
+//   10015 = 放置社交道具
 
 // ============ 请求/回复消息 ============
 
@@ -151,20 +200,17 @@ message AllLandsRequest {
     int64 host_gid = 1;      // 0或自己的GID=查看自己
 }
 
+// 农场级社交事件。实机已确认 5005=青蛙使坏瓶；它不绑定某一块土地。
+message FarmSocialEvent {
+    int64 item_id = 1;
+    int64 visitor_gid = 2;
+    int64 timestamp = 3;
+}
+
 message AllLandsReply {
     repeated LandInfo lands = 1;
     repeated OperationLimit operation_limits = 2;
-    repeated FarmSocialEventInfo farm_social_events = 3;
-}
-
-message FarmSocialEventInfo {
-    int64 item_id = 1;
-    int64 owner_id = 2;
-    int64 put_time = 3;
-    int64 expire_at = 4;
-    int32 phase = 5;
-    int64 state_at = 6;
-    int64 state_until = 7;
+    repeated FarmSocialEvent social_events = 3;
 }
 
 // --- 收获 ---
@@ -192,22 +238,34 @@ message WaterLandReply {
     repeated OperationLimit operation_limits = 2;
 }
 
-// --- 务农 (浇水+除草+除虫合并) ---
+// --- 务农 (除草+除虫合并) ---
 message FarmingRequest {
     repeated int64 land_ids = 1;
     int64 host_gid = 2;
-    int32 host_type = 3;
-    int32 reason = 4;
-    repeated int64 clear_farm_social_item_ids = 5;
+    int32 field_3 = 3; // 场景字段，自家与普通好友抓包均显式编码为 0
+    int32 field_4 = 4; // 场景字段，自家抓包显式编码为 0，普通好友抓包值为 2
+    // 自家农场待清理的农场级社交道具 ID。青蛙存在时官方单点与一键务农均发送 5005。
+    repeated int64 social_event_item_ids = 5 [packed = true];
+}
+
+message FarmingResult {
+    int64 land_id = 1;
+    corepb.Item reward = 2;
+}
+
+message FarmingSocialEventReward {
+    int64 item_id = 1;
+    corepb.Item reward = 2;
 }
 
 message FarmingReply {
     repeated LandInfo land = 1;
     repeated OperationLimit operation_limits = 2;
-    repeated SocialItemResult social_rewards = 3;
+    repeated FarmingResult results = 3;
+    repeated FarmingSocialEventReward social_event_rewards = 4;
 }
 
-// --- 除草 ---
+// --- 除草 (旧版兼容) ---
 message WeedOutRequest {
     repeated int64 land_ids = 1;
     int64 host_gid = 2;
@@ -218,7 +276,7 @@ message WeedOutReply {
     repeated OperationLimit operation_limits = 2;
 }
 
-// --- 除虫 ---
+// --- 除虫 (旧版兼容) ---
 message InsecticideRequest {
     repeated int64 land_ids = 1;
     int64 host_gid = 2;
@@ -262,18 +320,19 @@ message FertilizeRequest {
     int64 fertilizer_id = 2;
 }
 
-// 单次施肥实际消耗。field 1 的语义尚未完全确认；field 3 已通过
-// FertilizeReply 与紧随其后的 ItemNotify 交叉验证为本次消耗的肥料秒数。
-message FertilizerUse {
-    int64 field_1 = 1;
-    corepb.Item consumed = 3;
+// 一次操作中每块土地的奖励与消耗；批量施肥会返回多条。
+message LandOpDrop {
+    int64 land_id = 1;
+    repeated corepb.Item rewards = 2;
+    repeated corepb.Item costs = 3;
+    repeated int64 triggered_skill_ids = 4;
 }
 
 message FertilizeReply {
     repeated LandInfo land = 1;
     repeated OperationLimit operation_limits = 2;
     corepb.Item fertilizer = 3;       // 肥料 ID 与剩余肥料时间
-    FertilizerUse fertilizer_use = 4; // 本次实际消耗
+    repeated LandOpDrop land_op_drops = 4;
 }
 
 // --- 放虫 ---
@@ -298,21 +357,6 @@ message PutWeedsReply {
     repeated OperationLimit operation_limits = 2;
 }
 
-// --- 放置背包型社交道具（黄金虫等） ---
-message PutSocialItemRequest {
-    int64 host_gid = 1;
-    repeated int64 land_ids = 2;
-    int64 item_id = 3;
-    int64 social_type = 5;
-}
-
-message PutSocialItemReply {
-    repeated LandInfo land = 1;
-    repeated OperationLimit operation_limits = 2;
-    repeated SocialItemResult rewards = 3;
-    repeated SocialItemResult costs = 4;
-}
-
 // --- 升级土地 ---
 message UpgradeLandRequest {
     int64 land_id = 1;
@@ -332,15 +376,24 @@ message UnlockLandReply {
     LandInfo land = 1;
 }
 
-// --- 检查能否操作 ---
-message CheckCanOperateRequest {
-    int64 host_gid = 1;
-    int64 operation_id = 2;
+// --- 放置社交道具 (如友谊果实) ---
+message PutSocialItemRequest {
+    int64 host_gid = 1;       // 好友农场GID
+    int64 land_id = 2;        // 目标土地ID (单个)
+    int64 item_id = 3;        // 社交道具ID (如 301101=友谊果实)
 }
 
-message CheckCanOperateReply {
-    bool can_operate = 1;
-    int64 can_steal_num = 2;
+message ItemChange {
+    int64 land_id = 1;
+    int64 item_id = 2;
+    int64 count = 3;
+}
+
+message PutSocialItemReply {
+    LandInfo land = 1;                        // 操作后的土地信息
+    OperationLimit operation_limit = 2;       // 操作限制 (id=10015)
+    repeated ItemChange rewards = 3;          // 奖励 (经验等)
+    repeated ItemChange consumed = 4;         // 消耗的道具
 }
 
 // ============ 服务器推送通知 ============
@@ -349,4 +402,10 @@ message CheckCanOperateReply {
 message LandsNotify {
     repeated LandInfo lands = 1;   // 变化的土地列表
     int64 host_gid = 2;            // 农场主GID
+}
+
+// 青蛙等农场级社交事件变化；清空事件时 social_events 为空。
+message FarmSocialEventsNotify {
+    repeated FarmSocialEvent social_events = 1;
+    int64 host_gid = 2;
 }

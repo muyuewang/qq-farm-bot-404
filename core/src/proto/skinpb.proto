@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package gamepb.skinpb;
+
+// ============ 皮肤信息 ============
+message SkinItem {
+    int64 skin_id = 1;
+    bool is_new = 3;
+    int64 slot_type = 2;    // 装备槽位类型
+}
+
+// ============ 请求/回复 ============
+
+// --- 获取已拥有皮肤 ---
+message SkinsOwnedRequest {}
+
+message SkinsOwnedReply {
+    repeated SkinItem skins = 1;
+}
+
+// --- 获取已装备皮肤 ---
+message SkinsEquippedRequest {}
+
+message SkinsEquippedReply {
+    repeated SkinItem skins = 1;
+    SkinEffectSelection effect_selection = 2;
+}
+
+message SkinEffectSelection {
+    int64 effect_type = 1;
+    int64 effect_value = 2;
+    bool enabled = 3;
+}
+
+message SkinEffectParams {
+    int64 value = 1;
+}
+
+message SkinEffectTypeParam {
+    int64 effect_type = 1;
+    SkinEffectParams params = 2;
+}
+
+message GetSkinEffectTypeParamsRequest {}
+
+message GetSkinEffectTypeParamsReply {
+    repeated SkinEffectTypeParam params = 1;
+}
+
+// --- 装备皮肤 ---
+message EquipRequest {
+    int64 skin_id = 1;
+    int64 slot_type = 2;
+}
+
+message EquipReply {
+    repeated SkinItem skins = 1;
+}
+
+// --- 标记皮肤已查看 ---
+message MarkAsViewedRequest {
+    repeated int64 skin_ids = 1;
+}
+
+message MarkAsViewedReply {}
+
+// ============ 服务器推送 ============
+
+// 皮肤变更通知
+message SkinChangeNotify {
+    repeated SkinItem skins = 1;
+}

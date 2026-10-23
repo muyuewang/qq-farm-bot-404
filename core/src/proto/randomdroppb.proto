@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package gamepb.randomdroppb;
+
+import "corepb.proto";
+
+// ============ 随机掉落活动服务 ============
+
+message DropActivityInfo {
+    int64 activity_id = 1;
+    string name = 2;
+    int32 status = 3;
+    int64 begin_time = 4;
+    int64 end_time = 5;
+    repeated DropReward rewards = 6;
+    int32 drop_count = 7;       // 已掉落次数
+    int32 max_drop_count = 8;   // 最大掉落次数
+}
+
+message DropReward {
+    int64 item_id = 1;
+    int64 count = 2;
+    int32 probability = 3;      // 概率 (万分比)
+    bool claimed = 4;
+}
+
+// --- 获取活动信息 ---
+message GetActivityInfoRequest {}
+
+message GetActivityInfoReply {
+    repeated DropActivityInfo activities = 1;
+}

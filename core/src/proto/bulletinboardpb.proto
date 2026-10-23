@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package gamepb.bulletinboardpb;
+
+// ============ 公告信息 ============
+message BulletinItem {
+    int64 id = 1;
+    string title = 2;
+    int64 status = 3;       // 1=已读
+    // field 4 reserved
+    int64 type = 5;         // 类型
+}
+
+// ============ 请求/回复 ============
+message GetBulletinListRequest {
+    int64 page_size = 2;
+    int64 count = 1;        // 获取数量
+}
+
+message GetBulletinListReply {
+    repeated BulletinItem bulletins = 1;
+}
+
+// --- 获取公告详情 ---
+message GetBulletinDetailRequest {
+    int64 id = 1;           // 公告ID
+}
+
+message BulletinDetail {
+    int64 id = 1;
+    string title = 2;
+    string content = 3;     // 公告内容
+    int64 status = 4;
+    int64 type = 5;
+    // 其他字段待逆向确认
+}
+
+message GetBulletinDetailReply {
+    string title = 1;
+    string content = 2;
+    string begin_time = 3;
+    string end_time = 4;
+    string image_url = 5;
+}
+
+// ============ 通知 ============
+message BulletinListChangedNTF {
+    repeated BulletinItem bulletins = 1;
+}

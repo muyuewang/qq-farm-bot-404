@@ -2,26 +2,52 @@ syntax = "proto3";
 
 package corepb;
 
-// ============ 通用物品 ============
-message Item {
-    int64 id = 1;           // 物品ID
-    int64 count = 2;        // 数量
-    int64 expire_time = 3;  // 过期时间
-    // field 4 reserved
-    // google.protobuf.Any detail = 5;  // 详情 (略)
-    int64 uid = 6;          // UID
-    bool is_new = 7;        // 是否新获得
-    repeated int64 mutant_types = 8; // 变异类型
-    // ItemShow show = 100;  // 展示信息 (略)
+// The purchase ItemNotify currently carries an empty display payload. Keeping
+// the message typed preserves the wire field and supports populated data later.
+message ItemShowRestriction {
+    string text = 1;
+    string activity_id = 2;
 }
 
-// 背包（物品列表）
+message ItemShow {
+    ItemShowRestriction restriction = 3;
+    Item sell_price = 4; // Currency and amount shown as the item's sale value.
+    Item exchange_price = 5;
+}
+
+message Item {
+    int64 id = 1;
+    int64 count = 2;
+    int64 expire_time = 3;
+    // Field 4 is reserved by the game protocol.
+    // google.protobuf.Any detail = 5;
+    int64 uid = 6;
+    bool is_new = 7;
+    repeated int64 mutant_types = 8;
+    bool locked = 9;
+    ItemSourceInfo source_info = 10;
+    ItemShow show = 100;
+}
+
+message ItemSourceInfo {
+    string sender_name = 1;
+    int64 sent_at = 2;
+    int64 source_type = 3;
+}
+
 message ItemBag {
     repeated Item items = 1;
+    int64 capacity = 2;
+    int64 used_slots = 3;
 }
 
-// ============ 物品变化 ============
 message ItemChg {
-    Item item = 1;          // 物品信息
-    int64 delta = 2;        // 变化量 (正数增加, 负数减少)
+    Item item = 1;
+    int64 delta = 2;
+}
+
+message BuffEffect {
+    int64 attr_id = 1;
+    int64 attr_value = 2;
+    int64 extra_info = 3;
 }

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.marqueepb;
+
+// ============ 跑马灯/滚动消息 ============
+message GetMarqueeRequest {}
+
+message GetMarqueeReply {
+    // 服务器返回的跑马灯消息 (可能为空)
+}

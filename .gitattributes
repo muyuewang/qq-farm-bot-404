@@ -1,3 +1,19 @@
+# 统一换行：文本一律以 LF 存入仓库并检出，避免混合行尾把 diff 炸开
 * text=auto eol=lf
+
+# Windows 批处理必须 CRLF，否则 cmd 解析出错
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# shell 脚本
+*.sh text eol=lf
+
+# 二进制资源不参与换行转换
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.wasm binary

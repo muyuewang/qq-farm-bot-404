@@ -1,0 +1,295 @@
+[
+  {
+    "name": "claim story",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "32",
+      "pet_treasure_hunt_claim_story": {
+        "order": 9
+      }
+    },
+    "hex": "08f5dc8ec60710209a08020809"
+  },
+  {
+    "name": "draw",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "30",
+      "pet_treasure_hunt_draw": {}
+    },
+    "hex": "08f5dc8ec607101e8a0800"
+  },
+  {
+    "name": "refresh charm",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "41",
+      "pet_treasure_hunt_refresh_charm_pool": {}
+    },
+    "hex": "08f5dc8ec6071029ea0800"
+  },
+  {
+    "name": "equip charm",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "42",
+      "pet_treasure_hunt_equip_charms": {
+        "charm_ids": [
+          104
+        ]
+      }
+    },
+    "hex": "08f5dc8ec607102af208030a0168"
+  },
+  {
+    "name": "battle",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "43",
+      "pet_treasure_hunt_start_battle": {
+        "defender_gid": "9007199254740993",
+        "treasure_id": "treasure-123",
+        "challenge_item_id": "80103"
+      }
+    },
+    "hex": "08f5dc8ec607102bfa081b088180808080808010120c74726561737572652d31323318e7f104"
+  },
+  {
+    "name": "plunder log",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "44",
+      "pet_treasure_hunt_get_plundered_log": {}
+    },
+    "hex": "08f5dc8ec607102c820900"
+  },
+  {
+    "name": "open treasure",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "45",
+      "pet_treasure_hunt_open_treasure": {}
+    },
+    "hex": "08f5dc8ec607102d8a0900"
+  },
+  {
+    "name": "compensation",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "46",
+      "pet_treasure_hunt_claim_plunder_compensation": {}
+    },
+    "hex": "08f5dc8ec607102e920900"
+  },
+  {
+    "name": "friend",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "47",
+      "pet_treasure_hunt_get_friend_activity_info": {
+        "friend_gid": "9007199254740993"
+      }
+    },
+    "hex": "08f5dc8ec607102f9a0909088180808080808010"
+  },
+  {
+    "name": "claim dog",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "48",
+      "pet_treasure_hunt_claim_dog": {}
+    },
+    "hex": "08f5dc8ec6071030a20900"
+  },
+  {
+    "name": "mark story",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "49",
+      "pet_treasure_hunt_mark_story_animated": {
+        "orders": [
+          1,
+          2,
+          9
+        ]
+      }
+    },
+    "hex": "08f5dc8ec6071031aa09050a03010209"
+  },
+  {
+    "name": "skip battle",
+    "direction": "send",
+    "input": {
+      "id": "2026090101",
+      "cmd": "50",
+      "pet_treasure_hunt_set_skip_battle_cg": {
+        "skip": true
+      }
+    },
+    "hex": "08f5dc8ec6071032b209020801"
+  },
+  {
+    "name": "shop buy",
+    "direction": "send",
+    "input": {
+      "id": "2026090103",
+      "cmd": "1",
+      "shop_buy": {
+        "goods_id": "61",
+        "count": "2"
+      }
+    },
+    "hex": "08f7dc8ec6071001aa0604083d1002"
+  },
+  {
+    "name": "adult feed result",
+    "direction": "recv",
+    "input": {
+      "id": "2026090101",
+      "cmd": "29",
+      "pet_treasure_hunt_feed": {
+        "growth": "7000",
+        "stage": 2,
+        "became_adult": true,
+        "feed_count": 10,
+        "costs": [
+          {
+            "id": "1028",
+            "count": "700"
+          }
+        ],
+        "times": 1,
+        "rewards": [
+          {
+            "id": "1029",
+            "count": "50"
+          }
+        ]
+      }
+    },
+    "hex": "08f5dc8ec607101d8a081a08d83610021801200a2a0608840810bc0530013a050885081032"
+  },
+  {
+    "name": "draw result",
+    "direction": "recv",
+    "input": {
+      "id": "2026090101",
+      "cmd": "30",
+      "pet_treasure_hunt_draw": {
+        "costs": [
+          {
+            "id": "1028",
+            "count": "630"
+          }
+        ],
+        "treasure_total": "12",
+        "treasure_count": 2,
+        "rewards": [
+          {
+            "id": "1029",
+            "count": "50"
+          },
+          {
+            "id": "80101",
+            "count": "1"
+          }
+        ],
+        "times": 1
+      }
+    },
+    "hex": "08f5dc8ec607101e92081d120608840810f604180c20022a0508850810322a0608e5f10410013801"
+  },
+  {
+    "name": "battle result",
+    "direction": "recv",
+    "input": {
+      "id": "2026090101",
+      "cmd": "43",
+      "pet_treasure_hunt_start_battle": {
+        "won": true,
+        "plundered": {
+          "id": "1029",
+          "count": "510"
+        },
+        "defender_name": "测试好友",
+        "attacker_dice": 6,
+        "defender_dice": 1,
+        "charm_result": {
+          "attacker_charm_ids": [
+            104
+          ],
+          "defender_charm_ids": [
+            103
+          ],
+          "win_rate_summary": {
+            "before": 0.5,
+            "after": 0.75
+          }
+        }
+      }
+    },
+    "hex": "08f5dc8ec607102bfa08380801120608850810fe031a0ce6b58be8af95e5a5bde58f8b380640014a1a0a01681201672a1209000000000000e03f11000000000000e83f"
+  },
+  {
+    "name": "friend treasure",
+    "direction": "recv",
+    "input": {
+      "id": "2026090101",
+      "cmd": "47",
+      "pet_treasure_hunt_get_friend_activity_info": {
+        "gid": "9007199254740993",
+        "info": {
+          "defender_charm_ids": [
+            103
+          ],
+          "treasures": [
+            {
+              "id": "treasure-123",
+              "item_id": "1029",
+              "count": "350",
+              "status": 2,
+              "start_at": "1789010000",
+              "end_at": "1789024400",
+              "original_count": "350",
+              "protected_count": "50",
+              "max_count": "550",
+              "source_charm_ids": [
+                102
+              ],
+              "battle_previews": [
+                {
+                  "treasure_id": "treasure-123",
+                  "challenge_item_id": "80101",
+                  "can_start": true,
+                  "max_profit": {
+                    "id": "1029",
+                    "count": "60"
+                  },
+                  "max_loss": {
+                    "id": "1029",
+                    "count": "10"
+                  },
+                  "plunderable_count": "300"
+                }
+              ],
+              "plunder_count": "1",
+              "max_plunder_count": "3"
+            }
+          ]
+        }
+      }
+    },
+    "hex": "08f5dc8ec607102f9a09680a5d0a580a0c74726561737572652d31323310850818de0228023090b189d50638d0c088d50640de02483250a6045a016662250a0c74726561737572652d31323310e5f10418012205088508103c2a05088508100a30ac0268017003120167108180808080808010"
+  }
+]

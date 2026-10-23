@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.miscpb;
+
+message GetFollowGiftStatusRequest {}
+
+message GetFollowGiftStatusReply {
+    bool followed = 1;
+    bool can_claim = 2;
+}

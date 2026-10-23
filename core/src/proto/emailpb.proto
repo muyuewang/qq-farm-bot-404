@@ -14,7 +14,9 @@ message EmailItem {
     string title = 3;
     bool claimed = 4;
     bool has_reward = 5;
+    int64 sent_at = 6;
     string subtitle = 7;
+    int64 status_time = 8;
 }
 
 message GetEmailListReply {
@@ -39,9 +41,15 @@ message ClaimEmailReply {
 
 message BatchClaimEmailRequest {
     int32 box_type = 1;
-    string email_id = 2;
+    repeated string email_ids = 2;
 }
 
-message BatchClaimEmailReply {
-    repeated corepb.Item items = 1;
+message BatchClaimEmailReply {}
+
+// --- 批量删除邮件 ---
+message BatchDeleteEmailRequest {
+    int32 box_type = 1;
+    repeated string email_ids = 2;
 }
+
+message BatchDeleteEmailReply {}

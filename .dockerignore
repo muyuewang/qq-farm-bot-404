@@ -18,3 +18,9 @@ web/node_modules
 coverage
 .nyc_output
 *.tsbuildinfo
+
+# Local diagnostics and regression sources are not runtime assets
+output/
+protocol-captures/
+docs/performance-analysis/
+**/tests/

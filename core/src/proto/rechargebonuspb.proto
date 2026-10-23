@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.rechargebonuspb;
+
+// ============ 充值奖励配置 ============
+message GetConfigRequest {}
+
+message GetConfigReply {
+    // 服务器返回的充值奖励配置 (可能为空)
+}

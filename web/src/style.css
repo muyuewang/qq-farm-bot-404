@@ -1,7 +1,185 @@
-/* Global Scrollbar Customization */
+/* Mobile input compatibility — 确保手机端输入框支持全选/剪切/粘贴 */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+  touch-action: manipulation;
+}
+
+/* 确保 input 容器不限制文本选择 */
+input *,
+textarea * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* Compact, neutral scrollbars for dense admin views. */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
+}
+
+:root {
+  color-scheme: light;
+  --ui-bg: #f3f5ef;
+  --ui-bg-soft: #eef2eb;
+  --ui-surface: rgba(255, 255, 255, 0.86);
+  --ui-surface-strong: rgba(255, 255, 255, 0.92);
+  --ui-surface-solid: #fff;
+  --ui-surface-soft: rgba(239, 245, 238, 0.8);
+  --ui-border: rgba(58, 86, 68, 0.1);
+  --ui-border-strong: rgba(58, 86, 68, 0.2);
+  --ui-ink: #243028;
+  --ui-muted: #6d776f;
+  --ui-subtle: #929b94;
+  --ui-primary: #438d63;
+  --ui-primary-soft: #e4f1e7;
+  /* 主色作为填充（上面放白字）时使用；深色模式下比文字用的主色更深。 */
+  --ui-primary-fill: var(--ui-primary);
+  --ui-warning-fill: var(--ui-warning);
+  --ui-danger-fill: var(--ui-danger);
+  --ui-teal: #5ba495;
+  --ui-warning: #c58b3f;
+  --ui-warning-soft: #fbf2e3;
+  --ui-danger: #c95f66;
+  --ui-danger-soft: #fae9ea;
+  --ui-violet: #8f79bc;
+  --ui-violet-soft: #f0edf8;
+  --ui-blue: #5c8fa8;
+  --ui-blue-soft: #eaf2f5;
+  --ui-bg-glow: rgba(214, 236, 214, 0.75);
+  --ui-bg-glow-2: rgba(222, 236, 240, 0.6);
+  --chrome-bg: color-mix(in srgb, var(--ui-bg) 96%, transparent);
+  --ui-table-head: #edf2eb;
+  --ui-radius-control: 10px;
+  --ui-radius-card: 14px;
+  --ui-shadow-sm: 0 1px 2px rgba(45, 66, 52, 0.04), 0 6px 20px rgba(45, 66, 52, 0.05);
+  --ui-shadow-md: 0 12px 32px rgba(55, 75, 61, 0.1);
+  --ui-shadow-lg: 0 24px 64px rgba(55, 75, 61, 0.15);
+
+  /* Compatibility aliases for existing business components. */
+  --theme-bg: var(--ui-bg);
+  --theme-text: var(--ui-ink);
+  --theme-primary: var(--ui-primary);
+  --theme-secondary: var(--ui-teal);
+  --theme-primary-rgb: 67, 141, 99;
+  --theme-radius-sm: 6px;
+  --theme-radius-md: 10px;
+  --theme-radius-lg: var(--ui-radius-card);
+  --theme-radius-xl: var(--ui-radius-card);
+  --theme-shadow-sm: var(--ui-shadow-sm);
+  --theme-shadow-md: var(--ui-shadow-md);
+  --theme-shadow-lg: var(--ui-shadow-lg);
+  --theme-shadow-3d: var(--ui-shadow-md);
+  --theme-soil: #8b6914;
+  --theme-soil-dark: #6b4f0e;
+  --theme-grass: #4a8c3f;
+  --theme-grass-light: #6dbf5b;
+  --theme-sky: #87ceeb;
+  --theme-sky-light: #b8e4f7;
+  --theme-wood: #a16207;
+  --theme-wood-dark: #7a4a05;
+  --theme-leaf: #4a8c3f;
+  --theme-flower: #f472b6;
+  --theme-water: #5bb8f5;
+  --theme-sun: #f0c040;
+  --theme-gold: #f0c040;
+  --theme-wheat: #deb887;
+  --glass-panel: rgba(250, 251, 247, 0.78);
+  --glass-card: var(--ui-surface);
+  --glass-elevated: var(--ui-surface-strong);
+  --glass-input: rgba(255, 255, 255, 0.7);
+  --glass-border: var(--ui-border);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-muted: var(--ui-muted);
+  --glass-shadow: var(--ui-shadow-lg);
+}
+
+.dark {
+  color-scheme: dark;
+  /* 中性偏冷的深灰底，绿色只作为品牌点缀；层级靠明度区分，不靠饱和度。 */
+  --ui-bg: #111418;
+  --ui-bg-soft: #15191e;
+  --ui-surface: #1a1f25;
+  --ui-surface-strong: #20262d;
+  --ui-surface-solid: #1a1f25;
+  --ui-surface-soft: #242a32;
+  --ui-border: rgba(255, 255, 255, 0.07);
+  --ui-border-strong: rgba(255, 255, 255, 0.12);
+  --ui-ink: #e4e8ec;
+  --ui-muted: #a3acb6;
+  --ui-subtle: #78818c;
+  /* 主色与状态色提亮、降饱和，深底上可读；淡色背景改为半透明叠加，避免发闷。 */
+  --ui-primary: #5bbd88;
+  --ui-primary-soft: rgba(91, 189, 136, 0.14);
+  --ui-primary-fill: #3f9c6b;
+  --ui-warning-fill: #b9813a;
+  --ui-danger-fill: #c4545c;
+  --ui-teal: #6cc2b2;
+  --ui-warning: #e2ab5f;
+  --ui-warning-soft: rgba(226, 171, 95, 0.14);
+  --ui-danger: #ee858b;
+  --ui-danger-soft: rgba(238, 133, 139, 0.14);
+  --ui-violet: #b7a2ea;
+  --ui-violet-soft: rgba(183, 162, 234, 0.14);
+  --ui-blue: #82b6d6;
+  --ui-blue-soft: rgba(130, 182, 214, 0.14);
+  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --ui-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
+  --ui-shadow-lg: 0 20px 56px rgba(0, 0, 0, 0.48);
+  --theme-primary-rgb: 91, 189, 136;
+  --glass-panel: #15191e;
+  --glass-card: var(--ui-surface);
+  --glass-elevated: #20262d;
+  --glass-input: #161a20;
+  --glass-highlight: rgba(255, 255, 255, 0.03);
+  --ui-bg-glow: rgba(91, 189, 136, 0.045);
+  --ui-bg-glow-2: rgba(130, 182, 214, 0.035);
+  --chrome-bg: color-mix(in srgb, var(--ui-bg) 94%, transparent);
+  --ui-table-head: #242a32;
+}
+
+.dark :is(.n-input, .n-input-number, .n-base-selection) {
+  --n-text-color: var(--ui-ink) !important;
+  --n-text-color-disabled: var(--ui-subtle) !important;
+  --n-placeholder-color: var(--ui-subtle) !important;
+  --n-color-disabled: var(--ui-bg-soft) !important;
+}
+
+.dark .n-tabs {
+  --n-tab-text-color: var(--ui-muted) !important;
+  --n-tab-text-color-active: var(--ui-primary) !important;
+  --n-tab-text-color-hover: var(--ui-primary) !important;
+  --n-bar-color: var(--ui-primary) !important;
+}
+
+.dark .n-card {
+  --n-title-text-color: var(--ui-ink) !important;
+  --n-text-color: var(--ui-ink) !important;
+}
+
+.dark .base-button.n-button--default-type {
+  --n-text-color: var(--ui-ink) !important;
+  --n-text-color-hover: var(--ui-ink) !important;
+  --n-text-color-pressed: var(--ui-ink) !important;
+  --n-text-color-focus: var(--ui-ink) !important;
+  --n-text-color-disabled: var(--ui-subtle) !important;
+}
+
+.dark .base-button.n-button--default-type.n-button--secondary {
+  --n-color: var(--ui-surface-strong) !important;
+  --n-color-hover: color-mix(in srgb, var(--ui-surface-strong) 80%, var(--ui-primary)) !important;
+  --n-color-pressed: var(--ui-primary-soft) !important;
+}
+
+.dark :is(.n-base-select-option, .n-base-select-menu, .n-time-picker-panel, .n-dialog) {
+  color: var(--ui-ink);
+  background-color: var(--glass-elevated);
 }
 
 ::-webkit-scrollbar-track {
@@ -9,23 +187,34 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* slate-300 */
-  border-radius: 9999px;
+  background: rgba(100, 116, 139, 0.38);
   border: 2px solid transparent;
-  background-clip: content-box;
+  border-radius: 8px;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* slate-400 */
+  background: rgba(100, 116, 139, 0.62);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-/* Dark mode scrollbar */
 .dark ::-webkit-scrollbar-thumb {
-  background-color: #475569; /* slate-600 */
+  background: rgba(148, 163, 184, 0.42);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background-color: #64748b; /* slate-500 */
+  background: rgba(148, 163, 184, 0.68);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* 暗色模式下 select option 文字可见（仅 farm-input 下拉框） */
+.dark .farm-input option {
+  background-color: #374151 !important;
+  color: #f9fafb !important;
 }
 
 /* Base styles to reset some defaults if needed, though UnoCSS reset handles most */
@@ -35,113 +224,804 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden; /* App handles scrolling */
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+  color: var(--ui-ink);
+  background:
+    radial-gradient(1100px 520px at 0% 0%, var(--ui-bg-glow), transparent 70%),
+    radial-gradient(900px 480px at 100% 100%, var(--ui-bg-glow-2), transparent 70%),
+    var(--ui-bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-* {
-  box-sizing: border-box;
+.app-shell {
+  color: var(--ui-ink);
+  background: transparent;
 }
 
-/* NProgress Customization */
+.liquid-layout,
+.app-content {
+  background: transparent;
+}
+
+/* Uno's Tailwind reset has the same specificity as Naive UI's button rule. */
+.n-button {
+  background-color: var(--n-color);
+}
+
+.base-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.base-field__label {
+  color: var(--theme-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.base-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.base-switch__label {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--theme-text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.base-switch__label:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* NProgress Customization — 农场绿 */
 #nprogress .bar {
-  background: var(--theme-gradient) !important;
-  height: 3px !important;
+  height: 2px !important;
+  border-radius: 0;
+  background: var(--theme-primary) !important;
 }
 
 #nprogress .peg {
-  box-shadow:
-    0 0 10px var(--theme-primary),
-    0 0 5px var(--theme-primary) !important;
+  box-shadow: 0 0 8px var(--theme-primary) !important;
 }
 
-/* Shared interaction and accessibility defaults. */
-:where(button, a, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--theme-primary);
-  outline-offset: 3px;
+/* Shared liquid-glass surfaces. Repeated cards skip backdrop blur for performance. */
+
+/* Legacy aliases kept while feature pages move to framework components. */
+.cartoon-card:not(.land-card) {
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--ui-radius-card) !important;
+  background: var(--glass-card) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--ui-shadow-sm) !important;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.base-button {
-  transition-property: color, background-color, border-color, opacity, transform;
-}
-.base-button:active:not(:disabled):not([aria-disabled='true']) {
-  transition-duration: 80ms;
-}
-.base-input, .base-select-trigger {
-  min-height: 2.75rem;
+
+.farm-card,
+.farm-panel {
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--ui-radius-card) !important;
+  background: var(--glass-card) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--ui-shadow-sm) !important;
 }
 
-@media (pointer: coarse) {
-  .base-button, button, [role='option'] {
-    min-height: 44px;
+.farm-input {
+  border-color: var(--glass-border) !important;
+  background: var(--glass-input) !important;
+}
+
+.n-card {
+  border-color: var(--glass-border) !important;
+  background-color: var(--glass-card) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--ui-shadow-sm);
+}
+
+.n-modal,
+.n-dialog,
+.n-drawer,
+.n-popover:not(.n-popover--raw):not(.n-tooltip),
+.n-dropdown-menu {
+  border: 1px solid var(--glass-border) !important;
+  background-color: var(--glass-elevated) !important;
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+
+.n-input,
+.n-input-number,
+.n-base-selection {
+  --n-color: var(--glass-input) !important;
+  --n-color-focus: var(--glass-input) !important;
+  --n-border: 1px solid var(--glass-border) !important;
+  --n-border-hover: 1px solid color-mix(in srgb, var(--theme-primary) 52%, var(--glass-border)) !important;
+  --n-border-focus: 1px solid var(--theme-primary) !important;
+}
+
+.n-data-table,
+.n-table {
+  --n-merged-td-color: transparent !important;
+}
+
+.n-card-header,
+.n-card__content,
+.n-card__footer {
+  color: var(--ui-ink);
+}
+
+.n-tabs-nav {
+  min-width: 0;
+}
+
+.n-data-table,
+.n-table,
+.n-pagination {
+  color: var(--ui-ink);
+}
+
+.rounded-2xl,
+.rounded-3xl {
+  border-radius: var(--ui-radius-card) !important;
+}
+
+.shadow-md,
+.shadow-lg,
+.shadow-xl {
+  box-shadow: var(--ui-shadow-sm) !important;
+}
+
+.bg-white {
+  background-color: var(--ui-surface) !important;
+}
+
+.text-gray-900,
+.text-gray-800,
+.text-gray-700 {
+  color: var(--ui-ink) !important;
+}
+
+.text-gray-600,
+.text-gray-500,
+.text-gray-400 {
+  color: var(--ui-muted) !important;
+}
+
+.border-gray-100,
+.border-gray-200,
+.border-gray-300 {
+  border-color: var(--ui-border) !important;
+}
+
+.bg-gray-50,
+.bg-gray-100 {
+  background-color: var(--ui-surface-soft) !important;
+}
+
+.bg-blue-50,
+.bg-cyan-50 {
+  background-color: var(--ui-blue-soft) !important;
+}
+
+.bg-green-50,
+.bg-emerald-50,
+.bg-lime-50 {
+  background-color: var(--ui-primary-soft) !important;
+}
+
+.bg-amber-50,
+.bg-yellow-50,
+.bg-orange-50 {
+  background-color: var(--ui-warning-soft) !important;
+}
+
+.bg-red-50,
+.bg-rose-50,
+.bg-pink-50 {
+  background-color: var(--ui-danger-soft) !important;
+}
+
+.bg-purple-50,
+.bg-violet-50,
+.bg-indigo-50 {
+  background-color: var(--ui-violet-soft) !important;
+}
+
+.page-stack,
+.settings-page {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 页面操作区：标题由顶栏统一显示，页面内只放切换与操作。 */
+.page-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.page-toolbar__actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  /* 页面分区标签在手机上收紧间距，尽量一屏放下，超出时仍可横向滑动。 */
+  .n-tabs.n-tabs--line-type {
+    --n-tab-gap: 16px !important;
+    --n-tab-font-size: 14px !important;
   }
-  button {
-    min-width: 44px;
+
+  .page-toolbar__actions {
+    width: 100%;
+    margin-left: 0;
   }
-  .base-input, .base-textarea, .base-select-trigger {
-    font-size: 1rem;
+
+  .page-toolbar__actions > * {
+    flex: 1 1 0;
+    min-width: 0;
   }
+}
+
+.settings-page > :first-child h1 {
+  margin: 0;
+  color: var(--ui-ink);
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+  .settings-page > :first-child h1 {
+    font-size: 22px;
+  }
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(67, 141, 99, 0.2);
+  outline-offset: 2px;
+}
+
+/* Farm background gradient — 天空+草地渐变 */
+.farm-bg {
+  background: linear-gradient(180deg,
+    var(--theme-sky-light, #b8e4f7) 0%,
+    var(--theme-sky, #87ceeb) 35%,
+    var(--theme-grass-light, #6dbf5b) 35%,
+    var(--theme-grass, #4a8c3f) 60%,
+    var(--theme-soil-dark, #6b4f0e) 100%
+  );
+}
+
+/* Soil texture background — 泥土纹理 */
+.soil-bg {
+  background:
+    radial-gradient(circle at 15% 85%, rgba(240,192,64,0.15) 0%, transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(139,105,20,0.2) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(107,79,14,0.1) 0%, transparent 60%),
+    linear-gradient(180deg, var(--theme-soil, #8b6914) 0%, #6b4f0e 100%);
+}
+
+/* Grass background — 草地纹理 */
+.grass-bg {
+  background:
+    radial-gradient(circle at 25% 75%, rgba(109,191,91,0.3) 0%, transparent 45%),
+    radial-gradient(circle at 75% 25%, rgba(74,140,63,0.2) 0%, transparent 45%),
+    linear-gradient(180deg, var(--theme-grass-light, #6dbf5b) 0%, var(--theme-grass, #4a8c3f) 100%);
+}
+
+/* Cartoon animations — QQ农场风格弹性动画 */
+@keyframes cartoon-bounce {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-12px); }
+  50% { transform: translateY(-6px); }
+  70% { transform: translateY(-9px); }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.08); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes bounce-hover {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes plant-grow {
+  0% { transform: scale(0.3) translateY(20px); opacity: 0; }
+  60% { transform: scale(1.15) translateY(-6px); opacity: 1; }
+  80% { transform: scale(0.95) translateY(2px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes cartoon-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(-6deg); }
+  30% { transform: rotate(5deg); }
+  45% { transform: rotate(-4deg); }
+  60% { transform: rotate(3deg); }
+  75% { transform: rotate(-2deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+
+@keyframes water-drop {
+  0% { transform: translateY(-12px); opacity: 0; }
+  40% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(14px); opacity: 0; }
+}
+
+@keyframes float-up {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-30px); opacity: 0; }
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 140, 63, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(74, 140, 63, 0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+  20%, 40%, 60%, 80% { transform: translateX(3px); }
+}
+
+/* Cartoon font classes */
+.font-display {
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* 标题和页面导航共用一个固定区域；内容只在 .page-scroll 中滚动。
+   面板操作留在内容层，手机上随列表滚动，避免多层吸顶占用阅读空间。 */
+.page-tabs {
+  min-width: 0;
+  margin: 8px 0 0 !important;
+}
+
+@media (min-width: 1024px) {
+  .panel-sticky {
+    position: sticky;
+    top: var(--sticky-top, 0px);
+    z-index: 6;
+    background: var(--panel-sticky-bg, var(--ui-table-head));
+  }
+
+  /* 直接放在页面底色上的工具栏：并入顶部栏，细线移到它的下沿。 */
+  .panel-sticky--page {
+    z-index: 9;
+    padding-block: 10px;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    isolation: isolate;
+  }
+
+  .panel-sticky--page::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc(-1 * var(--page-pad, 0px));
+    content: '';
+    transition:
+      background-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .is-scrolled .panel-sticky--page::before {
+    background: var(--chrome-bg);
+    box-shadow: 0 1px 0 var(--ui-border);
+  }
+
+  /* 卡片内的工具栏：底色向两侧铺满卡片内边距（--panel-pad），吸顶时不露出下面的列表。 */
+  .panel-sticky--inset {
+    margin-top: -8px;
+    padding-block: 8px;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .panel-sticky--inset::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc(-1 * var(--panel-pad, 20px));
+    background: var(--panel-sticky-bg, var(--ui-table-head));
+    box-shadow: 0 1px 0 var(--ui-border);
+    content: '';
+  }
+}
+
+.font-mono {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Microsoft YaHei', 'PingFang SC', monospace;
+}
+
+.font-body {
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+/* Farm progress bar — 卡通进度条 */
+.farm-progress {
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 14px;
+  background: rgba(0,0,0,0.12);
+  border: 2px solid rgba(0,0,0,0.1);
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.farm-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(255,255,255,0.2) 4px,
+    rgba(255,255,255,0.2) 8px
+  );
+}
+
+@keyframes barberpole {
+  0% { background-position: 0 0; }
+  100% { background-position: 11.31px 0; }
+}
+
+/* Utility animation classes */
+.animate-bounce-in {
+  animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-sway {
+  animation: sway 2s ease-in-out infinite;
+}
+
+.animate-float-up {
+  animation: float-up 1s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation: none !important;
-    transition-property: opacity, color, background-color, border-color !important;
-    transition-duration: 100ms !important;
+  *,
+  *::before,
+  *::after {
     scroll-behavior: auto !important;
-  }
-  .base-button:active,
-  [class*='-enter-from'], [class*='-leave-to'],
-  .confirm-modal-enter-from .confirm-modal,
-  .confirm-modal-leave-to .confirm-modal {
-    transform: none !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root { --input-bg: #fff; }
-  .dark { --input-bg: #111827; }
-  .glass-panel, .ui-subtle-panel, .account-menu-surface {
-    background: var(--surface-1) !important;
+@media (max-width: 767px) {
+  .glass-app-header,
+  .app-sidebar,
+  .n-modal,
+  .n-dialog,
+  .n-drawer,
+  .n-popover:not(.n-popover--raw):not(.n-tooltip),
+  .n-dropdown-menu {
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
+    backdrop-filter: blur(12px) saturate(125%);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-app-header,
+  .app-sidebar,
+  .n-modal,
+  .n-dialog,
+  .n-drawer,
+  .n-popover:not(.n-popover--raw):not(.n-tooltip),
+  .n-dropdown-menu {
+    background: var(--theme-bg) !important;
+    -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  [class*='backdrop-blur'] {
-    backdrop-filter: none !important;
-  }
-  .confirm-modal-overlay {
-    background: rgba(0, 0, 0, 0.65) !important;
-    backdrop-filter: none !important;
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-app-header,
+  .app-sidebar,
+  .n-modal,
+  .n-dialog,
+  .n-drawer,
+  .n-popover:not(.n-popover--raw):not(.n-tooltip),
+  .n-dropdown-menu {
+    background: var(--glass-elevated) !important;
   }
 }
 
-@media (prefers-contrast: more) {
-  :root {
-    --surface-border: #475569;
-    --muted-text: #334155;
-  }
-  .dark {
-    --surface-border: #cbd5e1;
-    --muted-text: #e2e8f0;
-  }
-  .glass-panel, .ui-card, .ui-card-elevated, .base-input,
-  .base-textarea, .base-select-trigger, .confirm-modal {
-    border: 1px solid var(--surface-border) !important;
-  }
+/* 深色兜底：只写了浅色主题工具类（如 bg-purple-100、text-green-700）的元素，
+   在深色下映射到对应的半透明淡色与提亮后的状态色。已写 dark: 变体的元素不受影响。 */
+.dark .bg-green-50:not([class*="dark:bg-"]),
+.dark .bg-green-100:not([class*="dark:bg-"]),
+.dark .bg-emerald-50:not([class*="dark:bg-"]),
+.dark .bg-emerald-100:not([class*="dark:bg-"]),
+.dark .bg-lime-50:not([class*="dark:bg-"]),
+.dark .bg-lime-100:not([class*="dark:bg-"]),
+.dark .bg-teal-50:not([class*="dark:bg-"]),
+.dark .bg-teal-100:not([class*="dark:bg-"]) {
+  background-color: var(--ui-primary-soft) !important;
 }
 
-@media (prefers-contrast: more) {
-  .text-gray-400, .text-gray-500 { color: var(--muted-text) !important; }
+.dark .text-green-600:not([class*="dark:text-"]),
+.dark .text-green-700:not([class*="dark:text-"]),
+.dark .text-green-800:not([class*="dark:text-"]),
+.dark .text-green-900:not([class*="dark:text-"]),
+.dark .text-emerald-600:not([class*="dark:text-"]),
+.dark .text-emerald-700:not([class*="dark:text-"]),
+.dark .text-emerald-800:not([class*="dark:text-"]),
+.dark .text-emerald-900:not([class*="dark:text-"]),
+.dark .text-lime-600:not([class*="dark:text-"]),
+.dark .text-lime-700:not([class*="dark:text-"]),
+.dark .text-lime-800:not([class*="dark:text-"]),
+.dark .text-lime-900:not([class*="dark:text-"]),
+.dark .text-teal-600:not([class*="dark:text-"]),
+.dark .text-teal-700:not([class*="dark:text-"]),
+.dark .text-teal-800:not([class*="dark:text-"]),
+.dark .text-teal-900:not([class*="dark:text-"]) {
+  color: var(--ui-primary) !important;
 }
 
-/* Keep transient controls legible and reachable without adding decorative motion. */
-.base-button[aria-disabled='true'] {
-  cursor: not-allowed;
-  opacity: 0.6;
+.dark .border-green-100:not([class*="dark:border-"]),
+.dark .border-green-200:not([class*="dark:border-"]),
+.dark .border-green-300:not([class*="dark:border-"]),
+.dark .border-emerald-100:not([class*="dark:border-"]),
+.dark .border-emerald-200:not([class*="dark:border-"]),
+.dark .border-emerald-300:not([class*="dark:border-"]),
+.dark .border-lime-100:not([class*="dark:border-"]),
+.dark .border-lime-200:not([class*="dark:border-"]),
+.dark .border-lime-300:not([class*="dark:border-"]),
+.dark .border-teal-100:not([class*="dark:border-"]),
+.dark .border-teal-200:not([class*="dark:border-"]),
+.dark .border-teal-300:not([class*="dark:border-"]) {
+  border-color: color-mix(in srgb, var(--ui-primary) 32%, transparent) !important;
 }
-.account-menu-surface button, .account-menu-surface a {
-  min-height: 2.75rem;
+
+.dark .bg-amber-50:not([class*="dark:bg-"]),
+.dark .bg-amber-100:not([class*="dark:bg-"]),
+.dark .bg-yellow-50:not([class*="dark:bg-"]),
+.dark .bg-yellow-100:not([class*="dark:bg-"]),
+.dark .bg-orange-50:not([class*="dark:bg-"]),
+.dark .bg-orange-100:not([class*="dark:bg-"]) {
+  background-color: var(--ui-warning-soft) !important;
 }
-:where(h1, h2, h3) {
-  line-height: 1.25;
-  font-optical-sizing: auto;
+
+.dark .text-amber-600:not([class*="dark:text-"]),
+.dark .text-amber-700:not([class*="dark:text-"]),
+.dark .text-amber-800:not([class*="dark:text-"]),
+.dark .text-amber-900:not([class*="dark:text-"]),
+.dark .text-yellow-600:not([class*="dark:text-"]),
+.dark .text-yellow-700:not([class*="dark:text-"]),
+.dark .text-yellow-800:not([class*="dark:text-"]),
+.dark .text-yellow-900:not([class*="dark:text-"]),
+.dark .text-orange-600:not([class*="dark:text-"]),
+.dark .text-orange-700:not([class*="dark:text-"]),
+.dark .text-orange-800:not([class*="dark:text-"]),
+.dark .text-orange-900:not([class*="dark:text-"]) {
+  color: var(--ui-warning) !important;
+}
+
+.dark .border-amber-100:not([class*="dark:border-"]),
+.dark .border-amber-200:not([class*="dark:border-"]),
+.dark .border-amber-300:not([class*="dark:border-"]),
+.dark .border-yellow-100:not([class*="dark:border-"]),
+.dark .border-yellow-200:not([class*="dark:border-"]),
+.dark .border-yellow-300:not([class*="dark:border-"]),
+.dark .border-orange-100:not([class*="dark:border-"]),
+.dark .border-orange-200:not([class*="dark:border-"]),
+.dark .border-orange-300:not([class*="dark:border-"]) {
+  border-color: color-mix(in srgb, var(--ui-warning) 32%, transparent) !important;
+}
+
+.dark .bg-red-50:not([class*="dark:bg-"]),
+.dark .bg-red-100:not([class*="dark:bg-"]),
+.dark .bg-rose-50:not([class*="dark:bg-"]),
+.dark .bg-rose-100:not([class*="dark:bg-"]),
+.dark .bg-pink-50:not([class*="dark:bg-"]),
+.dark .bg-pink-100:not([class*="dark:bg-"]) {
+  background-color: var(--ui-danger-soft) !important;
+}
+
+.dark .text-red-600:not([class*="dark:text-"]),
+.dark .text-red-700:not([class*="dark:text-"]),
+.dark .text-red-800:not([class*="dark:text-"]),
+.dark .text-red-900:not([class*="dark:text-"]),
+.dark .text-rose-600:not([class*="dark:text-"]),
+.dark .text-rose-700:not([class*="dark:text-"]),
+.dark .text-rose-800:not([class*="dark:text-"]),
+.dark .text-rose-900:not([class*="dark:text-"]),
+.dark .text-pink-600:not([class*="dark:text-"]),
+.dark .text-pink-700:not([class*="dark:text-"]),
+.dark .text-pink-800:not([class*="dark:text-"]),
+.dark .text-pink-900:not([class*="dark:text-"]) {
+  color: var(--ui-danger) !important;
+}
+
+.dark .border-red-100:not([class*="dark:border-"]),
+.dark .border-red-200:not([class*="dark:border-"]),
+.dark .border-red-300:not([class*="dark:border-"]),
+.dark .border-rose-100:not([class*="dark:border-"]),
+.dark .border-rose-200:not([class*="dark:border-"]),
+.dark .border-rose-300:not([class*="dark:border-"]),
+.dark .border-pink-100:not([class*="dark:border-"]),
+.dark .border-pink-200:not([class*="dark:border-"]),
+.dark .border-pink-300:not([class*="dark:border-"]) {
+  border-color: color-mix(in srgb, var(--ui-danger) 32%, transparent) !important;
+}
+
+.dark .bg-purple-50:not([class*="dark:bg-"]),
+.dark .bg-purple-100:not([class*="dark:bg-"]),
+.dark .bg-violet-50:not([class*="dark:bg-"]),
+.dark .bg-violet-100:not([class*="dark:bg-"]),
+.dark .bg-indigo-50:not([class*="dark:bg-"]),
+.dark .bg-indigo-100:not([class*="dark:bg-"]),
+.dark .bg-fuchsia-50:not([class*="dark:bg-"]),
+.dark .bg-fuchsia-100:not([class*="dark:bg-"]) {
+  background-color: var(--ui-violet-soft) !important;
+}
+
+.dark .text-purple-600:not([class*="dark:text-"]),
+.dark .text-purple-700:not([class*="dark:text-"]),
+.dark .text-purple-800:not([class*="dark:text-"]),
+.dark .text-purple-900:not([class*="dark:text-"]),
+.dark .text-violet-600:not([class*="dark:text-"]),
+.dark .text-violet-700:not([class*="dark:text-"]),
+.dark .text-violet-800:not([class*="dark:text-"]),
+.dark .text-violet-900:not([class*="dark:text-"]),
+.dark .text-indigo-600:not([class*="dark:text-"]),
+.dark .text-indigo-700:not([class*="dark:text-"]),
+.dark .text-indigo-800:not([class*="dark:text-"]),
+.dark .text-indigo-900:not([class*="dark:text-"]),
+.dark .text-fuchsia-600:not([class*="dark:text-"]),
+.dark .text-fuchsia-700:not([class*="dark:text-"]),
+.dark .text-fuchsia-800:not([class*="dark:text-"]),
+.dark .text-fuchsia-900:not([class*="dark:text-"]) {
+  color: var(--ui-violet) !important;
+}
+
+.dark .border-purple-100:not([class*="dark:border-"]),
+.dark .border-purple-200:not([class*="dark:border-"]),
+.dark .border-purple-300:not([class*="dark:border-"]),
+.dark .border-violet-100:not([class*="dark:border-"]),
+.dark .border-violet-200:not([class*="dark:border-"]),
+.dark .border-violet-300:not([class*="dark:border-"]),
+.dark .border-indigo-100:not([class*="dark:border-"]),
+.dark .border-indigo-200:not([class*="dark:border-"]),
+.dark .border-indigo-300:not([class*="dark:border-"]),
+.dark .border-fuchsia-100:not([class*="dark:border-"]),
+.dark .border-fuchsia-200:not([class*="dark:border-"]),
+.dark .border-fuchsia-300:not([class*="dark:border-"]) {
+  border-color: color-mix(in srgb, var(--ui-violet) 32%, transparent) !important;
+}
+
+.dark .bg-blue-50:not([class*="dark:bg-"]),
+.dark .bg-blue-100:not([class*="dark:bg-"]),
+.dark .bg-sky-50:not([class*="dark:bg-"]),
+.dark .bg-sky-100:not([class*="dark:bg-"]),
+.dark .bg-cyan-50:not([class*="dark:bg-"]),
+.dark .bg-cyan-100:not([class*="dark:bg-"]) {
+  background-color: var(--ui-blue-soft) !important;
+}
+
+.dark .text-blue-600:not([class*="dark:text-"]),
+.dark .text-blue-700:not([class*="dark:text-"]),
+.dark .text-blue-800:not([class*="dark:text-"]),
+.dark .text-blue-900:not([class*="dark:text-"]),
+.dark .text-sky-600:not([class*="dark:text-"]),
+.dark .text-sky-700:not([class*="dark:text-"]),
+.dark .text-sky-800:not([class*="dark:text-"]),
+.dark .text-sky-900:not([class*="dark:text-"]),
+.dark .text-cyan-600:not([class*="dark:text-"]),
+.dark .text-cyan-700:not([class*="dark:text-"]),
+.dark .text-cyan-800:not([class*="dark:text-"]),
+.dark .text-cyan-900:not([class*="dark:text-"]) {
+  color: var(--ui-blue) !important;
+}
+
+.dark .border-blue-100:not([class*="dark:border-"]),
+.dark .border-blue-200:not([class*="dark:border-"]),
+.dark .border-blue-300:not([class*="dark:border-"]),
+.dark .border-sky-100:not([class*="dark:border-"]),
+.dark .border-sky-200:not([class*="dark:border-"]),
+.dark .border-sky-300:not([class*="dark:border-"]),
+.dark .border-cyan-100:not([class*="dark:border-"]),
+.dark .border-cyan-200:not([class*="dark:border-"]),
+.dark .border-cyan-300:not([class*="dark:border-"]) {
+  border-color: color-mix(in srgb, var(--ui-blue) 32%, transparent) !important;
+}
+
+.dark .bg-gray-50:not([class*="dark:bg-"]),
+.dark .bg-gray-100:not([class*="dark:bg-"]),
+.dark .bg-gray-200:not([class*="dark:bg-"]),
+.dark .bg-slate-50:not([class*="dark:bg-"]),
+.dark .bg-slate-100:not([class*="dark:bg-"]),
+.dark .bg-slate-200:not([class*="dark:bg-"]),
+.dark .bg-zinc-50:not([class*="dark:bg-"]),
+.dark .bg-zinc-100:not([class*="dark:bg-"]),
+.dark .bg-zinc-200:not([class*="dark:bg-"]),
+.dark .bg-neutral-50:not([class*="dark:bg-"]),
+.dark .bg-neutral-100:not([class*="dark:bg-"]),
+.dark .bg-neutral-200:not([class*="dark:bg-"]),
+.dark .bg-stone-50:not([class*="dark:bg-"]),
+.dark .bg-stone-100:not([class*="dark:bg-"]),
+.dark .bg-stone-200:not([class*="dark:bg-"]) {
+  background-color: var(--ui-surface-soft) !important;
+}
+
+/* Tailwind 的 dark:bg-gray-* 偏蓝，统一映射到中性深色层级，和其他卡片同一色系。 */
+.dark .dark\:bg-gray-900,
+.dark .dark\:bg-gray-900\/30,
+.dark .dark\:bg-gray-900\/50,
+.dark .dark\:bg-gray-900\/60 {
+  background-color: var(--ui-bg-soft) !important;
+}
+
+.dark .dark\:bg-gray-800,
+.dark .dark\:bg-gray-800\/60 {
+  background-color: var(--ui-surface) !important;
+}
+
+.dark .dark\:bg-gray-700,
+.dark .dark\:bg-gray-700\/30,
+.dark .dark\:bg-gray-700\/50,
+.dark .dark\:bg-slate-700 {
+  background-color: var(--ui-surface-soft) !important;
+}
+
+.dark .dark\:bg-gray-600 {
+  background-color: color-mix(in srgb, var(--ui-surface-soft) 70%, #ffffff 8%) !important;
 }

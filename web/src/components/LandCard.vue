@@ -1,212 +1,132 @@
 <script setup lang="ts">
-import OfficialCrystalMutation from './OfficialCrystalMutation.vue'
-import OfficialBichonMutation from './OfficialBichonMutation.vue'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   land: any
-  showActions?: boolean
-  farmGrid?: boolean
-  farmGridRowOffset?: number
-  isometric?: boolean
+  showDetails?: boolean
+  selectable?: boolean
   selected?: boolean
-  selectionActive?: boolean
+  selectionDisabled?: boolean
+  selectionLabel?: string
+  showFertilizerActions?: boolean
+  fertilizerPending?: boolean
+  normalFertilizerDisabled?: boolean
+  organicFertilizerDisabled?: boolean
+  organicFertilizerLabel?: string
+  normalFertilizerLabel?: string
+  showFarmingAction?: boolean
+  farmingPending?: boolean
+  farmingDisabled?: boolean
 }>(), {
-  showActions: true,
-  farmGrid: false,
-  farmGridRowOffset: 0,
-  isometric: false,
+  selectable: false,
   selected: false,
-  selectionActive: false,
+  selectionDisabled: false,
+  selectionLabel: '',
+  showFertilizerActions: false,
+  fertilizerPending: false,
+  normalFertilizerDisabled: false,
+  organicFertilizerDisabled: false,
+  organicFertilizerLabel: '',
+  normalFertilizerLabel: '',
+  showFarmingAction: false,
+  farmingPending: false,
+  farmingDisabled: false,
 })
 
 const emit = defineEmits<{
-  (e: 'fertilize', land: any): void
-  (e: 'remove', land: any): void
-  (e: 'select', land: any): void
+  select: [land: any]
+  fertilize: [land: any, fertilizerType: 'normal' | 'organic']
+  farm: [land: any]
+  details: [land: any]
 }>()
 
 const land = computed(() => props.land)
-const now = ref(Date.now())
-const cardElement = ref<HTMLElement | null>(null)
-const bubbleElement = ref<HTMLElement | null>(null)
-const floatingBubbleStyle = ref<Record<string, string>>({})
-const floatingBubbleBelow = ref(false)
-let timer: ReturnType<typeof setInterval> | null = null
 
-const floatingBubbleVisible = computed(() => props.selected)
-
-async function updateFloatingBubblePosition() {
-  if (!props.isometric || !floatingBubbleVisible.value)
-    return
-  await nextTick()
-  const card = cardElement.value
-  const bubble = bubbleElement.value
-  if (!card || !bubble)
-    return
-  const cardRect = card.getBoundingClientRect()
-  const width = bubble.offsetWidth
-  const height = bubble.offsetHeight
-  const gap = 10
-  const margin = 8
-  const spaceAbove = cardRect.top - margin - gap
-  const spaceBelow = window.innerHeight - cardRect.bottom - margin - gap
-  const below = spaceAbove < height && spaceBelow > spaceAbove
-  const idealTop = below ? cardRect.bottom + gap : cardRect.top - height - gap
-  const left = Math.min(window.innerWidth - width - margin, Math.max(margin, cardRect.left + cardRect.width / 2 - width / 2))
-  const top = Math.min(window.innerHeight - height - margin, Math.max(margin, idealTop))
-  floatingBubbleBelow.value = below
-  floatingBubbleStyle.value = {
-    '--bubble-arrow-left': `${Math.min(width - 18, Math.max(18, cardRect.left + cardRect.width / 2 - left))}px`,
-    'left': `${left}px`,
-    'top': `${top}px`,
-  }
-}
-
-function handleBubbleAction(type: 'fertilize' | 'remove') {
-  if (type === 'fertilize')
-    emit('fertilize', land.value)
-  else
-    emit('remove', land.value)
-}
-
-onMounted(() => {
-  timer = setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-  window.addEventListener('resize', updateFloatingBubblePosition)
-  window.addEventListener('scroll', updateFloatingBubblePosition, true)
-})
-
-onUnmounted(() => {
-  if (timer)
-    clearInterval(timer)
-  window.removeEventListener('resize', updateFloatingBubblePosition)
-  window.removeEventListener('scroll', updateFloatingBubblePosition, true)
-})
-
-const isFertilizable = computed(() =>
-  Number(land.value?.matureInSec) > 0
-  && land.value?.status !== 'locked'
-  && land.value?.status !== 'empty',
-)
-
-const isRemovable = computed(() =>
-  land.value?.status !== 'locked'
-  && land.value?.status !== 'empty'
-  && Boolean(
-    land.value?.plantName
-    || land.value?.seedImage
-    || Number(land.value?.matureInSec) > 0
-    || ['dead', 'growing', 'harvestable', 'stealable'].includes(String(land.value?.status || '')),
-  ),
-)
-
-const canFertilize = computed(() => props.showActions && isFertilizable.value)
-const canRemove = computed(() => props.showActions && isRemovable.value)
-
-const landTextureName = computed(() => {
-  const targetLand = land.value || {}
-  const level = Math.min(5, Math.max(1, Number(targetLand.level) || 1))
-  const isSnow = Boolean(
-    targetLand.isSnow
-    || targetLand.snow
-    || targetLand.snowy
-    || String(targetLand.weather || '').toLowerCase() === 'snow',
-  )
-
-  if (targetLand.status === 'locked')
-    return isSnow ? 'land_locked_snow' : 'land_locked'
-
-  if (targetLand.needWater) {
-    if (level === 1 && isSnow)
-      return 'land_dry1_snow'
-    return `land_dry${level}`
-  }
-
-  if (level === 1 && isSnow)
-    return 'land_valid1_snow'
-  return `land_valid${level}`
-})
-
-const landTextureUrl = computed(() => {
-  if (Number(land.value?.plantSize) > 1)
-    return `/game-config/land_images/land_valid${Math.min(5, Math.max(1, Number(land.value?.level) || 1))}_2x2.png`
-  return `/game-config/land_images/${landTextureName.value}.png`
-})
-
-const shouldRotateLandTexture = computed(() => {
-  const level = Number(land.value?.level) || 1
-  // 与 FarmPanel 的 Canvas 保持一致，避免选中 2x2 土地后再次翻转。
-  return level === 5 && Number(land.value?.plantSize) <= 1
-})
+// 上游资源已统一按变异 ID 命名；仍保留加载失败回退，兼容尚无 PNG 的变异。
+const failedMutantIcons = ref(new Set<number>())
 
 const mutantEffects = computed(() => {
   const effects = Array.isArray(land.value?.mutantEffects) ? land.value.mutantEffects : []
-  return effects
-    .map((effect: any) => {
-      const icon = String(effect?.icon || '').trim()
-      return {
+  if (effects.length > 0) {
+    return effects
+      .map((effect: any) => ({
         id: Number(effect?.id) || 0,
-        name: String(effect?.name || effect?.effect_name || icon || '变异').trim(),
-        icon,
-        image: icon === 'lightning'
-          ? '/activity/rain-poem/lightning-sense.png?v=2'
-          : (icon ? `/game-config/seed_images_named/mutant/${icon}.png` : ''),
-        tag: String(effect?.tag || '').trim(),
+        name: String(effect?.name || effect?.effect_name || '').trim(),
+        icon: String(effect?.icon || '').trim(),
         description: String(effect?.description || effect?.desc || effect?.tips || '').trim(),
+      }))
+      .filter((effect: { name: string }) => !!effect.name)
+  }
+  const ids = Array.isArray(land.value?.mutantConfigIds) ? land.value.mutantConfigIds : []
+  return ids
+    .map((id: any) => {
+      const numericId = Number(id) || 0
+      return {
+        id: numericId,
+        name: numericId > 0 ? `变异 #${numericId}` : '',
+        icon: '',
+        description: '',
       }
     })
-    .filter((effect: any) => effect.icon)
+    .filter((effect: { name: string }) => !!effect.name)
 })
 
-const hasGoldenMutation = computed(() => mutantEffects.value.some((effect: any) =>
-  effect.id === 5 || effect.icon.toLowerCase() === 'golden',
+const purpleCrystalResonancePercent = computed(() => (
+  Math.max(0, Number(land.value?.purpleCrystalResonanceExpBonus) || 0) / 100
 ))
 
-function hasMutation(id: number, icon: string) {
-  return mutantEffects.value.some((effect: any) =>
-    effect.id === id || effect.icon.toLowerCase() === icon,
-  )
-}
+const growProgress = computed(() => {
+  const matureInSec = land.value.matureInSec || 0
+  const totalGrowTime = land.value.totalGrowTime || 0
 
-const hasFrozenMutation = computed(() => hasMutation(1, 'frozen'))
-const hasLoveMutation = computed(() => hasMutation(2, 'love'))
-const hasDarkMutation = computed(() => hasMutation(3, 'dark'))
-const hasMoistMutation = computed(() => hasMutation(4, 'moist'))
-const hasLightningMutation = computed(() => hasMutation(12, 'lightning'))
-const hasCrystalMutation = computed(() => hasMutation(14, 'crystal'))
-const hasBichonMutation = computed(() => hasMutation(15, 'bichon'))
-const hasParadiseMutation = computed(() => hasMutation(16, 'leyuan'))
-const darkSmokeImageUrl = '/game-config/effect_images/mutant/dark-smoke.png'
-const darkParticleImageUrl = '/game-config/effect_images/mutant/dark-particle.png'
+  if (totalGrowTime <= 0 || matureInSec <= 0) {
+    return 0
+  }
 
-// seedImage 是背包物品图标，不能用于地块；plantImage 包含客户端通用种子贴图
-// model/v4/zhongzi，以及各作物从 Crop_*_2 开始的生长阶段贴图。
-const cropImageUrl = computed(() => {
-  return String(land.value?.plantImage || '').trim()
+  const progress = Math.min(100, Math.max(0, (matureInSec / totalGrowTime) * 100))
+  return progress
 })
 
-function getLandStatusClass(targetLand: any) {
-  const status = targetLand.status
-  const level = Number(targetLand.level) || 0
+function getLandStatusClass(land: any) {
+  const status = land.status
+  const level = Number(land.level) || 0
 
   if (status === 'locked')
-    return 'land-level-locked bg-slate-50/90 dark:bg-slate-900/80 border-slate-300 dark:border-slate-700 border-dashed'
+    return 'land-locked opacity-60 border-dashed border-gray-300 dark:border-gray-600'
 
-  const baseClass = `land-level-${Math.min(5, Math.max(1, level || 1))} bg-stone-50/90 dark:bg-stone-950/80 border-stone-300 dark:border-stone-700`
+  let baseClass = 'soil-level-0'
 
+  // 土地等级样式 — soil texture classes
+  switch (level) {
+    case 1: // 普通土地
+      baseClass = 'soil-level-1'
+      break
+    case 2: // 红土地
+      baseClass = 'soil-level-2'
+      break
+    case 3: // 黑土地
+      baseClass = 'soil-level-3'
+      break
+    case 4: // 金土地
+      baseClass = 'soil-level-4'
+      break
+    case 5: // 紫金土地
+      baseClass = 'soil-level-5'
+      break
+  }
+
+  // 状态叠加
   if (status === 'dead')
-    return 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 grayscale'
+    return 'land-dead border-gray-400 dark:border-gray-600 grayscale'
 
   if (status === 'harvestable')
-    return `${baseClass} ring-2 ring-yellow-500 ring-offset-1 dark:ring-offset-gray-900`
+    return `${baseClass} land-harvestable`
 
   if (status === 'stealable')
-    return `${baseClass} ring-2 ring-purple-500 ring-offset-1 dark:ring-offset-gray-900`
+    return `${baseClass} land-stealable`
 
-  if (mutantEffects.value.length > 0)
-    return `${baseClass} ring-1 ring-pink-300 dark:ring-pink-700`
+  if (status === 'growing')
+    return baseClass
 
   return baseClass
 }
@@ -214,55 +134,11 @@ function getLandStatusClass(targetLand: any) {
 function formatTime(sec: number) {
   if (sec <= 0)
     return ''
-
-  const wholeSeconds = Math.floor(sec)
-  const h = Math.floor(wholeSeconds / 3600)
-  const m = Math.floor((wholeSeconds % 3600) / 60)
-  const s = wholeSeconds % 60
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
   return `${h > 0 ? `${h}:` : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
-
-const statusLabel = computed(() => {
-  const status = String(land.value?.status || '')
-  const phaseName = String(land.value?.phaseName || '').trim()
-
-  // “生长中”只是地块的操作状态；详情里应展示当前作物阶段。
-  // 否则种子、发芽、小叶、大叶和开花期都会被错误地显示成同一个状态。
-  if (status === 'growing' && phaseName)
-    return phaseName
-
-  const labels: Record<string, string> = {
-    harvestable: '可收获',
-    stealable: '可采摘',
-    harvested: '已成熟',
-    growing: '生长中',
-    dead: '已枯萎',
-    empty: '空闲',
-    locked: '未解锁',
-  }
-  return labels[status] || phaseName || '未知状态'
-})
-
-const phaseProgress = computed(() => {
-  const start = Number(land.value?.phaseStartTime) || 0
-  const end = Number(land.value?.phaseEndTime) || 0
-  if (end > start) {
-    const duration = end - start
-    const elapsed = Math.min(duration, Math.max(0, now.value / 1000 - start))
-    return {
-      percent: Math.round(elapsed / duration * 100),
-      elapsed,
-      duration,
-    }
-  }
-  if (['harvestable', 'stealable', 'harvested', 'dead'].includes(String(land.value?.status || ''))) {
-    return { percent: 100, elapsed: 0, duration: 0 }
-  }
-  return null
-})
-
-watch(floatingBubbleVisible, updateFloatingBubblePosition, { flush: 'post' })
-watch(() => [phaseProgress.value?.percent, mutantEffects.value.length], updateFloatingBubblePosition, { flush: 'post' })
 
 function getSafeImageUrl(url: string) {
   if (!url)
@@ -272,1251 +148,1048 @@ function getSafeImageUrl(url: string) {
   return url
 }
 
-function getFarmGridStyle(targetLand: any) {
-  if (!props.farmGrid)
-    return undefined
-
-  const occupiedIds = Array.isArray(targetLand?.occupiedLandIds)
-    ? targetLand.occupiedLandIds.map(Number).filter((id: number) => id > 0)
-    : []
-  const anchorId = occupiedIds.length > 1
-    ? Math.min(...occupiedIds)
-    : Number(targetLand?.id)
-  if (!anchorId)
-    return undefined
-
-  return {
-    gridColumnStart: ((anchorId - 1) % 4) + 1,
-    gridRowStart: Math.max(1, Math.floor((anchorId - 1) / 4) + 1 - props.farmGridRowOffset),
+function getLandTypeName(level: number) {
+  const typeMap: Record<number, string> = {
+    0: '普通土地',
+    1: '普通土地',
+    2: '红土地',
+    3: '黑土地',
+    4: '金土地',
+    5: '紫金土地',
   }
+  return typeMap[Number(level) || 0] || ''
+}
+function getPlantSizeText(land: any) {
+  const size = Number(land?.plantSize) || 1
+  if (size <= 1)
+    return ''
+  return `${size}x${size}`
 }
 
-function getFarmGridColumnClass(targetLand: any) {
-  if (!props.farmGrid && !props.isometric)
-    return ''
-  const occupiedIds = Array.isArray(targetLand?.occupiedLandIds)
-    ? targetLand.occupiedLandIds.map(Number).filter((id: number) => id > 0)
-    : []
-  const anchorId = occupiedIds.length > 1 ? Math.min(...occupiedIds) : Number(targetLand?.id)
-  return anchorId ? `land-grid-column-${((anchorId - 1) % 4) + 1}` : ''
+function landTypeBadgeClass(level: number) {
+  const lv = Number(level) || 0
+  const map: Record<number, string> = {
+    0: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    1: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    2: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+    3: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+    4: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    5: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  }
+  return map[lv] || map[0]
 }
 
-function getIsometricBubbleClass(targetLand: any) {
-  if (!props.isometric)
+function activateSelection() {
+  if (props.selectable && !props.selectionDisabled)
+    emit('select', props.land)
+}
+
+function requestFertilize(event: Event, fertilizerType: 'normal' | 'organic') {
+  event.stopPropagation()
+  if (props.fertilizerPending)
+    return
+  if (fertilizerType === 'normal' && props.normalFertilizerDisabled)
+    return
+  if (fertilizerType === 'organic' && props.organicFertilizerDisabled)
+    return
+  emit('fertilize', props.land, fertilizerType)
+}
+
+function requestFarming(event: Event) {
+  event.stopPropagation()
+  if (!props.farmingPending && !props.farmingDisabled)
+    emit('farm', props.land)
+}
+
+const normalRemainingText = computed(() => {
+  const left = Number(land.value?.leftInorcFertTimes)
+  if (!Number.isFinite(left) || left <= 0)
     return ''
-  const occupiedIds = Array.isArray(targetLand?.occupiedLandIds)
-    ? targetLand.occupiedLandIds.map(Number).filter((id: number) => id > 0)
-    : []
-  const anchorId = occupiedIds.length > 1 ? Math.min(...occupiedIds) : Number(targetLand?.id)
-  if (!anchorId)
-    return ''
-  const column = (anchorId - 1) % 4
-  const row = Math.floor((anchorId - 1) / 4)
-  return column + row <= 1 ? 'land-bubble-below' : ''
+  return `普通剩 ${left}`
+})
+
+function interactionEffectBadges(land: any) {
+  const effects = Array.isArray(land?.interactionEffects) ? land.interactionEffects : []
+  const seen = new Set<string>()
+  return effects
+    .filter((effect: any) => effect?.confirmed && effect?.itemId)
+    .map((effect: any) => ({
+      itemId: String(effect.itemId),
+      name: String(effect.itemName || `道具${effect.itemId}`),
+      title: `${String(effect.itemName || `道具${effect.itemId}`)}：已生效`,
+    }))
+    .filter((effect: any) => {
+      if (seen.has(effect.itemId))
+        return false
+      seen.add(effect.itemId)
+      return true
+    })
+}
+
+function interactionBadgeClass(itemId: string) {
+  if (itemId === '301101')
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+  if (itemId === '301102')
+    return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+  if (itemId === '301103')
+    return 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300'
+  if (itemId === '5006')
+    return 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+}
+
+function mutantBadgeClass(effect: { icon?: string }) {
+  const icon = String(effect?.icon || '').toLowerCase()
+  const map: Record<string, string> = {
+    golden: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    frozen: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+    ice: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+    snow: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+    love: 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300',
+    dark: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+    moist: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300',
+    haha: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+    tata: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+    lotus: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+    moon: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
+    mian: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300',
+    crystal: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+    desert: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+    lucky: 'bg-lime-100 text-lime-800 dark:bg-lime-900/40 dark:text-lime-300',
+    luxury: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
+    shinning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+    lightning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    butterfly: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300',
+  }
+  return map[icon] || 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300'
+}
+
+function mutantIconUrl(id: number) {
+  const numericId = Number(id) || 0
+  return numericId > 0 ? `/game-config/seed_images_named/mutant/${numericId}.png` : ''
+}
+
+function mutantIconName(effect: { icon?: string }) {
+  return String(effect?.icon || '').trim().toLowerCase()
+}
+
+function showMutantImage(effect: { id?: number }) {
+  const id = Number(effect?.id) || 0
+  return id > 0 && !failedMutantIcons.value.has(id)
+}
+
+function markMutantIconFailed(effect: { id?: number }) {
+  const id = Number(effect?.id) || 0
+  if (id > 0)
+    failedMutantIcons.value = new Set(failedMutantIcons.value).add(id)
 }
 </script>
 
 <template>
   <div
-    ref="cardElement"
-    class="land-card relative h-full min-h-0 flex flex-col cursor-pointer items-center rounded-lg px-2 pb-11 pt-2 transition"
+    class="land-card relative min-h-[160px] flex flex-col items-center border-2 cartoon-card rounded-2xl p-3 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
     :class="[
       getLandStatusClass(land),
-      getFarmGridColumnClass(land),
-      getIsometricBubbleClass(land),
       {
-        'col-span-2 row-span-2 justify-center px-4 pt-3': !isometric && Number(land.plantSize) > 1,
-        'land-isometric': isometric,
-        'land-isometric-size-2': isometric && Number(land.plantSize) > 1,
-        'land-card-selected': selected,
+        'land-card--selectable': selectable,
+        'land-card--selected': selected,
+        'land-card--selection-disabled': selectable && selectionDisabled,
       },
     ]"
-    :style="getFarmGridStyle(land)"
-    :role="isometric ? undefined : 'button'"
-    :aria-label="isometric ? undefined : `土地 #${land.id} ${land.plantName || ''}`"
-    :aria-pressed="isometric ? undefined : selected"
-    :tabindex="isometric ? undefined : 0"
-    @click="!isometric && $emit('select', land)"
-    @keydown.enter.prevent="!isometric && $emit('select', land)"
-    @keydown.space.prevent="!isometric && $emit('select', land)"
+    :role="selectable ? 'button' : undefined"
+    :tabindex="selectable && !selectionDisabled ? 0 : undefined"
+    :aria-pressed="selectable ? selected : undefined"
+    :aria-disabled="selectable ? selectionDisabled : undefined"
+    @click="activateSelection"
+    @keydown.enter.prevent="activateSelection"
+    @keydown.space.prevent="activateSelection"
   >
-    <button
-      v-if="isometric"
-      type="button"
-      class="land-hit-area absolute"
-      :aria-label="`土地 #${land.id} ${land.plantName || ''}`"
-      :aria-pressed="selected"
-      @click.stop="$emit('select', land)"
-    />
-    <div
-      class="land-ground-layer pointer-events-none absolute inset-0"
-      aria-hidden="true"
-    >
-      <img
-        :src="landTextureUrl"
-        alt=""
-        :class="[
-          Number(land.plantSize) > 1 ? 'land-ground-merged' : 'land-ground-single',
-          { 'land-ground-rotated': shouldRotateLandTexture },
-        ]"
-      >
-    </div>
-
-    <div class="land-card-id absolute left-1 top-1 text-[10px] text-gray-400 font-mono">
+    <!-- Land ID badge -->
+    <div class="absolute left-2 top-2 text-[10px] font-display font-mono opacity-50">
       #{{ land.id }}
     </div>
 
     <div
-      v-if="land?.qixiDew?.applied"
-      class="qixi-dew-effect pointer-events-none absolute"
-      title="鹊羽灵露已生效"
-      aria-label="鹊羽灵露已生效"
+      v-if="selectable"
+      class="selection-cue absolute right-2 top-2"
+      :class="selected ? 'selection-cue--selected' : selectionDisabled ? 'selection-cue--disabled' : 'selection-cue--ready'"
+      :title="selectionLabel || (selected ? '已选择' : selectionDisabled ? '不可选择' : '点击选择')"
     >
-      <img class="qixi-dew-feather qixi-dew-feather-1" src="/game-config/effect_images/qixi-dew/effect_yumao.png" alt="">
-      <img class="qixi-dew-feather qixi-dew-feather-2" src="/game-config/effect_images/qixi-dew/effect_yumao.png" alt="">
-      <img class="qixi-dew-feather qixi-dew-feather-3" src="/game-config/effect_images/qixi-dew/effect_yumao.png" alt="">
-      <img class="qixi-dew-feather qixi-dew-feather-4" src="/game-config/effect_images/qixi-dew/effect_yumao.png" alt="">
-      <img class="qixi-dew-feather qixi-dew-feather-5" src="/game-config/effect_images/qixi-dew/effect_yumao.png" alt="">
+      <span class="selection-cue__mark">
+        <span v-if="selected" class="i-carbon-checkmark" />
+        <span v-else-if="selectionDisabled" class="i-carbon-subtract" />
+      </span>
+      <span v-if="selectionLabel" class="selection-cue__label">{{ selectionLabel }}</span>
     </div>
 
+    <!-- Plant size badge (joint planting) -->
     <div
-      v-if="mutantEffects.length > 0"
-      class="land-mutant-effects absolute left-1 top-5 flex flex-col gap-1"
+      v-if="land.plantSize > 1"
+      class="absolute right-2 rounded-full bg-pink-100 px-1.5 py-0.5 text-[10px] text-pink-700 font-bold shadow-sm dark:bg-pink-900/30 dark:text-pink-300"
+      :class="selectable ? 'top-8' : 'top-2'"
     >
-      <img
-        v-for="effect in mutantEffects"
-        :key="`${land.id}-${effect.id}-${effect.icon}`"
-        :src="effect.image"
-        :alt="effect.name"
-        :title="effect.tag && effect.tag !== '无' ? `${effect.name} · ${effect.tag}` : effect.name"
-        class="h-4 w-4 rounded-sm object-contain drop-shadow-sm"
-        loading="lazy"
-      >
+      合种 {{ getPlantSizeText(land) }}
     </div>
 
+    <!-- Plant image with growth animation -->
     <div
-      class="land-card-image mb-0.5 mt-3 flex shrink-0 items-center justify-center"
-      :class="[
-        Number(land.plantSize) > 1 ? 'h-16 w-16' : 'h-9 w-9',
-        {
-          'land-card-image-seed': Number(land.imagePhase) === 1,
-          'land-card-image-seed-single': Number(land.imagePhase) === 1 && Number(land.plantSize) <= 1,
-          'land-card-image-golden': hasGoldenMutation && Boolean(cropImageUrl),
-          'land-card-image-frozen': hasFrozenMutation && Boolean(cropImageUrl),
-          'land-card-image-love': hasLoveMutation && Boolean(cropImageUrl),
-          'land-card-image-dark': hasDarkMutation && Boolean(cropImageUrl),
-          'land-card-image-moist': hasMoistMutation && Boolean(cropImageUrl),
-          'land-card-image-lightning': hasLightningMutation && Boolean(cropImageUrl),
-          'land-card-image-pet-mutation': (hasCrystalMutation || hasBichonMutation) && Boolean(cropImageUrl),
-          'land-card-image-paradise': hasParadiseMutation && Boolean(cropImageUrl),
-        },
-      ]"
+      class="plant-container mb-1 mt-5 h-12 w-12 flex items-center justify-center"
+      :class="{ 'animate-plant-grow': land.matureInSec > 0 }"
     >
-      <div v-if="hasGoldenMutation && cropImageUrl" class="golden-mutation-aura" aria-hidden="true" />
-      <div v-if="hasGoldenMutation && cropImageUrl" class="golden-mutation-sparkles" aria-hidden="true">
-        <i v-for="index in 6" :key="index" />
-      </div>
-      <div v-if="hasFrozenMutation && cropImageUrl" class="frozen-mutation-layer" aria-hidden="true">
-        <i v-for="index in 6" :key="index">✦</i>
-      </div>
-      <div v-if="hasLoveMutation && cropImageUrl" class="love-mutation-layer" aria-hidden="true">
-        <i v-for="index in 5" :key="index">♥</i>
-      </div>
-      <div v-if="hasDarkMutation && cropImageUrl" class="dark-mutation-layer" aria-hidden="true">
-        <img v-for="index in 4" :key="`smoke-${index}`" :src="darkSmokeImageUrl" alt="" class="dark-mutation-smoke">
-        <img v-for="index in 5" :key="`particle-${index}`" :src="darkParticleImageUrl" alt="" class="dark-mutation-particle">
-      </div>
-      <div v-if="hasMoistMutation && cropImageUrl" class="moist-mutation-layer" aria-hidden="true">
-        <i v-for="index in 4" :key="index" />
-      </div>
-      <div v-if="hasLightningMutation && cropImageUrl" class="lightning-mutation-layer" aria-hidden="true">
-        <img
-          v-for="index in 4"
-          :key="`lightning-frame-${index}`"
-          :src="`/game-config/effect_images/rain-poem/lightning-0${index - 1}.png`"
-          :class="`lightning-mutation-frame lightning-mutation-frame-${index}`"
-          alt=""
-        >
-      </div>
-      <OfficialCrystalMutation
-        v-if="hasCrystalMutation && cropImageUrl && !['dead', 'empty', 'locked'].includes(land.status)"
-      />
-      <OfficialBichonMutation
-        v-if="hasBichonMutation && cropImageUrl && !['dead', 'empty', 'locked'].includes(land.status)"
-      />
       <img
-        v-if="cropImageUrl"
-        :src="getSafeImageUrl(cropImageUrl)"
-        class="land-crop-image max-h-full max-w-full object-contain"
+        v-if="land.seedImage"
+        :src="getSafeImageUrl(land.seedImage)"
+        class="max-h-full max-w-full object-contain drop-shadow-sm"
         loading="lazy"
         referrerpolicy="no-referrer"
       >
-      <div v-else-if="Number(land.phase) !== 1" class="i-carbon-sprout text-xl text-gray-300" />
+      <span v-else class="i-carbon-sprout text-2xl opacity-30" />
     </div>
 
-    <div
-      class="land-card-name w-full shrink-0 truncate px-1 text-center text-gray-900 font-bold leading-5 dark:text-gray-100"
-      :class="Number(land.plantSize) > 1 ? 'text-sm' : 'text-xs'"
-      :title="land.plantName"
-    >
+    <!-- Plant name -->
+    <div class="w-full truncate px-1 text-center text-xs font-bold" :title="land.plantName">
       {{ land.plantName || '-' }}
     </div>
 
-    <div class="land-card-meta mb-0.5 mt-0.5 w-full shrink-0 text-center text-[10px] text-gray-500">
-      <span v-if="land.matureInSec > 0" class="text-orange-800 font-medium dark:text-orange-300">
-        预计 {{ formatTime(land.matureInSec) }} 后成熟
+    <!-- Time/status line -->
+    <div class="mb-0.5 mt-0.5 w-full text-center text-[10px]">
+      <span v-if="land.matureInSec > 0" class="text-orange-600 font-bold dark:text-orange-400">
+        <span class="i-carbon-time inline-block align-[-1px]" /> {{ formatTime(land.matureInSec) }}
       </span>
-      <span v-else>
+      <span v-else class="text-gray-500">
         {{ land.phaseName || (land.status === 'locked' ? '未解锁' : '未开垦') }}
       </span>
     </div>
 
-    <div class="mb-0.5 mt-0.5 flex shrink-0 items-center justify-center gap-1.5">
-      <span class="land-card-season whitespace-nowrap text-[10px] text-gray-800 font-medium dark:text-gray-200">
-        季数 {{ land.totalSeason > 0 ? (`${land.currentSeason}/${land.totalSeason}`) : '-/-' }}
+    <!-- Cartoon progress bar -->
+    <div v-if="land.matureInSec > 0 && land.totalGrowTime > 0" class="w-full px-2">
+      <div class="farm-progress">
+        <div
+          class="farm-progress-fill"
+          :style="{ width: `${growProgress}%` }"
+        />
+      </div>
+    </div>
+
+    <!-- 土地类型、季数与详情入口合并为一行，不再单独占一行。 -->
+    <div class="land-meta mt-0.5 flex items-center gap-1.5 text-[10px]">
+      <span class="rounded-full px-1.5 py-0.5 font-display" :class="landTypeBadgeClass(land.level)">
+        {{ getLandTypeName(land.level) }}
+      </span>
+      <span class="text-gray-400">
+        季 {{ land.totalSeason > 0 ? (`${land.currentSeason}/${land.totalSeason}`) : '-/-' }}
+      </span>
+      <button v-if="showDetails" type="button" class="land-details-link" :aria-label="`查看第 ${land.id} 块土地详情`" @click.stop="emit('details', land)" @keydown.stop>
+        详情<span class="i-carbon-chevron-right" />
+      </button>
+    </div>
+
+    <!-- Status Badges (game-style) -->
+    <div class="mt-auto flex flex-wrap items-center justify-center gap-1 pt-1">
+      <span
+        v-if="purpleCrystalResonancePercent > 0"
+        class="badge-purple-crystal inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+        :title="`紫金土地上的任意变异作物经验 +${purpleCrystalResonancePercent}%`"
+      >
+        <span class="i-carbon-flash-filled" /> 紫晶共鸣
+      </span>
+      <span
+        v-for="effect in mutantEffects"
+        :key="effect.id || effect.name"
+        class="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+        :class="mutantBadgeClass(effect)"
+        :title="effect.description || effect.name"
+      >
+        <img
+          v-if="showMutantImage(effect)"
+          :src="mutantIconUrl(effect.id)"
+          :alt="effect.name"
+          class="h-3 w-3 object-contain"
+          @error="markMutantIconFailed(effect)"
+        >
+        <span v-else-if="mutantIconName(effect) === 'lightning'" class="i-carbon-lightning" />
+        <span v-else-if="mutantIconName(effect) === 'butterfly'" class="i-carbon-bee" />
+        <span v-else class="i-carbon-star" />
+        {{ effect.name }}
+      </span>
+      <span
+        v-for="effect in interactionEffectBadges(land)"
+        :key="effect.itemId"
+        class="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+        :class="interactionBadgeClass(effect.itemId)"
+        :title="effect.title"
+      >
+        <span class="i-carbon-checkmark-outline" /> {{ effect.name }}
+      </span>
+      <span
+        v-if="land.needWater"
+        class="badge-water inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+      >
+        <span class="i-carbon-rain-drop" /> 缺水
+      </span>
+      <span
+        v-if="land.needWeed"
+        class="inline-flex items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] text-green-700 font-bold dark:bg-green-900/40 dark:text-green-300"
+      >
+        <span class="i-carbon-clean" /> 杂草
+      </span>
+      <span
+        v-if="land.needBug"
+        class="badge-bug inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+      >
+        <span class="i-carbon-debug" /> 虫害
+      </span>
+      <span
+        v-if="land.status === 'harvestable'"
+        class="badge-harvest inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+      >
+        <span class="i-carbon-wheat" /> 收获
+      </span>
+      <span
+        v-if="land.status === 'stealable'"
+        class="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-700 font-bold dark:bg-purple-900/40 dark:text-purple-300"
+      >
+        <span class="i-carbon-touch-1" /> 可偷
+      </span>
+      <span
+        v-if="land.status === 'harvested'"
+        class="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700 font-bold dark:bg-gray-700 dark:text-gray-200"
+      >
+        <span class="i-carbon-wheat" /> 成熟不可偷
+      </span>
+      <span
+        v-if="showFertilizerActions && normalRemainingText"
+        class="inline-flex items-center gap-0.5 rounded-full bg-lime-100 px-1.5 py-0.5 text-[10px] text-lime-800 font-bold dark:bg-lime-900/40 dark:text-lime-300"
+      >
+        <span class="i-carbon-chemistry" /> {{ normalRemainingText }}
       </span>
     </div>
 
-    <div class="land-card-flags min-h-4 flex shrink-0 origin-bottom scale-90 gap-0.5 text-[10px]">
-      <span v-if="land.needWater" class="rounded bg-blue-100 px-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" title="需要浇水"><span v-if="isometric" class="i-carbon-rain-drop" /><template v-else>水</template></span>
-      <span v-if="land.needWeed" class="rounded bg-green-100 px-0.5 text-green-700 dark:bg-green-900/30 dark:text-green-400" title="需要除草"><span v-if="isometric" class="i-carbon-sprout" /><template v-else>草</template></span>
-      <span v-if="land.needBug" class="rounded bg-red-100 px-0.5 text-red-700 dark:bg-red-900/30 dark:text-red-400" title="需要除虫"><span v-if="isometric" class="i-carbon-warning-alt" /><template v-else>虫</template></span>
-      <span v-if="land.status === 'harvestable'" class="rounded bg-orange-100 px-0.5 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">可收</span>
-      <span v-else-if="land.status === 'stealable'" class="rounded bg-purple-100 px-0.5 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">可偷</span>
-    </div>
-
-    <div
-      v-if="canFertilize || canRemove"
-      class="land-actions absolute bottom-2 left-2 right-2 grid grid-cols-2 h-7 gap-1"
-    >
+    <div v-if="showFarmingAction" class="farming-action-wrap mt-2 w-full" @click.stop>
       <button
-        v-if="canFertilize"
         type="button"
-        class="land-action-button text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-        title="催熟"
-        @click.stop="$emit('fertilize', land)"
+        class="farming-action"
+        :disabled="farmingPending || farmingDisabled"
+        title="清理该地块的缺水、杂草、虫害或乌云，并同时处理农场中的青蛙"
+        @click="requestFarming"
       >
-        <span class="i-carbon-growth text-sm" />
-        <span>催熟</span>
-      </button>
-      <div v-else />
-
-      <button
-        v-if="canRemove"
-        type="button"
-        class="land-action-button text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/30"
-        title="铲除作物"
-        @click.stop="$emit('remove', land)"
-      >
-        <span class="i-carbon-trash-can text-sm" />
-        <span>铲除</span>
+        <span v-if="farmingPending" class="i-svg-spinners-90-ring-with-bg" />
+        <span v-else class="i-carbon-clean" />
+        务农
       </button>
     </div>
 
-    <Teleport v-if="farmGrid || isometric" to="body" :disabled="!isometric">
-      <div
-        v-show="!isometric || floatingBubbleVisible"
-        ref="bubbleElement"
-        class="land-bubble"
-        :class="{
-          'land-bubble-floating': isometric,
-          'land-bubble-floating-below': isometric && floatingBubbleBelow,
-        }"
-        :style="isometric ? floatingBubbleStyle : undefined"
-        role="dialog"
-        :aria-label="`土地 #${land.id} 详情`"
-        @click.stop
+    <div v-if="showFertilizerActions" class="fertilizer-actions mt-2 w-full" @click.stop>
+      <button
+        type="button"
+        class="fertilizer-action fertilizer-action--normal"
+        :disabled="fertilizerPending || normalFertilizerDisabled"
+        :title="normalFertilizerDisabled ? (normalFertilizerLabel || '本季已施过普通化肥') : '对该地块施一次普通化肥'"
+        @click="requestFertilize($event, 'normal')"
       >
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <div class="text-[10px] text-gray-400">
-              土地 #{{ land.id }}
-            </div>
-            <div class="truncate text-sm text-gray-900 font-bold dark:text-gray-100">
-              {{ land.plantName || '未种植' }}
-            </div>
-          </div>
-          <span class="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-medium dark:bg-green-900/30 dark:text-green-300">{{ statusLabel }}</span>
-        </div>
-
-        <div class="grid grid-cols-2 mt-2 gap-2 text-xs">
-          <div class="rounded-lg bg-gray-50 p-2 dark:bg-gray-900/60">
-            <div class="text-[10px] text-gray-400">
-              成熟倒计时
-            </div>
-            <div class="mt-0.5 font-semibold tabular-nums">
-              {{ land.matureInSec > 0 ? formatTime(land.matureInSec) : '—' }}
-            </div>
-          </div>
-          <div class="rounded-lg bg-gray-50 p-2 dark:bg-gray-900/60">
-            <div class="text-[10px] text-gray-400">
-              生长季数
-            </div>
-            <div class="mt-0.5 font-semibold">
-              {{ land.totalSeason > 0 ? `${land.currentSeason}/${land.totalSeason}` : '—' }}
-            </div>
-          </div>
-        </div>
-
-        <div v-if="phaseProgress" class="mt-2 rounded-lg bg-emerald-50 p-2 dark:bg-emerald-950/30">
-          <div class="flex items-center justify-between gap-2 text-[11px]">
-            <span class="truncate text-emerald-700 font-medium dark:text-emerald-300">
-              {{ land.phaseName || '当前阶段' }}
-            </span>
-            <span class="shrink-0 text-emerald-600 font-semibold tabular-nums dark:text-emerald-300">
-              {{ phaseProgress.percent }}%
-            </span>
-          </div>
-          <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/60">
-            <div
-              class="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
-              :style="{ width: `${phaseProgress.percent}%` }"
-            />
-          </div>
-          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-gray-400 tabular-nums">
-            <span>已进行 {{ formatTime(phaseProgress.elapsed) }}</span>
-            <span>本阶段 {{ formatTime(phaseProgress.duration) }}</span>
-          </div>
-        </div>
-
-        <div v-if="mutantEffects.length > 0" class="mt-2 rounded-lg bg-pink-50 p-2 dark:bg-pink-950/30">
-          <div class="mb-1 text-[10px] text-pink-500 font-medium dark:text-pink-300">
-            变异效果
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <div
-              v-for="effect in mutantEffects"
-              :key="`bubble-${land.id}-${effect.id}-${effect.icon}`"
-              class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] text-pink-700 shadow-sm dark:bg-gray-900 dark:text-pink-200"
-            >
-              <img :src="effect.image" :alt="effect.name" class="h-4 w-4 object-contain">
-              <span class="font-medium">{{ effect.name }}</span>
-              <span v-if="effect.tag && effect.tag !== '无'" class="text-[10px] text-pink-400">· {{ effect.tag }}</span>
-            </div>
-          </div>
-          <div class="mt-2 rounded-md bg-white/85 px-2 py-1.5 text-[11px] text-pink-700 shadow-sm space-y-1 dark:bg-gray-900/85 dark:text-pink-200">
-            <div v-for="effect in mutantEffects" :key="`description-${effect.id}-${effect.icon}`">
-              {{ effect.description || effect.name }}
-            </div>
-          </div>
-        </div>
-
-        <div v-if="land.needWater || land.needWeed || land.needBug" class="mt-2 flex flex-wrap gap-1 text-[10px]">
-          <span v-if="land.needWater" class="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">需要浇水</span>
-          <span v-if="land.needWeed" class="rounded-full bg-green-100 px-2 py-0.5 text-green-700">需要除草</span>
-          <span v-if="land.needBug" class="rounded-full bg-red-100 px-2 py-0.5 text-red-700">需要除虫</span>
-        </div>
-
-        <div v-if="isFertilizable || isRemovable" class="grid grid-cols-2 mt-2 gap-2">
-          <button type="button" class="bubble-action border-emerald-600 text-emerald-700 dark:text-emerald-300" :disabled="!isFertilizable" @click="handleBubbleAction('fertilize')">
-            <span class="i-carbon-growth" />催熟
-          </button>
-          <button type="button" class="bubble-action border-red-500 text-red-600 dark:text-red-300" :disabled="!isRemovable" @click="handleBubbleAction('remove')">
-            <span class="i-carbon-trash-can" />铲除
-          </button>
-        </div>
-      </div>
-    </Teleport>
+        <span v-if="fertilizerPending" class="i-svg-spinners-90-ring-with-bg" />
+        <span v-else class="i-carbon-chemistry" />
+        普通
+      </button>
+      <button
+        type="button"
+        class="fertilizer-action fertilizer-action--organic"
+        :disabled="fertilizerPending || organicFertilizerDisabled"
+        :title="organicFertilizerDisabled ? (organicFertilizerLabel || '已无法再施有机肥') : '对该地块施一次有机化肥'"
+        @click="requestFertilize($event, 'organic')"
+      >
+        <span v-if="fertilizerPending" class="i-svg-spinners-90-ring-with-bg" />
+        <span v-else class="i-carbon-sprout" />
+        有机
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.qixi-dew-effect {
-  z-index: 6;
-  left: 50%;
-  top: 46%;
-  width: 70%;
-  height: 72%;
-  transform: translate(-50%, -50%);
-  overflow: hidden;
+/* Land colors stay independent from the shared glass-card surface. */
+.land-card {
+  border-width: 2px;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 8px 20px rgba(40, 48, 44, 0.12);
 }
-
-.qixi-dew-effect img {
-  position: absolute;
-  display: block;
-  object-fit: contain;
+.land-card--selectable {
+  cursor: pointer;
   user-select: none;
 }
-
-.qixi-dew-feather {
-  top: -20%;
-  width: 22%;
-  opacity: 0;
-  transform-origin: center;
-  filter: brightness(1.55) saturate(0.7) drop-shadow(0 0 3px rgb(255 244 249 / 0.82));
-  animation: qixi-dew-feather-fall 4.8s linear infinite backwards;
+.land-card--selectable:focus-visible {
+  outline: 3px solid rgba(37, 116, 88, 0.34);
+  outline-offset: 3px;
 }
-
-.qixi-dew-feather-1 {
-  left: 4%;
-  animation-delay: -0.4s;
+.land-card--selected {
+  border-color: #257458 !important;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.72),
+    0 0 0 3px rgba(37, 116, 88, 0.2),
+    0 12px 24px rgba(37, 116, 88, 0.18) !important;
+  transform: translateY(-2px);
 }
-
-.qixi-dew-feather-2 {
-  left: 26%;
-  width: 17%;
-  animation-delay: -3.2s;
-  animation-duration: 5.4s;
+.land-card--selection-disabled {
+  cursor: not-allowed;
+  filter: saturate(0.65);
+  opacity: 0.72;
 }
-
-.qixi-dew-feather-3 {
-  left: 48%;
-  width: 24%;
-  animation-delay: -1.8s;
-  animation-duration: 5.8s;
-}
-
-.qixi-dew-feather-4 {
-  left: 68%;
-  width: 15%;
-  animation-delay: -4.3s;
-  animation-duration: 4.5s;
-}
-
-.qixi-dew-feather-5 {
-  left: 81%;
-  width: 12%;
-  animation-delay: -2.7s;
-  animation-duration: 6.2s;
-}
-
-.land-isometric-size-2 .qixi-dew-effect {
-  top: 45%;
-  width: 52%;
-  height: 68%;
-}
-
-@keyframes qixi-dew-feather-fall {
-  0% {
-    opacity: 0;
-    transform: translate3d(-8%, -8%, 0) rotate(-18deg) scale(0.72);
-  }
-  16% {
-    opacity: 0.3;
-    transform: translate3d(10%, 18%, 0) rotate(4deg) scale(0.82);
-  }
-  42% {
-    opacity: 0.58;
-    transform: translate3d(-12%, 58%, 0) rotate(-12deg) scale(0.92);
-  }
-  72% {
-    opacity: 0.4;
-    transform: translate3d(14%, 108%, 0) rotate(11deg) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(-5%, 160%, 0) rotate(-8deg) scale(1.05);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .qixi-dew-effect img {
-    animation: none !important;
-  }
-  .qixi-dew-feather {
-    display: none;
-  }
-  .qixi-dew-feather-3 {
-    display: block;
-    top: 38%;
-    opacity: 0.38;
-    transform: rotate(-8deg);
-  }
-}
-
-.land-card-image-golden {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border-radius: 42%;
-}
-
-.land-card-image-golden .land-crop-image {
-  position: relative;
+.selection-cue {
   z-index: 2;
-  animation: golden-crop-glow 2.4s ease-in-out infinite;
-}
-
-.golden-mutation-aura {
-  position: absolute;
-  z-index: 0;
-  inset: -6%;
-  border-radius: 50%;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   pointer-events: none;
-  background: radial-gradient(
-    circle,
-    rgb(255 248 184 / 0.78) 0 24%,
-    rgb(250 204 21 / 0.38) 43%,
-    rgb(245 158 11 / 0.12) 62%,
-    transparent 74%
-  );
-  filter: blur(2px);
-  animation: golden-aura-pulse 2.4s ease-in-out infinite;
+  line-height: 1.1;
 }
-
-.golden-mutation-sparkles {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  overflow: hidden;
-  border-radius: 44%;
-  pointer-events: none;
-  animation: golden-sparkle-orbit 9s linear infinite;
+.selection-cue--ready {
+  color: #257458;
 }
-
-.golden-mutation-sparkles i {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #fff8a6;
-  box-shadow: 0 0 4px 1px rgb(250 204 21 / 0.9);
-  animation: golden-sparkle-blink 1.8s ease-in-out infinite;
+.selection-cue--selected {
+  color: #257458;
 }
-
-.golden-mutation-sparkles i:nth-child(1) {
-  left: 12%;
-  top: 24%;
+.selection-cue--disabled {
+  color: #7d8782;
 }
-.golden-mutation-sparkles i:nth-child(2) {
-  right: 10%;
-  top: 18%;
-  animation-delay: -0.6s;
+.selection-cue__mark {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 2px 7px rgba(40, 62, 53, 0.14);
 }
-.golden-mutation-sparkles i:nth-child(3) {
-  right: 2%;
-  top: 57%;
-  animation-delay: -1.2s;
+.selection-cue__mark > span {
+  font-size: 15px;
 }
-.golden-mutation-sparkles i:nth-child(4) {
-  bottom: 8%;
-  left: 62%;
-  animation-delay: -0.3s;
+.selection-cue--selected .selection-cue__mark {
+  color: #fff;
+  border-color: #257458;
+  background: #257458;
 }
-.golden-mutation-sparkles i:nth-child(5) {
-  bottom: 14%;
-  left: 9%;
-  animation-delay: -0.9s;
+.selection-cue--disabled .selection-cue__mark {
+  color: #7d8782;
+  border-color: #aab2ae;
+  background: rgba(239, 242, 240, 0.96);
 }
-.golden-mutation-sparkles i:nth-child(6) {
-  left: 42%;
-  top: 2%;
-  animation-delay: -1.5s;
-}
-
-.land-card-image-pet-mutation,
-.land-card-image-frozen,
-.land-card-image-love,
-.land-card-image-dark,
-.land-card-image-moist,
-.land-card-image-lightning {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border-radius: 42%;
-}
-
-.land-card-image-frozen .land-crop-image {
-  position: relative;
-  z-index: 2;
-  animation: frozen-crop-glow 2.8s ease-in-out infinite;
-}
-
-.frozen-mutation-layer,
-.love-mutation-layer,
-.dark-mutation-layer,
-.moist-mutation-layer,
-.lightning-mutation-layer {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  overflow: hidden;
-  border-radius: 42%;
-  pointer-events: none;
-}
-
-.frozen-mutation-layer {
-  background: transparent;
-}
-
-.frozen-mutation-layer i {
-  position: absolute;
-  color: #e0f2fe;
-  font-size: 7px;
-  text-shadow: 0 0 4px #38bdf8;
-  animation: frozen-crystal-twinkle 1.9s ease-in-out infinite;
-}
-
-.frozen-mutation-layer i:nth-child(1) {
-  left: 4%;
-  top: 22%;
-}
-.frozen-mutation-layer i:nth-child(2) {
-  right: 5%;
-  top: 12%;
-  animation-delay: -0.5s;
-}
-.frozen-mutation-layer i:nth-child(3) {
-  right: -1%;
-  top: 56%;
-  animation-delay: -1s;
-}
-.frozen-mutation-layer i:nth-child(4) {
-  bottom: 3%;
-  left: 66%;
-  animation-delay: -1.5s;
-}
-.frozen-mutation-layer i:nth-child(5) {
-  bottom: 8%;
-  left: 5%;
-  animation-delay: -0.8s;
-}
-.frozen-mutation-layer i:nth-child(6) {
-  left: 45%;
-  top: -5%;
-  animation-delay: -1.3s;
-}
-
-.land-card-image-love .land-crop-image,
-.land-card-image-dark .land-crop-image {
-  position: relative;
-  z-index: 2;
-}
-
-.land-card-image-love .land-crop-image {
-  filter: saturate(1.22) brightness(1.05) drop-shadow(0 0 5px rgb(244 63 94 / 0.82));
-}
-
-.love-mutation-layer i {
-  position: absolute;
-  bottom: -2px;
-  color: #ff2f6d;
+.selection-cue__label {
+  padding: 4px 7px;
+  border: 1px solid rgba(37, 116, 88, 0.24);
+  border-radius: 999px;
+  color: #245f4b;
+  background: rgba(244, 252, 247, 0.96);
   font-size: 10px;
-  font-style: normal;
-  line-height: 1;
-  text-shadow:
-    0 0 2px #fff,
-    0 0 5px rgb(244 63 94 / 0.95);
-  animation: love-heart-rise 2.2s ease-in infinite;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgba(40, 62, 53, 0.1);
+}
+.selection-cue--disabled .selection-cue__label {
+  border-color: rgba(109, 119, 114, 0.22);
+  color: #69736e;
+  background: rgba(239, 242, 240, 0.96);
 }
 
-.love-mutation-layer i:nth-child(1) {
-  left: 8%;
-}
-.love-mutation-layer i:nth-child(2) {
-  left: 28%;
-  animation-delay: -0.7s;
-}
-.love-mutation-layer i:nth-child(3) {
-  left: 48%;
-  animation-delay: -1.4s;
-}
-.love-mutation-layer i:nth-child(4) {
-  left: 68%;
-  animation-delay: -2.1s;
-}
-.love-mutation-layer i:nth-child(5) {
-  left: 86%;
-  animation-delay: -2.5s;
+.land-card:hover:not(.land-card--selection-disabled):not(.land-card--selected) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 12px 26px rgba(40, 48, 44, 0.16);
+  transform: translateY(-1px);
 }
 
-.land-card-image-dark .land-crop-image {
-  animation: dark-crop-pulse 3.2s ease-in-out infinite;
+/* ===== Soil Texture Backgrounds by Level ===== */
+.soil-level-0 {
+  background: linear-gradient(180deg, #f5f0e8 0%, #e8dcc8 60%, #d4c4a0 100%);
+  border-color: #c9b88a;
+}
+.soil-level-1 {
+  /* 普通土地 */
+  background: linear-gradient(180deg, #f5f0e8 0%, #e8dcc8 60%, #d4c4a0 100%);
+  border-color: #c9b88a;
+}
+.soil-level-2 {
+  /* 红土地 — reddish-brown */
+  background:
+    radial-gradient(ellipse at 30% 70%, rgba(180, 80, 40, 0.2) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 25%, rgba(160, 60, 30, 0.15) 0%, transparent 45%),
+    linear-gradient(180deg, #e8b09a 0%, #c87850 45%, #a85830 100%);
+  border-color: #984828;
+}
+.soil-level-3 {
+  /* 黑土地 — dark rich soil */
+  background:
+    radial-gradient(ellipse at 25% 75%, rgba(40, 40, 40, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(60, 50, 40, 0.2) 0%, transparent 45%),
+    linear-gradient(180deg, #6b6058 0%, #4a3f35 45%, #2e2520 100%);
+  border-color: #3a2f25;
+  color: #e8e0d8;
+}
+.soil-level-4 {
+  /* 金土地 — golden shimmer */
+  background:
+    radial-gradient(ellipse at 30% 60%, rgba(255, 215, 0, 0.35) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 30%, rgba(255, 200, 50, 0.25) 0%, transparent 45%),
+    linear-gradient(180deg, #fff0b0 0%, #f0d060 45%, #d4a820 100%);
+  border-color: #c09818;
+}
+.soil-level-5 {
+  /* 紫金土地 — purple-gold shimmer */
+  background:
+    radial-gradient(ellipse at 25% 65%, rgba(168, 85, 247, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 30%, rgba(255, 215, 0, 0.3) 0%, transparent 45%),
+    linear-gradient(180deg, #f0e0ff 0%, #d4a8f0 30%, #c084fc 60%, #a855f7 100%);
+  border-color: #9333ea;
 }
 
-.dark-mutation-smoke,
-.dark-mutation-particle {
-  position: absolute;
-  object-fit: contain;
-  pointer-events: none;
+.land-locked {
+  background: linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%);
+}
+.land-dead {
+  background: linear-gradient(180deg, #b0b0b0 0%, #888888 100%);
 }
 
-.dark-mutation-smoke {
-  width: 58%;
-  opacity: 0;
-  filter: sepia(1) saturate(2.2) hue-rotate(225deg) brightness(0.48);
-  mix-blend-mode: multiply;
-  animation: dark-smoke-drift 3.6s ease-in-out infinite;
+/* ===== Level-specific border accents ===== */
+.soil-level-1 {
+  border-color: #c9b88a;
+}
+.soil-level-2 {
+  border-color: #984828;
+}
+.soil-level-3 {
+  border-color: #5a4f45;
+}
+.soil-level-4 {
+  border-color: #c09818;
+}
+.soil-level-5 {
+  border-color: #9333ea;
 }
 
-.dark-mutation-smoke:nth-child(1) {
-  bottom: 4%;
-  left: -4%;
-}
-.dark-mutation-smoke:nth-child(2) {
-  right: -7%;
-  bottom: 8%;
-  animation-delay: -0.9s;
-}
-.dark-mutation-smoke:nth-child(3) {
-  top: 12%;
-  left: 5%;
-  animation-delay: -1.8s;
-}
-.dark-mutation-smoke:nth-child(4) {
-  top: 4%;
-  right: 2%;
-  animation-delay: -2.7s;
+/* ===== Harvestable / Stealable highlights — 增强发光效果 ===== */
+.land-harvestable {
+  box-shadow:
+    0 0 0 3px #f0c040,
+    0 0 16px rgba(240, 192, 64, 0.35),
+    0 3px 0 rgba(0, 0, 0, 0.15);
 }
 
-.dark-mutation-particle {
-  width: 13%;
-  opacity: 0;
-  filter: sepia(1) saturate(3) hue-rotate(220deg) brightness(0.7);
-  animation: dark-particle-flicker 2.4s ease-in-out infinite;
-}
-
-.dark-mutation-particle:nth-child(5) {
-  left: 10%;
-  top: 24%;
-}
-.dark-mutation-particle:nth-child(6) {
-  right: 8%;
-  top: 18%;
-  animation-delay: -0.5s;
-}
-.dark-mutation-particle:nth-child(7) {
-  bottom: 10%;
-  left: 28%;
-  animation-delay: -1s;
-}
-.dark-mutation-particle:nth-child(8) {
-  right: 22%;
-  bottom: 8%;
-  animation-delay: -1.5s;
-}
-.dark-mutation-particle:nth-child(9) {
-  left: 46%;
-  top: 4%;
-  animation-delay: -2s;
-}
-
-.moist-mutation-layer i {
-  position: absolute;
-  top: -5px;
-  width: 3px;
-  height: 5px;
-  border-radius: 50% 50% 55% 55%;
-  background: rgb(56 189 248 / 0.9);
-  box-shadow: 0 0 1px rgb(255 255 255 / 0.85);
-  animation: moist-drop-fall 1.6s linear infinite;
-}
-
-.moist-mutation-layer i:nth-child(1) {
-  left: 15%;
-}
-.moist-mutation-layer i:nth-child(2) {
-  left: 39%;
-  animation-delay: -0.8s;
-}
-.moist-mutation-layer i:nth-child(3) {
-  left: 63%;
-  animation-delay: -0.4s;
-}
-.moist-mutation-layer i:nth-child(4) {
-  left: 84%;
-  animation-delay: -1.2s;
-}
-
-.land-card-image-lightning .land-crop-image {
-  position: relative;
-  z-index: 2;
-}
-
-.lightning-mutation-layer {
-  z-index: 4;
-  overflow: visible;
-}
-
-.lightning-mutation-frame {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 145%;
-  height: 145%;
-  object-fit: contain;
-  opacity: 0;
-  transform: translate(-50%, -50%);
-  animation: official-lightning-frame 1s steps(1, end) infinite;
-}
-
-.lightning-mutation-frame-2 {
-  animation-delay: -0.75s;
-}
-.lightning-mutation-frame-3 {
-  animation-delay: -0.5s;
-}
-.lightning-mutation-frame-4 {
-  animation-delay: -0.25s;
-}
-
-@keyframes golden-crop-glow {
+@keyframes pulse-glow-gold {
   0%,
   100% {
-    filter: sepia(1) saturate(3.6) hue-rotate(345deg) brightness(1.08) contrast(1.08)
-      drop-shadow(0 0 3px rgb(250 204 21 / 0.72));
+    box-shadow:
+      0 0 0 3px #f0c040,
+      0 0 12px rgba(240, 192, 64, 0.3),
+      0 3px 0 rgba(0, 0, 0, 0.15);
   }
   50% {
-    filter: sepia(1) saturate(4.8) hue-rotate(350deg) brightness(1.2) contrast(1.12)
-      drop-shadow(0 0 8px rgb(245 158 11 / 0.98));
+    box-shadow:
+      0 0 0 4px #f0c040,
+      0 0 24px rgba(240, 192, 64, 0.5),
+      0 3px 0 rgba(0, 0, 0, 0.15);
   }
 }
 
-@keyframes golden-aura-pulse {
-  0%,
-  100% {
-    opacity: 0.62;
-    transform: scale(0.88);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
+.land-stealable {
+  box-shadow:
+    0 0 0 3px #a855f7,
+    0 0 16px rgba(168, 85, 247, 0.35),
+    0 3px 0 rgba(0, 0, 0, 0.15);
 }
 
-@keyframes golden-sparkle-orbit {
-  to {
-    transform: rotate(360deg);
-  }
+/* ===== Plant Growth Animation ===== */
+.animate-plant-grow {
+  animation: plant-grow 0.45s ease-out both;
 }
 
-@keyframes golden-sparkle-blink {
-  0%,
-  100% {
-    opacity: 0.2;
-    transform: scale(0.55);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.25);
-  }
+.land-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
 }
 
-@keyframes frozen-crop-glow {
-  0%,
-  100% {
-    filter: saturate(0.72) hue-rotate(72deg) brightness(1.13) contrast(1.04)
-      drop-shadow(0 0 3px rgb(125 211 252 / 0.78));
-  }
-  50% {
-    filter: saturate(0.62) hue-rotate(82deg) brightness(1.24) contrast(1.08) drop-shadow(0 0 6px rgb(56 189 248 / 0.94));
-  }
-}
-
-@keyframes frozen-crystal-twinkle {
-  0%,
-  100% {
-    opacity: 0.24;
-    transform: scale(0.65) rotate(0);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.2) rotate(45deg);
-  }
-}
-
-@keyframes love-heart-rise {
+@keyframes plant-grow {
   0% {
-    opacity: 0;
-    transform: translateY(2px) scale(0.7) rotate(-8deg);
-  }
-  28% {
-    opacity: 0.95;
+    transform: scale(0.96) translateY(2px);
+    opacity: 0.75;
   }
   100% {
-    opacity: 0;
-    transform: translateY(-21px) scale(1.15) rotate(10deg);
+    transform: scale(1) translateY(0);
+    opacity: 1;
   }
 }
 
-@keyframes dark-crop-pulse {
+/* ===== Golden shimmer for level 4 ===== */
+@keyframes golden-shimmer {
   0%,
   100% {
-    filter: saturate(0.78) brightness(0.82) contrast(1.06) hue-rotate(8deg) drop-shadow(0 0 2px rgb(76 29 149 / 0.42));
+    box-shadow:
+      0 0 8px rgba(255, 215, 0, 0.2),
+      var(--theme-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
   }
   50% {
-    filter: saturate(0.84) brightness(0.88) contrast(1.08) hue-rotate(13deg) drop-shadow(0 0 3px rgb(109 40 217 / 0.52));
+    box-shadow:
+      0 0 16px rgba(255, 215, 0, 0.4),
+      0 0 32px rgba(255, 215, 0, 0.15),
+      var(--theme-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
   }
 }
 
-@keyframes dark-smoke-drift {
+@keyframes purple-gold-shimmer {
   0%,
   100% {
-    opacity: 0;
-    transform: translateY(3px) scale(0.72) rotate(-8deg);
+    box-shadow:
+      0 0 8px rgba(168, 85, 247, 0.2),
+      0 0 4px rgba(255, 215, 0, 0.15),
+      var(--theme-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
   }
-  35% {
-    opacity: 0.24;
-  }
-  65% {
-    opacity: 0.14;
-    transform: translateY(-5px) scale(1.04) rotate(6deg);
+  50% {
+    box-shadow:
+      0 0 16px rgba(168, 85, 247, 0.4),
+      0 0 24px rgba(255, 215, 0, 0.2),
+      var(--theme-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
   }
 }
 
-@keyframes dark-particle-flicker {
+/* ===== Cartoon Progress Bar (farm-progress) ===== */
+.farm-progress {
+  width: 100%;
+  height: 10px;
+  background: linear-gradient(180deg, #d4c8a0 0%, #c0b080 100%);
+  border-radius: var(--theme-radius-md, 8px);
+  overflow: hidden;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.15),
+    0 1px 2px rgba(255, 255, 255, 0.3);
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.farm-progress::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  right: 2px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.15));
+  border-radius: 6px 6px 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.farm-progress-fill {
+  height: 100%;
+  background: linear-gradient(180deg, #6dd400 0%, #44a800 40%, #2d8000 100%);
+  border-radius: var(--theme-radius-md, 8px);
+  transition: width 1s linear;
+  position: relative;
+  box-shadow:
+    inset 0 1px 3px rgba(255, 255, 255, 0.4),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.farm-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  border-radius: var(--theme-radius-md, 8px);
+}
+
+@keyframes progress-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+/* ===== Status Badge Animations ===== */
+
+/* Water drop animation */
+.badge-water {
+  background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+  color: #0369a1;
+  animation: water-drop 1.5s ease-in-out infinite;
+}
+.dark .badge-water {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+}
+
+@keyframes water-drop {
   0%,
   100% {
-    opacity: 0;
-    transform: translateY(3px) scale(0.55);
+    transform: translateY(0) scale(1);
   }
-  45% {
-    opacity: 0.55;
-    transform: translateY(-2px) scale(0.9);
+  30% {
+    transform: translateY(-3px) scale(1.1);
+  }
+  50% {
+    transform: translateY(1px) scale(0.95);
   }
   70% {
-    opacity: 0.18;
-    transform: translateY(-6px) scale(0.7);
+    transform: translateY(-1px) scale(1.02);
   }
 }
 
-@keyframes moist-drop-fall {
-  0% {
-    opacity: 0;
-    transform: translateY(0);
+/* Bug wiggle animation */
+.badge-bug {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #dc2626;
+  animation: cartoon-wiggle 0.6s ease-in-out infinite;
+}
+.dark .badge-bug {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+@keyframes cartoon-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
   }
-  15% {
-    opacity: 0.9;
+  20% {
+    transform: rotate(-8deg);
+  }
+  40% {
+    transform: rotate(8deg);
+  }
+  60% {
+    transform: rotate(-5deg);
   }
   80% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(36px);
+    transform: rotate(5deg);
   }
 }
 
-@keyframes official-lightning-frame {
+/* Harvest sparkle animation */
+.badge-harvest {
+  background: linear-gradient(135deg, #fef9c3, #fde68a);
+  color: #b45309;
+  animation: sparkle 1.2s ease-in-out infinite;
+}
+.dark .badge-harvest {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+@keyframes sparkle {
   0%,
-  24.99% {
-    opacity: 1;
-  }
-  25%,
   100% {
-    opacity: 0;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  25% {
+    transform: scale(1.15);
+    filter: brightness(1.2);
+  }
+  50% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  75% {
+    transform: scale(1.1);
+    filter: brightness(1.15);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .land-card-image-golden .land-crop-image,
-  .golden-mutation-aura,
-  .golden-mutation-sparkles,
-  .golden-mutation-sparkles i,
-  .land-card-image-frozen .land-crop-image,
-  .land-card-image-dark .land-crop-image,
-  .frozen-mutation-layer i,
-  .love-mutation-layer i,
-  .dark-mutation-smoke,
-  .dark-mutation-particle,
-  .moist-mutation-layer i,
-  .lightning-mutation-frame {
-    animation: none;
-  }
-
-  .lightning-mutation-frame-1 {
-    opacity: 1;
-  }
-
-  .land-card-image-golden .land-crop-image {
-    filter: sepia(1) saturate(4.2) hue-rotate(348deg) brightness(1.14) contrast(1.1)
-      drop-shadow(0 0 5px rgb(250 204 21 / 0.8));
-  }
+/* Pale land surfaces keep every level recognizable without the old heavy texture. */
+.land-card {
+  min-height: 176px;
+  border-width: 1px;
+  color: var(--ui-ink);
+  box-shadow: var(--ui-shadow-sm);
 }
-
-.land-ground-layer {
-  z-index: 0;
+.land-card:hover {
+  box-shadow: var(--ui-shadow-md);
 }
-
-.land-card-selected {
-  z-index: 100 !important;
+.soil-level-0 {
+  border-color: #ddd8ca;
+  background: #f8f6f0;
+}
+.soil-level-1 {
+  border-color: #e7d49a;
+  background: #fff8df;
+}
+.soil-level-2 {
+  border-color: #e8b8ac;
+  background: #fff0ed;
+}
+.soil-level-3 {
+  border-color: #bcb8b1;
+  color: var(--ui-ink);
+  background: #efeeeb;
+}
+.soil-level-4 {
+  border-color: #e7d46c;
+  background: #fffbdc;
+}
+.soil-level-5 {
+  border-color: #c9b9e6;
+  color: var(--ui-ink);
+  background: #f4effc;
+}
+.land-locked {
+  border-color: #d6dbd5;
+  background: #f0f2ef;
+}
+.land-dead {
+  border-color: #c7cbc6;
+  color: var(--ui-muted);
+  background: #e7e9e6;
+}
+.land-harvestable {
+  border-color: rgba(67, 141, 99, 0.48);
   box-shadow:
-    0 0 0 3px rgb(59 130 246 / 0.88),
-    0 8px 20px rgb(15 23 42 / 0.2);
+    inset 0 3px 0 var(--ui-primary),
+    var(--ui-shadow-sm);
 }
-
-.land-isometric.land-card-selected {
+.land-stealable {
+  border-color: rgba(143, 121, 188, 0.48);
+  box-shadow:
+    inset 0 3px 0 var(--ui-violet),
+    var(--ui-shadow-sm);
+}
+.farm-progress {
+  height: 6px;
+  border: 0;
+  background: rgba(113, 125, 116, 0.12);
   box-shadow: none;
-  transform: translate(-50%, -8px) scale(1.02);
 }
-
-.land-isometric.land-card-selected .land-card-image {
-  z-index: 1;
-  filter: saturate(1.08) brightness(1.06) drop-shadow(0 7px 5px rgb(56 42 25 / 0.28));
-}
-
-.land-isometric {
-  position: absolute;
-  pointer-events: none;
-  padding: 2px;
-  transform: translateX(-50%);
-  transform-origin: 50% 50%;
-}
-
-.land-hit-area {
-  z-index: 2;
-  left: 2%;
-  top: 8%;
-  width: 96%;
-  height: 80%;
-  cursor: pointer;
-  pointer-events: auto;
-  border: 0;
-  background: transparent;
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-}
-
-.land-bubble {
-  position: absolute;
-  z-index: 30 !important;
-  left: 50%;
-  top: calc(100% + 6px);
-  width: min(240px, calc(100vw - 40px));
-  display: none;
-  padding: 12px;
-  border: 1px solid rgb(226 232 240);
-  border-radius: 12px;
-  background: rgb(255 255 255 / 0.98);
-  color: #334155;
-  text-align: left;
-  box-shadow: 0 14px 32px rgb(15 23 42 / 0.24);
-  transform: translateX(-50%);
-}
-
-.land-bubble::before {
-  position: absolute;
-  left: 50%;
-  top: -7px;
-  width: 12px;
-  height: 12px;
-  content: '';
-  border-left: 1px solid rgb(226 232 240);
-  border-top: 1px solid rgb(226 232 240);
-  background: inherit;
-  transform: translateX(-50%) rotate(45deg);
-}
-
-.land-bubble-floating {
-  position: fixed;
-  z-index: 1000 !important;
-  right: auto;
-  display: block;
-  pointer-events: auto;
-  transform: none;
-}
-
-.land-bubble-floating::before {
-  left: var(--bubble-arrow-left, 50%);
-  top: auto;
-  bottom: -7px;
-  border: 0;
-  border-right: 1px solid rgb(226 232 240);
-  border-bottom: 1px solid rgb(226 232 240);
-}
-
-.land-bubble-floating.land-bubble-floating-below::before {
-  top: -7px;
-  bottom: auto;
-  border: 0;
-  border-left: 1px solid rgb(226 232 240);
-  border-top: 1px solid rgb(226 232 240);
-}
-
-.land-card-selected .land-bubble {
-  display: block;
-}
-
-.land-grid-column-1 .land-bubble {
-  left: 0;
-  transform: none;
-}
-
-.land-grid-column-1 .land-bubble::before {
-  left: 25%;
-}
-
-.land-grid-column-4 .land-bubble {
-  right: 0;
-  left: auto;
-  transform: none;
-}
-
-.land-grid-column-4 .land-bubble::before {
-  right: 25%;
-  left: auto;
-}
-
-.land-isometric .land-card-id {
+.farm-progress::before,
+.farm-progress::after,
+.farm-progress-fill::after {
   display: none;
 }
-
-.land-isometric .land-bubble {
-  top: 4px;
-  transform: translate(-50%, calc(-100% - 8px));
+.farm-progress-fill {
+  background: linear-gradient(90deg, #ef8ca0, #efc76f, #8acb8f, #75b8cf, #aa8bd0);
+  box-shadow: none;
+}
+.badge-water,
+.badge-bug,
+.badge-harvest {
+  animation: none;
 }
 
-.land-isometric .land-bubble::before {
-  top: auto;
-  bottom: -7px;
-  border: 0;
-  border-right: 1px solid rgb(226 232 240);
-  border-bottom: 1px solid rgb(226 232 240);
+.badge-purple-crystal {
+  color: #6d3da0;
+  border: 1px solid rgba(146, 103, 190, 0.35);
+  background: linear-gradient(135deg, rgba(239, 225, 255, 0.96), rgba(218, 244, 255, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
-.land-isometric.land-grid-column-1 .land-bubble,
-.land-isometric.land-grid-column-4 .land-bubble {
-  transform: translateY(calc(-100% - 8px));
+.dark .badge-purple-crystal {
+  color: #e9d5ff;
+  border-color: rgba(196, 151, 255, 0.34);
+  background: linear-gradient(135deg, rgba(88, 49, 121, 0.58), rgba(33, 82, 102, 0.52));
 }
 
-.land-isometric.land-bubble-below .land-bubble {
-  top: calc(100% - 8px);
-  transform: translateX(-50%);
+.land-details-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 0 1px 2px;
+  border-radius: 4px;
+  color: var(--ui-muted);
+  font-size: 10px;
+  line-height: 1.2;
 }
 
-.land-isometric.land-bubble-below .land-bubble::before {
-  top: -7px;
-  bottom: auto;
-  border: 0;
-  border-left: 1px solid rgb(226 232 240);
-  border-top: 1px solid rgb(226 232 240);
+.land-details-link:hover {
+  color: var(--ui-primary);
 }
 
-.land-isometric.land-bubble-below.land-grid-column-1 .land-bubble,
-.land-isometric.land-bubble-below.land-grid-column-4 .land-bubble {
-  transform: none;
+.land-details-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-primary) 55%, transparent);
+  outline-offset: 1px;
 }
 
-.bubble-action {
+/* 手机端：收紧留白与图片，操作按钮加高到便于点击的尺寸。 */
+@media (max-width: 640px) {
+  .land-card {
+    min-height: 0;
+    padding: 8px 8px 10px;
+  }
+
+  .land-card:hover {
+    transform: none;
+  }
+
+  .plant-container {
+    width: 40px;
+    height: 40px;
+    margin-top: 14px;
+  }
+
+  .farming-action-wrap,
+  .fertilizer-actions {
+    margin-top: 6px;
+  }
+
+  .farming-action,
+  .fertilizer-action {
+    min-height: 32px;
+    font-size: 12px;
+  }
+}
+
+.fertilizer-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.farming-action {
+  width: 100%;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 32px;
-  border-width: 1px;
+  gap: 5px;
+  border: 1px solid #a9d4b0;
   border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  color: #245f4b;
+  background: #eaf8ed;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.bubble-action:disabled {
+.farming-action:disabled {
   cursor: not-allowed;
-  opacity: 0.35;
+  opacity: 0.55;
 }
 
-:global(.dark) .land-bubble {
-  border-color: #475569;
-  background: rgb(31 41 55 / 0.98);
-  color: #e5e7eb;
+.dark .farming-action {
+  color: #bbf7d0;
+  border-color: rgba(169, 212, 176, 0.38);
+  background: rgba(20, 80, 50, 0.35);
 }
 
-.land-ground-single {
-  position: absolute;
-  left: 50%;
-  top: 47%;
-  width: 94%;
-  height: auto;
-  max-height: 68%;
-  object-fit: contain;
-  transform: translate(-50%, -50%);
-  opacity: 0.82;
-  filter: saturate(1.05) drop-shadow(0 3px 4px rgba(71, 53, 35, 0.16));
-}
-
-.land-card.col-span-2 .land-ground-layer,
-.land-card.land-isometric-size-2 .land-ground-layer {
-  left: 7%;
-  right: 7%;
-  top: 12%;
-  bottom: 15%;
-}
-
-.land-ground-merged {
-  position: absolute;
-  left: 50%;
-  top: 48%;
-  width: 94%;
-  height: auto;
-  max-height: 74%;
-  object-fit: contain;
-  transform: translate(-50%, -50%);
-  opacity: 0.82;
-  filter: saturate(1.05) drop-shadow(0 3px 4px rgba(71, 53, 35, 0.14));
-}
-
-.land-ground-single.land-ground-rotated,
-.land-ground-merged.land-ground-rotated {
-  transform: translate(-50%, -50%) rotate(180deg);
-}
-
-.land-card > :not(.land-ground-layer) {
-  z-index: 1;
-}
-
-.land-card-name,
-.land-card-meta,
-.land-card-season {
-  text-shadow:
-    0 1px 2px rgba(255, 255, 255, 0.95),
-    0 0 5px rgba(255, 255, 255, 0.88);
-}
-
-:global(.dark) .land-card-name,
-:global(.dark) .land-card-meta,
-:global(.dark) .land-card-season {
-  text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.95),
-    0 0 5px rgba(0, 0, 0, 0.8);
-}
-
-.land-action-button {
-  height: 28px;
-  min-width: 0;
+.fertilizer-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.78);
+  min-height: 26px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
-  box-shadow: inset 0 0 0 1px currentColor;
-  transition:
-    background-color 0.15s ease,
-    transform 0.15s ease;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.land-action-button:hover {
-  transform: translateY(-1px);
+.fertilizer-action--normal {
+  color: #5b4630;
+  background: #fff4d6;
+  border-color: #ead28a;
 }
 
-.land-level-black .land-card-id,
-.land-level-black .land-card-meta,
-.land-level-black .land-card-season {
-  color: #475569;
+.fertilizer-action--organic {
+  color: #245f4b;
+  background: #e8f7ea;
+  border-color: #b5dcb8;
 }
 
-:global(.dark) .land-level-black .land-card-id,
-:global(.dark) .land-level-black .land-card-meta,
-:global(.dark) .land-level-black .land-card-season {
-  color: #cbd5e1;
+.fertilizer-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
-.land-level-black .land-card-name {
-  color: #111827;
-  text-shadow: none;
+.dark .fertilizer-action--normal {
+  color: #fde68a;
+  background: rgba(120, 90, 20, 0.35);
+  border-color: rgba(234, 210, 138, 0.4);
 }
 
-:global(.dark) .land-level-black .land-card-name {
-  color: #f8fafc;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.65);
+.dark .fertilizer-action--organic {
+  color: #bbf7d0;
+  background: rgba(20, 80, 50, 0.35);
+  border-color: rgba(181, 220, 184, 0.35);
 }
-
-.land-level-black .land-action-button {
-  background: rgba(255, 255, 255, 0.78);
+/* ===== 深色土地 =====
+   注意：scoped 样式里 :global(.dark) .x 会被编译成 .dark{}（丢掉 .x），必须写成 .dark .x。
+   深灰卡面 + 等级色的顶部渐变和描边区分土地等级；带上 .land-card 以压过上方的浅色土地规则。 */
+.dark .land-card {
+  --land-tint: #9aa3ad;
+  border-color: color-mix(in srgb, var(--land-tint) 30%, transparent);
+  color: var(--ui-ink);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--land-tint) 13%, #1d2228) 0%, #1a1f25 62%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
-
-:global(.dark) .land-level-black .land-action-button {
-  background: rgba(255, 255, 255, 0.9);
+.dark .land-card.soil-level-1 {
+  --land-tint: #c9a867;
+}
+.dark .land-card.soil-level-2 {
+  --land-tint: #e08a6e;
+}
+.dark .land-card.soil-level-3 {
+  --land-tint: #8d939b;
+}
+.dark .land-card.soil-level-4 {
+  --land-tint: #e6c35a;
+}
+.dark .land-card.soil-level-5 {
+  --land-tint: #b892f0;
+}
+.dark .land-card.land-locked {
+  --land-tint: #6b737d;
+  opacity: 0.72;
+}
+.dark .land-card.land-dead {
+  --land-tint: #6b737d;
+  color: var(--ui-muted);
+}
+.dark .land-card.land-harvestable {
+  border-color: color-mix(in srgb, var(--ui-primary) 55%, transparent);
+  box-shadow:
+    inset 0 3px 0 var(--ui-primary),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.dark .land-card.land-stealable {
+  border-color: color-mix(in srgb, var(--ui-violet) 55%, transparent);
+  box-shadow:
+    inset 0 3px 0 var(--ui-violet),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.dark .land-card:hover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.dark .land-card .farm-progress {
+  background: rgba(255, 255, 255, 0.08);
+}
+.dark .land-card .farm-progress-fill {
+  filter: saturate(0.8) brightness(0.92);
+}
+.dark .land-card .selection-cue__mark {
+  background: #20262d;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.dark .land-card .selection-cue--selected .selection-cue__mark {
+  color: #fff;
+  border-color: var(--ui-primary-fill);
+  background: var(--ui-primary-fill);
+}
+.dark .land-card .selection-cue--disabled .selection-cue__mark,
+.dark .land-card .selection-cue--disabled .selection-cue__label {
+  color: var(--ui-subtle);
+  border-color: var(--ui-border-strong);
+  background: #20262d;
+}
+.dark .land-card .selection-cue__label {
+  color: var(--ui-primary);
+  border-color: color-mix(in srgb, var(--ui-primary) 30%, transparent);
+  background: #20262d;
+  box-shadow: none;
 }
 </style>

@@ -1,18 +1,22 @@
 {
   "name": "qq-farm-bot-web",
   "type": "module",
-  "version": "2.8.0",
+  "version": "20261022",
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "vite build",
+    "build:compressed": "vite build --mode compressed",
+    "build:analyze": "vite build --mode analyze",
+    "typecheck": "vue-tsc -b",
+    "test": "node --test tests/*.test.mjs",
     "lint": "eslint \"src/**/*.{ts,vue}\" --fix",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vueuse/core": "^14.2.1",
     "axios": "^1.13.5",
-    "marked": "^18.0.6",
+    "naive-ui": "^2.43.2",
     "nprogress": "^0.2.0",
     "pinia": "^3.0.4",
     "socket.io-client": "^4.8.3",

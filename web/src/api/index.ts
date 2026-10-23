@@ -7,16 +7,31 @@ const accountIdRef = useStorage('current_account_id', '')
 
 const api = axios.create({
   baseURL: '/',
-  timeout: 20000,
+  timeout: 10000,
 })
 
-let lastNetworkToastAt = 0
-function showNetworkToast(message: string) {
-  const now = Date.now()
-  if (now - lastNetworkToastAt < 5000)
-    return
-  lastNetworkToastAt = now
-  useToastStore().error(message)
+export function normalizeApiErrorMessage(raw: unknown): string {
+  const text = String(raw || '').trim()
+  if (!text)
+    return ''
+
+  const codeMatch = text.match(/\bcode=\d+\b\s*(.*)$/)
+  const codeIndex = codeMatch?.index ?? -1
+  if (codeMatch?.[1] && codeIndex >= 0 && text.slice(0, codeIndex).includes('.'))
+    return codeMatch[1].trim()
+  return text
+}
+
+export function getApiErrorMessage(error: unknown, fallback = '请求失败'): string {
+  const candidate = error as any
+  const data = candidate?.response?.data
+    || (candidate && typeof candidate === 'object' ? candidate : null)
+  const raw = data?.errorMessage
+    || data?.error
+    || data?.message
+    || candidate?.message
+    || (typeof error === 'string' ? error : '')
+  return normalizeApiErrorMessage(raw) || fallback
 }
 
 api.interceptors.request.use((config) => {
@@ -25,25 +40,45 @@ api.interceptors.request.use((config) => {
     config.headers['x-admin-token'] = token
   }
   const accountId = accountIdRef.value
-  if (accountId) {
-    config.headers['x-account-id'] = accountId
+  if (accountId && !config.headers.has('x-account-id')) {
+    config.headers.set('x-account-id', accountId)
   }
   return config
-}, error => Promise.reject(error))
+}, (error) => {
+  return Promise.reject(error)
+})
 
 api.interceptors.response.use((response) => {
+  const responseData = response?.data
+  const skipToast = (response?.config as any)?.skipErrorToast
+  if (responseData && typeof responseData === 'object' && responseData.ok === false) {
+    const message = getApiErrorMessage(responseData, '')
+    if (message) {
+      responseData.error = message
+      if (!skipToast)
+        useToastStore().error(message)
+    }
+  }
   return response
 }, (error) => {
-  if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') {
-    return Promise.reject(error)
-  }
-  if (error?.config?.skipErrorToast === true)
+  // Aborting an in-flight request is expected when a modal closes or a QR flow restarts.
+  if (axios.isCancel(error) || error?.code === 'ERR_CANCELED')
     return Promise.reject(error)
 
   const toast = useToastStore()
+  const normalizedMessage = getApiErrorMessage(error, '')
+  if (normalizedMessage) {
+    error.message = normalizedMessage
+    if (error.response?.data && typeof error.response.data === 'object')
+      error.response.data.error = normalizedMessage
+  }
+
+  // 支持 skipErrorToast 配置，让调用方自行处理错误
+  const skipToast = error.config?.skipErrorToast
 
   if (error.response) {
     if (error.response.status === 401) {
+      // Avoid redirect loop or multiple redirects
       if (!window.location.pathname.includes('/login')) {
         tokenRef.value = ''
         window.location.href = '/login'
@@ -51,26 +86,30 @@ api.interceptors.response.use((response) => {
       }
     }
     else if (error.response.status >= 500) {
-      const backendError = String(error.response.data?.error || error.response.data?.message || '')
-      if (backendError === '账号未运行' || backendError === 'API Timeout' || backendError === 'Request Timeout') {
+      const backendError = getApiErrorMessage(error, '')
+      // 后端运行态可预期错误：不弹全局500，交给页面状态处理
+      if (backendError === '账号未运行' || backendError === 'API Timeout') {
         return Promise.reject(error)
       }
-      toast.error(`服务器错误 ${error.response.status} ${error.response.statusText}`)
+      if (!skipToast) {
+        toast.error(backendError || '请求失败，请稍后重试')
+      }
     }
     else {
-      toast.error('请求失败，请联系管理员')
+      if (!skipToast) {
+        toast.error(getApiErrorMessage(error, `请求失败，请联系管理员！`))
+      }
     }
   }
   else if (error.request) {
-    if (error.code === 'ECONNABORTED') {
-      showNetworkToast('请求超时，请稍后重试')
-    }
-    else {
-      showNetworkToast('网络错误，无法连接到服务器')
+    if (!skipToast) {
+      toast.error('网络错误，无法连接到服务器')
     }
   }
   else {
-    toast.error(`错误: ${error.message}`)
+    if (!skipToast) {
+      toast.error(`错误: ${getApiErrorMessage(error, '请求失败')}`)
+    }
   }
 
   return Promise.reject(error)

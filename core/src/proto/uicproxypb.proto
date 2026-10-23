@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package gamepb.uicproxypb;
+
+// ============ 文本审核结果 ============
+message TextResult {
+    int32 status = 1;       // 审核状态
+    string text = 2;        // 审核后的文本
+    // field 3 reserved
+    string uid = 4;         // 用户ID
+}
+
+// ============ 请求/回复 ============
+message TextItem {
+    string text = 1;
+    string uid = 2;
+}
+
+message BatchModerateTextRequest {
+    repeated TextItem items = 1;
+}
+
+message BatchModerateTextReply {
+    repeated TextResult results = 1;
+}

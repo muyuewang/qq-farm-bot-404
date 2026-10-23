@@ -29,7 +29,7 @@ message Meta {
 message Message {
     Meta meta = 1;
     bytes body = 2;
-    string auth_token = 3;
+    string token = 3;
 }
 
 // 服务器推送事件

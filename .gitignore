@@ -1,32 +1,59 @@
+# Dependencies
 node_modules/
-.DS_Store
-/.idea/
-core/node_modules/
-web/node_modules/
+bun.lock
 
+# Build output
+core/dist/
 web/dist/
-web/stats.html
-dist/
-build/
-coverage/
-.cache/
-.vite/
-.turbo/
-__pycache__/
+core/client.js
 
+# Runtime data (contains user credentials and logs)
 core/data/
-core/docs/
-logs/
-log/
-tmp/
-temp/
-.tmp/
 
-.env
-.env.*
-!.env.compose.example
+# Local captures, Spine source/renderer, and browser review artifacts
+/output/
+/.playwright-cli/
+
+# Build analysis
+web/stats.html
+
+# Logs
 *.log
-/.pnpm-store/
 
-# 配置合并脚本产生的备份
-*.bak
+# Runtime process state
+*.pid
+*.pid.lock
+
+# Misc
+core/share.txt
+Update.log
+*.tgz
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/coverage
+**/test/
+**/tests/
+!core/tests/
+!core/tests/*.test.js
+!web/tests/
+!web/tests/*.test.mjs
+coverage/
+.nyc_output/
+
+# Cleanup script (self-deleting)
+cleanup.bat
+
+# Local protocol captures and generated runtime analysis
+protocol-captures/
+/docs/performance-analysis/
+
+# Python caches
+__pycache__/

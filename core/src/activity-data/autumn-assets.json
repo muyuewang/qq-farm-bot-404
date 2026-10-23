@@ -1,0 +1,16 @@
+[
+  {
+    "file": "happy.png",
+    "path": "gui/texture/icon/icon_happyShare",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/21/21b16590-4a3b-49b1-9c4f-b37bdaf6b4af.13bef.png",
+    "bytes": 15729,
+    "sha256": "52723b4e8742c6a9abcd2d03c1e7fc9b4e4bab5d90944f51612f17a0bc159abd"
+  },
+  {
+    "file": "wish.png",
+    "path": "gui/texture/gotoJump/icon_wishSign",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/42/42226ee6-f864-4568-bec0-3cf26a62adfb.ea69c.png",
+    "bytes": 12963,
+    "sha256": "ec7658a2dd23608237fbf4a256e49d7c2b83e7d436a9397cd32c2aaa50d76b8e"
+  }
+]

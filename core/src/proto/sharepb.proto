@@ -10,25 +10,62 @@ import "corepb.proto";
 message CheckCanShareRequest {}
 
 message CheckCanShareReply {
-    bool can_share = 1;  // 是否可以分享
+    bool can_share = 1;
 }
 
-// --- 报告分享 ---
+// --- 分享上报（每日礼包：field_1=1/field_4=42；青梅酿：field_1=11/field_4=215） ---
 message ReportShareRequest {
-    bool shared = 1;  // 是否已分享
+    int32 field_1 = 1;
+    int32 field_4 = 4;
 }
 
 message ReportShareReply {
-    bool success = 1;  // 是否成功
+    bytes result = 1;
 }
 
-// --- 领取分享奖励 ---
+// --- 分享奖励（抓包确认：field_1=true） ---
 message ClaimShareRewardRequest {
-    bool claimed = 1;  // 请求领取
+    bool field_1 = 1;
 }
 
 message ClaimShareRewardReply {
-    bool success = 1;           // 是否成功
-    bool has_reward = 2;        // 是否有奖励
-    repeated corepb.Item items = 3;  // 奖励物品列表
+    repeated corepb.Item items = 1;
+}
+
+// --- 获取邀请信息 ---
+message GetInviteInfoRequest {}
+
+message InviteUser {
+    int64 gid = 1;
+    int64 field_2 = 2;
+    string name = 3;
+    string avatar = 4;
+}
+
+message InviteRewardStage {
+    int64 index = 1;
+    int64 reward_index = 2;
+    corepb.Item item = 3;
+    int32 status = 4;
+}
+
+message InviteInfo {
+    InviteUser user_a = 1;
+    int32 status = 2;
+    InviteUser user_b = 3;
+    repeated InviteRewardStage reward_stages = 4;
+}
+
+message GetInviteInfoReply {
+    repeated InviteInfo infos = 1;
+}
+
+// --- 领取邀请奖励 ---
+message GetInviteAwardRequest {
+    int64 share_cfg_id = 1;
+}
+
+message GetInviteAwardReply {
+    bool success = 1;
+    repeated corepb.Item items = 2;
 }

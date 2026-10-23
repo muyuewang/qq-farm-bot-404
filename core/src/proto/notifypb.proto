@@ -8,3 +8,19 @@ import "corepb.proto";
 message ItemNotify {
     repeated corepb.ItemChg items = 1;
 }
+
+message ItemUseDailyLimit {
+    int64 current = 1;
+    int64 limit = 2;
+    repeated int64 item_ids = 3 [packed = true];
+}
+
+message ItemUseDailyEntry {
+    int64 type = 1;
+    ItemUseDailyLimit value = 2;
+}
+
+message ItemUseDailyNotify {
+    repeated ItemUseDailyEntry previous = 1;
+    repeated ItemUseDailyEntry current = 2;
+}

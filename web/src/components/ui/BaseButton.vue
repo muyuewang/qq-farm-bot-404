@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ButtonProps } from 'naive-ui'
+import { NButton } from 'naive-ui/es/button'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -17,80 +19,80 @@ const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void
 }>()
 
-const componentTag = computed(() => {
-  if (props.to)
-    return props.disabled || props.loading ? 'a' : RouterLink
-  if (props.href)
-    return 'a'
-  return 'button'
+const naiveSize = computed<ButtonProps['size']>(() => {
+  if (props.size === 'sm')
+    return 'small'
+  if (props.size === 'lg')
+    return 'large'
+  return 'medium'
 })
 
-const baseClasses = 'inline-flex items-center justify-center rounded-lg font-medium base-button transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98]'
-
-const variantClasses = computed(() => {
-  switch (props.variant) {
-    case 'primary':
-      return 'text-white shadow-sm hover:brightness-105 focus:ring-[var(--theme-primary)]'
-    case 'secondary':
-      return 'border border-gray-200 bg-white/70 text-gray-700 shadow-sm hover:bg-gray-50 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-200 dark:hover:bg-gray-700'
-    case 'success':
-      return 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 shadow-sm dark:bg-green-600 dark:hover:bg-green-500'
-    case 'danger':
-      return 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm dark:bg-red-600 dark:hover:bg-red-500'
-    case 'ghost':
-      return 'text-gray-600 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-gray-800/80'
-    case 'outline':
-      return 'border border-gray-200 bg-transparent text-gray-700 hover:bg-gray-50 focus:ring-gray-400 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
-    case 'text':
-      return 'hover:underline p-0 bg-transparent shadow-none hover:bg-transparent'
-    default:
-      return 'text-white shadow-sm hover:brightness-95 focus:ring-green-500'
-  }
+const naiveType = computed<ButtonProps['type']>(() => {
+  if (props.variant === 'danger')
+    return 'error'
+  if (props.variant === 'success')
+    return 'success'
+  if (!props.variant || props.variant === 'primary')
+    return 'primary'
+  return 'default'
 })
 
-const sizeClasses = computed(() => {
-  if (props.variant === 'text')
-    return ''
+function handleClick(event: MouseEvent) {
+  if (!props.disabled && !props.loading)
+    emit('click', event)
+}
 
-  switch (props.size) {
-    case 'sm':
-      return 'px-3 py-1.5 text-sm'
-    case 'lg':
-      return 'px-6 py-3 text-lg'
-    default:
-      return 'px-4 py-2 text-sm'
-  }
-})
-
-const widthClasses = computed(() => props.block ? 'w-full' : '')
-
-const buttonStyle = computed(() => {
-  if (props.variant === 'primary' || (!props.variant && props.variant !== 'secondary' && props.variant !== 'danger' && props.variant !== 'success' && props.variant !== 'ghost' && props.variant !== 'outline' && props.variant !== 'text')) {
-    return { background: 'var(--theme-primary)' }
-  }
-  if (props.variant === 'text') {
-    return { color: 'var(--theme-primary)' }
-  }
-  return {}
-})
+function handleRouterClick(event: MouseEvent, navigate: (event?: MouseEvent) => void) {
+  if (props.disabled || props.loading)
+    return
+  emit('click', event)
+  navigate(event)
+}
 </script>
 
 <template>
-  <component
-    :is="componentTag"
-    :to="to"
-    :href="disabled || loading ? undefined : href"
-    :tabindex="disabled || loading ? -1 : undefined"
-    :type="!to && !href ? (type || 'button') : undefined"
-    :disabled="!to && !href ? disabled || loading : undefined"
-    :aria-disabled="disabled || loading || undefined"
-    :aria-busy="loading || undefined"
-    :class="[baseClasses, variantClasses, sizeClasses, widthClasses]"
-    :style="buttonStyle"
-    v-bind="$attrs"
-    @click="disabled || loading ? $event.preventDefault() : emit('click', $event)"
+  <NButton
+    v-if="!to"
+    class="base-button"
+    :tag="href ? 'a' : 'button'"
+    :href="href"
+    :attr-type="type || 'button'"
+    :type="naiveType"
+    :size="naiveSize"
+    :loading="loading"
+    :disabled="disabled"
+    :block="block"
+    :secondary="variant === 'secondary'"
+    :quaternary="variant === 'ghost'"
+    :ghost="variant === 'outline'"
+    :text="variant === 'text'"
+    @click="handleClick"
   >
-    <div v-if="loading" class="i-svg-spinners-ring-resize mr-2 animate-spin" />
+    <template v-if="$slots.icon" #icon>
+      <slot name="icon" />
+    </template>
     <slot />
-  </component>
+  </NButton>
+  <RouterLink v-else v-slot="{ href: routerHref, navigate }" :to="to" custom>
+    <NButton
+      class="base-button"
+      tag="a"
+      :href="routerHref"
+      :type="naiveType"
+      :size="naiveSize"
+      :loading="loading"
+      :disabled="disabled"
+      :block="block"
+      :secondary="variant === 'secondary'"
+      :quaternary="variant === 'ghost'"
+      :ghost="variant === 'outline'"
+      :text="variant === 'text'"
+      @click="handleRouterClick($event, navigate)"
+    >
+      <template v-if="$slots.icon" #icon>
+        <slot name="icon" />
+      </template>
+      <slot />
+    </NButton>
+  </RouterLink>
 </template>

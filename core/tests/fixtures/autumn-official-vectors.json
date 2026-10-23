@@ -1,0 +1,179 @@
+[
+  {
+    "direction": "send",
+    "hex": "08f1ee8ec6071033ba09020805",
+    "expected": {
+      "activity_id": "2026092401",
+      "operate_type": "51",
+      "wish_sign_draw": {
+        "choose_id": "5"
+      }
+    }
+  },
+  {
+    "direction": "recv",
+    "hex": "08f1ee8ec6071033ba090b080110011a0508f12e1014",
+    "expected": {
+      "activity_id": "2026092401",
+      "operate_type": "51",
+      "wish_sign_draw": {
+        "rewards": [
+          {
+            "id": "6001",
+            "count": "20"
+          }
+        ],
+        "text_id": "1",
+        "day_id": "1"
+      }
+    }
+  },
+  {
+    "direction": "send",
+    "hex": "08f1ee8ec6071034c209020805",
+    "expected": {
+      "activity_id": "2026092401",
+      "operate_type": "52",
+      "wish_sign_claim": {
+        "choose_id": "5"
+      }
+    }
+  },
+  {
+    "direction": "recv",
+    "hex": "08f1ee8ec6071034c209070a0508f12e1014",
+    "expected": {
+      "activity_id": "2026092401",
+      "operate_type": "52",
+      "wish_sign_claim": {
+        "awards": [
+          {
+            "id": "6001",
+            "count": "20"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "direction": "send",
+    "hex": "08d5ef8ec6071045ca0900",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "69",
+      "share_reward_share": {}
+    }
+  },
+  {
+    "direction": "recv",
+    "hex": "08d5ef8ec6071045ca09280a24087b120973796e7468657469631a0973796e74686574696320012a0808011204746573741005",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "69",
+      "share_reward_share": {
+        "ark": {
+          "host_gid": "123",
+          "share_key": "synthetic",
+          "share_open_id": "synthetic",
+          "ark_biz_type": 1,
+          "ark_biz_param": "CAESBHRlc3Q="
+        },
+        "granted_score": "5"
+      }
+    }
+  },
+  {
+    "direction": "send",
+    "hex": "08d5ef8ec6071046d20900",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "70",
+      "share_reward_claim_milestones": {}
+    }
+  },
+  {
+    "direction": "recv",
+    "hex": "08d5ef8ec6071046d209100a0601818080801012060882f1041001",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "70",
+      "share_reward_claim_milestones": {
+        "claimed_tier_ids": [
+          "1",
+          "4294967297"
+        ],
+        "rewards": [
+          {
+            "id": "80002",
+            "count": "1"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "direction": "send",
+    "hex": "08d5ef8ec6071047da090f08ffffffffffffffffff0110641802",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "71",
+      "share_reward_get_logs": {
+        "page": -1,
+        "page_size": 100,
+        "tab": 2
+      }
+    }
+  },
+  {
+    "direction": "recv",
+    "hex": "08d5ef8ec6071047da092f0a2b08828080801010011a0e087b1206e6b58be8af951a00280f200528ff8ad2d506320973796e7468657469631001",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "71",
+      "share_reward_get_logs": {
+        "logs": [
+          {
+            "seq": "4294967298",
+            "kind": 1,
+            "actor": {
+              "gid": "123",
+              "name": "测试",
+              "avatar": "",
+              "level": "15"
+            },
+            "score": "5",
+            "created_at": "1790215551",
+            "ark_token": "synthetic"
+          }
+        ],
+        "total": 1
+      }
+    }
+  },
+  {
+    "direction": "send",
+    "hex": "08d5ef8ec6071049ea0900",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "73",
+      "share_reward_claim_daily": {}
+    }
+  },
+  {
+    "direction": "recv",
+    "hex": "08d5ef8ec6071049ea09090a0508870810051005",
+    "expected": {
+      "activity_id": "2026092501",
+      "operate_type": "73",
+      "share_reward_claim_daily": {
+        "rewards": [
+          {
+            "id": "1031",
+            "count": "5"
+          }
+        ],
+        "granted_score": "5"
+      }
+    }
+  }
+]

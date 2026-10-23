@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, useId } from 'vue'
-import { useModalFocus } from '@/composables/useModalFocus'
-import api from '@/api'
+import { NCard } from 'naive-ui/es/card'
+import { NModal } from 'naive-ui/es/modal'
+import { ref, watch } from 'vue'
+import api, { getApiErrorMessage } from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 
@@ -26,13 +27,20 @@ watch(() => props.show, (val) => {
 async function save() {
   if (!props.account)
     return
+
+  const remark = name.value.trim()
+  if (!remark) {
+    errorMessage.value = '请输入备注名称'
+    return
+  }
+
   loading.value = true
   errorMessage.value = ''
   try {
     // 使用 name 字段存储备注，只发送 id 和 name 两个字段
     const payload = {
       id: props.account.id,
-      name: name.value,
+      name: remark,
     }
 
     const res = await api.post('/api/accounts', payload)
@@ -41,41 +49,41 @@ async function save() {
       emit('close')
     }
     else {
-      errorMessage.value = `保存失败: ${res.data.error}`
+      errorMessage.value = `保存失败: ${getApiErrorMessage(res.data, '请求失败')}`
     }
   }
   catch (e: any) {
-    errorMessage.value = `保存失败: ${e.response?.data?.error || e.message}`
+    errorMessage.value = `保存失败: ${getApiErrorMessage(e, '请求失败')}`
   }
   finally {
     loading.value = false
   }
 }
-const modalSurface = ref<HTMLElement | null>(null)
-const modalId = useId()
-useModalFocus(() => props.show, modalSurface, () => { if (!loading.value) emit('close') })
 </script>
 
 <template>
-  <div v-if="show" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-    <div ref="modalSurface" role="dialog" aria-modal="true" :aria-labelledby="`${modalId}-title`" tabindex="-1" class="max-w-sm w-full overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
-      <div class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
-        <h3 :id="`${modalId}-title`" class="text-lg font-semibold">
-          修改备注
-        </h3>
-        <BaseButton variant="ghost" aria-label="关闭弹窗" class="!p-1" @click="$emit('close')">
-          <div class="i-carbon-close text-xl" />
-        </BaseButton>
-      </div>
-
-      <div class="p-4 space-y-4">
-        <div v-if="errorMessage" class="rounded bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+  <NModal
+    :show="show"
+    :mask-closable="!loading"
+    :close-on-esc="!loading"
+    @update:show="value => !value && $emit('close')"
+  >
+    <NCard
+      class="remark-modal-card"
+      title="修改备注"
+      :bordered="false"
+      :closable="!loading"
+      @close="$emit('close')"
+    >
+      <div class="space-y-4">
+        <div v-if="errorMessage" class="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
           {{ errorMessage }}
         </div>
         <BaseInput
           v-model="name"
           label="备注名称"
           placeholder="请输入备注名称"
+          class="farm-input"
           @keyup.enter="save"
         />
 
@@ -95,6 +103,12 @@ useModalFocus(() => props.show, modalSurface, () => { if (!loading.value) emit('
           </BaseButton>
         </div>
       </div>
-    </div>
-  </div>
+    </NCard>
+  </NModal>
 </template>
+
+<style scoped>
+.remark-modal-card {
+  width: min(384px, calc(100vw - 32px));
+}
+</style>

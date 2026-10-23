@@ -3,407 +3,188 @@ syntax = "proto3";
 package gamepb.activitypb;
 
 import "corepb.proto";
+import "autumn-activities.proto";
+import "milk-tea.proto";
+import "pet-diary.proto";
 
-service ActivityService {
-    rpc List(ListRequest) returns (ListReply);
-    rpc GetGroup(GetGroupRequest) returns (GetGroupReply);
-    rpc Operate(OperateRequest) returns (OperateReply);
+message ActivityContent {
+    int64 activity_id = 1;
+    int64 group_id = 2;
+    int64 type = 3;
+    string name = 4;
+    bytes extra = 5;
+    int64 begin_time = 6;
+    int64 end_time = 7;
+    int64 sort_order = 8;
+    int64 field_20 = 20;
+    int64 field_21 = 21;
+    int64 field_22 = 22;
+    int64 field_23 = 23;
+    int64 settle_start_time = 24;
 }
 
-message ListRequest {}
-
-message GetGroupRequest {
-    int64 id = 1;
-    string uid = 2;
-}
-
-message DrawParams {
-    int64 id = 1;
-    int64 count = 2;
-    corepb.Item cost = 3;
-}
-
-message RandomShopOperateParams {
-    int64 id = 1;
-    int64 count = 2;
-}
-
-message ExchangeShopOperateParams {
-    int64 id = 1;
+message ActivityItem {
+    int64 item_id = 1;
     int64 count = 2;
 }
 
-message HeluPaidDrawParams {
-    int64 type = 1;
-    int64 count = 2;
-    int64 item_uid = 3;
-}
-
-message WeatherTask { int32 id = 1; int64 item_id = 2; corepb.Item reward = 3; string desc = 4; int32 target = 5; int32 progress = 6; }
-message WeatherTaskInfo { repeated WeatherTask tasks = 1; }
-message WeatherResearchStage { int32 id = 1; bytes progress = 2; int32 status = 3; int32 claimed = 5; corepb.Item cost = 6; corepb.Item reward = 7; bool repeatable = 8; int32 limit = 9; }
-message WeatherResearchProgress { int32 current_stage = 1; repeated WeatherResearchStage stages = 2; }
-message WeatherResearchInfo { WeatherResearchProgress progress = 1; }
-
-message QingmeiClaimParams {
-    int32 type = 1;
-}
-
-message QingmeiWineStartParams {
-    repeated corepb.Item items = 1;
-}
-
-message QingmeiWineBrewParams {
-}
-
-message QingmeiWineSellParams {
-    int32 multiple = 1;
-}
-
-message QixiGiftParams {
-    int64 friend_gid = 1;
-    int32 gift_id = 2;
-}
-
-message TechTreeSubmitNodeReq {
-    int64 node_id = 1;
-}
-
-message TechTreeSubmitNodeRsp {
-    int64 node_id = 1;
-    repeated corepb.Item rewards = 2;
-    repeated int64 unlocked_node_ids = 3;
-}
-
-message WishSignDrawReq { int32 choose_id = 1; }
-message WishSignClaimReq { int32 choose_id = 1; }
-message WishSignPending {
-    int32 choose_id = 1;
-    int32 text_id = 2;
-    int32 day_id = 3;
-    repeated corepb.Item rewards = 4;
-}
-message ActivityBodyWishSign {
-    int32 remaining_count = 1;
-    int32 activity_day = 2;
-    WishSignPending pending = 3;
-}
-message WishSignDrawRsp {
-    int32 text_id = 1;
-    int32 day_id = 2;
-    repeated corepb.Item rewards = 3;
-}
-message WishSignClaimRsp { repeated corepb.Item awards = 1; }
-
-message ShareRewardDailyView {
-    int32 claimed_count = 1;
-    bool first_share_awarded = 2;
-    bool daily_reward_claimed = 3;
-    int32 claim_limit = 4;
-}
-message ShareRewardPoolView { int32 claimed_count = 1; int32 claim_limit = 2; }
-message ShareRewardMilestoneView {
-    int32 tier_id = 1;
-    int32 threshold = 2;
-    repeated corepb.Item rewards = 3;
-    int32 state = 4;
-}
-message ShareRewardRedDots {
-    bool daily = 1;
-    bool milestone = 2;
-    bool unread_host_log = 3;
-    bool first_share = 4;
-    bool unread_guest_log = 5;
-}
-message ShareRewardSummary {
-    int64 score_item_id = 1;
-    int32 current_score = 2;
-    ShareRewardDailyView daily = 3;
-    ShareRewardPoolView my_pool = 4;
-    repeated ShareRewardMilestoneView milestones = 5;
-    int32 daily_reward = 6;
-    int32 first_share_reward = 7;
-    ShareRewardRedDots red_dots = 8;
-}
-message ActivityBodyShareReward { ShareRewardSummary summary = 1; }
-message ShareRewardArk {
-    int64 host_gid = 1;
-    string share_key = 2;
-    string share_open_id = 3;
-    int32 ark_biz_type = 4;
-    bytes ark_biz_param = 5;
-}
-message ShareRewardShareRsp { ShareRewardArk ark = 1; int32 granted_score = 2; }
-message ShareRewardClaimMilestonesRsp {
-    repeated int32 claimed_tier_ids = 1;
-    repeated corepb.Item rewards = 2;
-}
-message ShareRewardClaimDailyRsp {
-    repeated corepb.Item rewards = 1;
-    int32 granted_score = 2;
-}
-
-message CharityFlowerClaimShareReq {}
-message CharityFlowerDonateAllReq {}
-message CharityFlowerClaimRewardReq { int64 need_personal_score = 1; }
-message CharityFlowerClaimXhhReq {}
-message CharityFlowerSetComplianceAgreedReq { bool agreed = 1; }
-
-message OperateRequest {
-    int64 id = 1;
-    int64 cmd = 2;
-    DrawParams draw = 3;
-    ExchangeShopOperateParams exchange_shop_operate = 101;
-    RandomShopOperateParams random_shop_operate = 102;
-    QingmeiClaimParams qingmei_claim_params = 103;
-    HeluPaidDrawParams helu_paid_draw = 107;
-    QingmeiWineStartParams qingmei_wine_start = 112;
-    QingmeiWineBrewParams qingmei_wine_brew = 113;
-    QingmeiWineSellParams qingmei_wine_sell = 114;
-    QixiGiftParams qixi_gift = 124;
-    CharityFlowerClaimShareReq charity_flower_claim_share = 134;
-    CharityFlowerDonateAllReq charity_flower_donate_all = 135;
-    CharityFlowerClaimRewardReq charity_flower_claim_reward = 136;
-    CharityFlowerClaimXhhReq charity_flower_claim_xhh = 137;
-    CharityFlowerSetComplianceAgreedReq charity_flower_set_compliance_agreed = 138;
-    TechTreeSubmitNodeReq tech_tree_submit_node = 140;
-    WishSignDrawReq wish_sign_draw = 151;
-    WishSignClaimReq wish_sign_claim = 152;
-    ShareRewardShareReq share_reward_share = 153;
-    ShareRewardClaimMilestonesReq share_reward_claim_milestones = 154;
-    ShareRewardClaimDailyReq share_reward_claim_daily = 157;
-}
-
-message ShareRewardShareReq {}
-message ShareRewardClaimMilestonesReq {}
-message ShareRewardClaimDailyReq {}
-
-message RandomShopItem {
-    int32 id = 1;
-    string name = 2;
-    corepb.Item item = 4;
-    corepb.Item cost = 5;
-    int32 stock_count = 6;
-    int32 bought_count = 7;
-    bool special = 8;
-}
-
-message RandomShopInfo {
-    repeated RandomShopItem items = 1;
-    int64 next_refresh_time = 2;
-    int32 manual_refresh_cost = 3;
-    int32 manual_refresh_currency_id = 4;
-    int32 manual_refresh_extra_value = 5;
-    int32 max_manual_refresh_count = 6;
-    int32 manual_refresh_used_count = 7;
-}
-
-message ExchangeShopItem {
-    int32 id = 1;
-    corepb.Item item = 2;
-    corepb.Item cost = 3;
-    int32 status = 4;
+message StarSandGoods {
+    int64 goods_id = 1;
+    ActivityItem item = 2;
+    ActivityItem cost = 3;
+    int64 status = 4;
     bool owned = 5;
-    int32 sort = 6;
-    string name = 7;
-    string extra = 8;
+    int64 sort_order = 6;
+    bytes name = 7;
+    bytes resource_json = 8;
+    int64 field_10 = 10;
+    int64 field_11 = 11;
+    bytes category = 12;
 }
 
-message ExchangeShopInfo {
-    repeated ExchangeShopItem items = 1;
+message StarSandGoodsList {
+    repeated StarSandGoods goods = 1;
 }
 
-message DrawPoolItem {
-    int32 id = 1;
-    int32 rarity = 2;
-    corepb.Item item = 3;
-    int32 flag = 4;
+message ConstellationNode {
+    int64 node_id = 1;
+    bool field_2 = 2;
+    bool field_3 = 3;
+    bool field_4 = 4;
+    repeated ActivityItem rewards = 5;
+}
+
+message ConstellationGroup {
+    int64 group_id = 1;
+    bool field_2 = 2;
+    string name = 3;
+    string links = 4;
+    string config_json = 5;
+}
+
+message ConstellationData {
+    int64 field_1 = 1;
+    int64 field_2 = 2;
+    int64 field_3 = 3;
+    repeated ConstellationNode nodes = 4;
+    repeated ConstellationGroup groups = 5;
+}
+
+// 雨落成诗：天气采集瓶的产出配置。尚未抓到语义的字段保留协议字段名，
+// 避免把客户端静态配置误当成账号动态进度。
+message WeatherBottleReward {
+    int64 reward_id = 1;
+    ActivityItem reward = 3;
+    int64 status = 4;
     string probability = 6;
 }
 
-message DrawInfo {
-    int32 free_remaining_count = 1;
-    int32 max_free_count = 2;
-    int32 paid_remaining_count = 3;
-    int32 max_paid_count = 4;
-    int32 paid_currency_id = 5;
-    int32 paid_price = 6;
-    int32 fallback_price = 7;
-    repeated DrawPoolItem rewards = 8;
+message WeatherBottleConfig {
+    int64 field_3 = 3;
+    int64 field_4 = 4;
+    int64 collector_item_id = 5;
+    int64 collector_item_count = 6;
+    repeated WeatherBottleReward rewards = 8;
+    int64 field_9 = 9;
 }
 
-message DrawReward {
-    int32 slot_id = 1;
-    corepb.Item item = 2;
-    int32 flag = 4;
-}
-
-message DrawResult {
-    repeated DrawReward rewards = 1;
-    repeated corepb.Item items = 2;
-    corepb.Item cost = 3;
-}
-
-message QingmeiPreviewResult {
-    int64 price = 1;
-}
-
-message QingmeiBrewResult {
-    int32 wine_type = 1;
-    int64 cost = 2;
-    int64 price = 3;
-    bool can_double = 4;
-}
-
-message QingmeiSellResult {
-    int32 multiple = 1;
-    int64 gold = 2;
-    corepb.Item item = 3;
-}
-
-message QingmeiClaimResult {
-    repeated corepb.Item items = 1;
-}
-
-message ActivityInfo {
-    int64 id = 1;
-    int64 parent_id = 2;
-    int32 type = 3;
+message WeatherActivityTask {
+    int64 task_id = 1;
+    int64 trigger_item_id = 2;
+    ActivityItem reward = 3;
     string title = 4;
-    string payload = 5;
-    int64 start_time = 6;
-    int64 end_time = 7;
-    int32 sort = 8;
-    bool visible = 20;
-    int32 status = 21;
-    bool enabled = 22;
-    RandomShopInfo random_shop = 101;
-    ExchangeShopInfo exchange_shop = 102;
-    DrawInfo draw_info = 105;
+    int64 daily_limit = 5;
+    int64 current = 6;
 }
 
-message QixiBridgeStage {
-    int32 id = 1;
-    corepb.Item cost = 2;
-    repeated corepb.Item rewards = 3;
-    int32 status = 4;
+message WeatherActivityTasks {
+    repeated WeatherActivityTask tasks = 1;
 }
 
-message QixiBridgeInfo {
-    repeated corepb.Item balances = 1;
-    repeated QixiBridgeStage stages = 2;
-    int32 last_built_stage_id = 3;
+message WeatherResearchNode {
+    int64 node_id = 1;
+    repeated int64 prerequisite_node_ids = 2 [packed = true];
+    int64 status = 3;
+    bool claimed = 4;
+    int64 field_5 = 5;
+    ActivityItem cost = 6;
+    ActivityItem reward = 7;
+    int64 field_8 = 8;
+    int64 field_9 = 9;
 }
 
-message QixiGiftRule {
-    corepb.Item cost = 1;
-    corepb.Item reward = 2;
-    bool enabled = 3;
-    bool visible = 4;
+message WeatherResearchTrack {
+    int64 current_stage = 1;
+    repeated WeatherResearchNode nodes = 2;
 }
 
-message QixiGiftInfo {
-    int32 sent_count = 1;
-    int32 received_count = 2;
-    int32 max_count = 3;
-    QixiGiftRule rule = 4;
+message WeatherResearchData {
+    WeatherResearchTrack track = 1;
 }
 
-message ActivityNode {
-    ActivityInfo activity = 1;
-    repeated ActivityNode children = 2;
-    RandomShopInfo random_shop = 101;
-    ExchangeShopInfo exchange_shop = 102;
-    DrawInfo draw_info = 105;
-    StarRecordInfo star_record = 110;
-    QixiBridgeInfo qixi_bridge = 112;
-    QixiGiftInfo qixi_gift = 113;
-    WeatherTaskInfo weather_tasks = 117;
-    WeatherResearchInfo weather_research = 118;
-    ActivityBodyCharityFlower charity_flower = 116;
-    ActivityBodyPetDiary pet_diary = 115;
+message ActivityData {
+    ActivityBodyMilkTea milk_tea = 121;
+    ActivityBodyGrowthFund growth_fund = 122;
     ActivityBodyWishSign wish_sign = 119;
     ActivityBodyShareReward share_reward = 120;
+    ActivityContent activity = 1;
+    repeated ActivityData children = 2;
+    StarSandGoodsList catalog = 102;
+    QingMeiDailySeedData qingmei_daily_seed = 103;
+    QingMeiBrewData qingmei_brew = 108;
+    ConstellationData constellation = 110;
+    ActivityBodyPetTreasureHunt pet_treasure_hunt = 115;
+    QixiBridgeConfig qixi_bridge = 112;
+    QixiGiftProgress qixi_gift = 113;
+    QingMeiQuote qingmei_quote = 114;
+    WeatherBottleConfig weather_bottle = 105;
+    CharityRedFlowerData charity_red_flower = 116;
+    WeatherActivityTasks weather_tasks = 117;
+    WeatherResearchData weather_research = 118;
 }
 
-enum CharityFlowerShareStatus {
-    CHARITY_FLOWER_SHARE_STATUS_UNKNOWN = 0;
-    CHARITY_FLOWER_SHARE_NOT_COMPLETED = 1;
-    CHARITY_FLOWER_SHARE_CLAIMABLE = 2;
-    CHARITY_FLOWER_SHARE_CLAIMED = 3;
+message CharityRedFlowerProgressReward {
+    int64 target = 1;
+    ActivityItem reward = 2;
+    int64 status = 3;
 }
 
-enum CharityFlowerXhhStatus {
-    CHARITY_FLOWER_XHH_STATUS_UNKNOWN = 0;
-    CHARITY_FLOWER_XHH_NOT_ELIGIBLE = 1;
-    CHARITY_FLOWER_XHH_CLAIMABLE = 2;
-    CHARITY_FLOWER_XHH_CLAIMED = 3;
+message CharityRedFlowerGlobalReward {
+    int64 target = 1;
+    ActivityItem reward = 2;
 }
 
-message CharityFlowerPersonalReward {
-    int64 need_personal_score = 1;
-    repeated corepb.Item reward = 2;
-    bool reached = 3;
-    bool claimed = 4;
+message CharityRedFlowerPublicFund {
+    int64 date = 1;
+    string order_id = 2;
+    string token = 3;
+    int64 status = 4;
 }
 
-message CharityFlowerGlobalReward {
-    int64 need_global_score = 1;
-    repeated corepb.Item reward = 2;
-    bool reached = 3;
-}
-
-message CharityFlowerXhhSuccessOrder {
-    int64 day = 1;
-    string xhh_code = 2;
-    string xhh_trans_code = 3;
-    int32 xhh_num = 4;
-}
-
-message ActivityBodyCharityFlower {
+message CharityRedFlowerData {
     int64 love_item_id = 1;
-    int64 love_count = 2;
-    int64 personal_score = 3;
-    int64 global_score = 4;
-    int64 max_global_score = 5;
-    CharityFlowerShareStatus share_status = 6;
-    repeated corepb.Item share_reward = 7;
-    repeated int64 task_ids = 8;
-    repeated CharityFlowerPersonalReward personal_rewards = 9;
-    repeated CharityFlowerGlobalReward global_rewards = 10;
-    int64 final_pack_threshold = 11;
-    repeated corepb.Item final_reward = 12;
-    int64 settlement_time = 13;
-    bool settled = 14;
-    bool final_reward_eligible = 15;
-    bool can_donate = 16;
-    CharityFlowerXhhStatus xhh_status = 17;
-    repeated CharityFlowerXhhSuccessOrder xhh_success_orders = 18;
-    bool compliance_agreed = 19;
-    string business_id = 20;
-    repeated corepb.Item xhh_reward = 21;
+    int64 love_balance = 2;
+    int64 donated_love = 3;
+    int64 global_donated_love = 4;
+    int64 global_target_love = 5;
+    int64 seed_reward_status = 6;
+    ActivityItem seed_reward = 7;
+    int64 field_8 = 8;
+    repeated CharityRedFlowerProgressReward progress_rewards = 9;
+    CharityRedFlowerGlobalReward global_reward = 10;
+    int64 settlement_required_love = 11;
+    ActivityItem settlement_reward = 12;
+    int64 end_time = 13;
+    int64 field_14 = 14;
+    int64 field_15 = 15;
+    int64 field_16 = 16;
+    int64 flow_status = 17;
+    CharityRedFlowerPublicFund public_fund = 18;
+    int64 agreement_status = 19;
+    int64 field_20 = 20;
+    ActivityItem daily_reward = 21;
+    int64 daily_reward_status = 22;
 }
-
-message CharityFlowerClaimShareRsp { repeated corepb.Item awards = 1; }
-message CharityFlowerDonateAllRsp {
-    int64 consumed_love_count = 1;
-    int64 score_added = 2;
-    int64 personal_score = 3;
-    int64 global_score = 4;
-    repeated int64 reached_global_scores = 5;
-}
-message CharityFlowerClaimRewardRsp {
-    int64 need_personal_score = 1;
-    repeated corepb.Item awards = 2;
-}
-message CharityFlowerClaimXhhRsp {
-    int32 xhh_num = 1;
-    string xhh_code = 2;
-    repeated corepb.Item awards = 3;
-    string trans_code = 4;
-    string business_id = 5;
-}
-message CharityFlowerSetComplianceAgreedRsp { bool agreed = 1; }
 
 message ActivityWindow {
     int64 id = 1;
@@ -412,122 +193,332 @@ message ActivityWindow {
     int64 end_time = 4;
 }
 
-message ListReply {
-    repeated ActivityNode groups = 1;
+message ActivityListRequest {}
+
+message ActivityListReply {
+    repeated ActivityData activities = 1;
     repeated ActivityWindow activity_windows = 2;
 }
 
+message SetSplashedRequest {
+    int64 activity_id = 1;
+}
+
+message SetSplashedReply {}
+
+message GetGroupRequest {
+    int64 group_id = 1;
+}
+
 message GetGroupReply {
-    ActivityNode group = 1;
+    ActivityData group = 1;
 }
 
-message StarRecordReward {
-    int32 id = 1;
-    bool unlocked = 2;
-    bool claimed = 3;
-    repeated corepb.Item rewards = 5;
+message QingMeiDailySeedGrant {
+    int64 grant_id = 1;
+    ActivityItem item = 3;
 }
 
-message StarRecordConfig {
-    int32 id = 1;
-    bool featured = 2;
-    string title = 3;
-    string graph = 4;
-    string extra = 5;
+message QingMeiDailySeedData {
+    bool claimed = 1;
+    QingMeiDailySeedGrant grant = 2;
 }
 
-message StarRecordInfo {
-    int32 status = 1;
-    int32 opened_days = 2;
-    repeated StarRecordReward records = 4;
-    repeated StarRecordConfig configs = 5;
+message QingMeiBrewData {
+    int64 base_gold = 1;
+    int64 current_round = 2;
+    int64 max_rounds = 3;
+    repeated int64 quote_prices = 4 [packed = true];
+    repeated int64 quote_totals = 5 [packed = true];
+    bool finished = 6;
+    int64 base_price = 7;
+    repeated int64 ingredient_item_ids = 8 [packed = true];
+    int64 guaranteed_price = 9;
 }
 
-message StarRecordClaimResult {
-    repeated int32 record_ids = 1;
-    repeated corepb.Item rewards = 2;
+message QixiBridgeStage {
+    int64 stage = 1;
+    ActivityItem cost = 2;
+    repeated ActivityItem rewards = 3;
+    int64 status = 4;
 }
 
-message OperateReply {
-    int64 id = 1;
-    int32 cmd = 2;
-    ActivityNode group = 3;
-    DrawResult draw_result = 108;
-    QingmeiPreviewResult qingmei_preview = 113;
-    QingmeiBrewResult qingmei_brew = 114;
-    QingmeiSellResult qingmei_sell = 115;
-    QingmeiClaimResult qingmei_claim = 104;
-    StarRecordClaimResult star_record_claim = 120;
-    corepb.Item qixi_gift_result = 125;
-    CharityFlowerClaimShareRsp charity_flower_claim_share = 135;
-    CharityFlowerDonateAllRsp charity_flower_donate_all = 136;
-    CharityFlowerClaimRewardRsp charity_flower_claim_reward = 137;
-    CharityFlowerClaimXhhRsp charity_flower_claim_xhh = 138;
-    CharityFlowerSetComplianceAgreedRsp charity_flower_set_compliance_agreed = 139;
-    TechTreeSubmitNodeRsp tech_tree_submit_node = 140;
+message QixiBridgeConfig {
+    repeated ActivityItem display_items = 1;
+    repeated QixiBridgeStage stages = 2;
+    int64 current_stage = 3;
+}
+
+message QixiGiftExchange {
+    repeated ActivityItem cost_items = 1;
+    repeated ActivityItem receive_items = 2;
+    int64 gift_type = 3;
+    int64 content = 4;
+}
+
+message QixiGiftProgress {
+    int64 total_send_count = 1;
+    int64 total_send_limit = 2;
+    int64 total_receive_limit = 3;
+    repeated QixiGiftExchange gifts = 4;
+}
+
+message QingMeiBrewStarted {
+    int64 base_gold = 1;
+}
+
+message QingMeiQuote {
+    int64 round = 1;
+    int64 unit_price = 2;
+    int64 total_gold = 3;
+    bool doubled = 4;
+}
+
+message QingMeiSettlement {
+    int64 settlement_mode = 1;
+    int64 total_gold = 2;
+    corepb.Item reward = 3;
+}
+
+// ActivityService.Operate selectors are fixed by the callers below. No generic
+// operate_type is exposed by the HTTP API.
+message QueryActivityRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+}
+
+message ExchangeShopOperateParams {
+    int64 goods_id = 1;
+    int64 count = 2;
+}
+
+message ExchangeShopRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    ExchangeShopOperateParams exchange_shop_operate = 101;
+}
+
+// 雨落成诗：推进一个气象研究节点。
+// 实机协议为 operate_type=40，选择器位于 field 140。
+message WeatherResearchOperateParams {
+    int64 node_id = 1;
+}
+
+message AdvanceWeatherResearchRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    WeatherResearchOperateParams weather_research_operate = 140;
+}
+
+// 雨落成诗：在好友雷雨现场使用天气采集瓶。
+// 实机协议为 activity_id=2026070303、operate_type=9，好友 GID 位于
+// field 107 的 field 3；这条链路不经过 ItemService.Use。
+message WeatherCollectOperateParams {
+    int64 host_gid = 3;
+}
+
+message CollectWeatherRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    WeatherCollectOperateParams weather_collect_operate = 107;
+}
+
+// Compatibility aliases used by the upstream activity-center implementation.
+// The verified wire selectors remain field 107 for friend collection and
+// field 140 for weather research.
+message WeatherResearchOperateRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    WeatherResearchOperateParams params = 140;
+}
+
+message WeatherTaskOperateParams {
+    int64 target_gid = 3;
+}
+
+message WeatherTaskOperateRequest {
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    WeatherTaskOperateParams params = 107;
+}
+
+message OperateConstellationRequest {
+    message Empty {}
+
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Empty field_119 = 119;
+}
+
+message ClaimQingMeiDailySeedRequest {
+    message Params { int64 grant_id = 1; }
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Params params = 103;
+}
+
+message StartQingMeiBrewRequest {
+    message Ingredient {
+        int64 uid = 1;
+        int64 count = 2;
+    }
+    message Params { repeated Ingredient ingredients = 1; }
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Params params = 112;
+}
+
+message ContinueQingMeiBrewRequest {
+    message Empty {}
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Empty params = 113;
+}
+
+message SettleQingMeiBrewRequest {
+    message Params { int64 settlement_mode = 1; }
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Params params = 114;
+}
+
+message ClaimQixiBridgeRewardsRequest {
+    message Params { int64 step = 1; }
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Params params = 125;
+}
+
+message GiftQixiSachetRequest {
+    message Params {
+        int64 target_gid = 1;
+        int64 msg_text_id = 2;
+    }
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Params params = 124;
+}
+
+message CharityRedFlowerOperateRequest {
+    message Empty {}
+    message QueryParams { bool accepted = 1; }
+    message ProgressRewardParams { int64 target = 1; }
+
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    Empty claim_seed = 134;
+    Empty donate_love = 135;
+    ProgressRewardParams claim_progress_reward = 136;
+    Empty send_public_fund = 137;
+    QueryParams query = 138;
+}
+
+message CharityRedFlowerSeedResult {
+    corepb.Item reward = 1;
+}
+
+message CharityRedFlowerDonateResult {
+    int64 donated = 1;
+    int64 count = 2;
+    int64 status = 3;
+    int64 global_donated = 4;
+}
+
+message CharityRedFlowerPublicFundResult {
+    int64 status = 1;
+    string order_id = 2;
+    corepb.Item reward = 3;
+    string token = 4;
+}
+
+message CharityRedFlowerQueryResult {
+    bool accepted = 1;
+}
+
+message CharityRedFlowerProgressRewardResult {
+    int64 target = 1;
+    corepb.Item reward = 2;
+}
+
+message QixiGiftResult {
+    int64 total_send_count = 1;
+}
+
+message QixiBridgeRewardResult {
+    repeated int64 unlocked_steps = 1 [packed = true];
+    repeated corepb.Item awards = 2;
+    bool completed = 3;
+}
+
+message ActivityOperateReply {
+    MilkTeaCreateShopRsp milk_tea_create_shop = 158;
+    MilkTeaRenameShopRsp milk_tea_rename_shop = 159;
+    MilkTeaGetShopRsp milk_tea_get_shop = 160;
+    MilkTeaGetHireListRsp milk_tea_get_hire_list = 161;
+    MilkTeaHireRsp milk_tea_hire = 162;
+    MilkTeaGetWorkshopRsp milk_tea_get_workshop = 163;
+    MilkTeaClaimCashierRsp milk_tea_claim_cashier = 164;
+    MilkTeaBoostRsp milk_tea_boost = 165;
+    MilkTeaUpgradeRsp milk_tea_upgrade = 166;
+    MilkTeaCraftRsp milk_tea_craft = 167;
+    MilkTeaGetWorkPageRsp milk_tea_get_work_page = 168;
+    MilkTeaClaimWagesRsp milk_tea_claim_wages = 169;
+    MilkTeaInteractRsp milk_tea_interact = 170;
+    MilkTeaGetRankRsp milk_tea_get_rank = 171;
+    MilkTeaGetSalesLogRsp milk_tea_get_sales_log = 172;
+    MilkTeaSetHireDisableRsp milk_tea_set_hire_disable = 173;
+    MilkTeaGuideStepRsp milk_tea_guide_step = 174;
+    UnlockGrowthFundRsp growth_fund_unlock = 175;
+    ClaimGrowthFundRsp growth_fund_claim = 176;
+    MilkTeaSetSubscribeRsp milk_tea_set_subscribe = 179;
     WishSignDrawRsp wish_sign_draw = 151;
     WishSignClaimRsp wish_sign_claim = 152;
     ShareRewardShareRsp share_reward_share = 153;
     ShareRewardClaimMilestonesRsp share_reward_claim_milestones = 154;
+    ShareRewardGetLogsRsp share_reward_get_logs = 155;
+    ShareRewardResolveArkRsp share_reward_resolve = 156;
     ShareRewardClaimDailyRsp share_reward_claim_daily = 157;
+    int64 activity_id = 1;
+    int64 operate_type = 2;
+    ActivityData data = 3;
+    repeated corepb.Item rewards = 104;
+    QingMeiBrewStarted qingmei_brew_started = 113;
+    QingMeiQuote qingmei_quote = 114;
+    QingMeiSettlement qingmei_settlement = 115;
+    QixiGiftResult qixi_gift_result = 125;
+    QixiBridgeRewardResult qixi_bridge_result = 126;
+    ExchangeShopResult weather_exchange_result = 101;
+    WeatherTaskOperateResult weather_task_result = 108;
+    WeatherResearchOperateResult weather_research_result = 140;
+    CharityRedFlowerSeedResult charity_seed_result = 135;
+    CharityRedFlowerDonateResult charity_donate_result = 136;
+    CharityRedFlowerProgressRewardResult charity_progress_reward_result = 137;
+    CharityRedFlowerPublicFundResult charity_public_fund_result = 138;
+    CharityRedFlowerQueryResult charity_query_result = 139;
 }
 
-// 萌宠日记（S3 比熊萌宠主题赛季，uid = SEASON_BEAR_CAMPAIGN）活动体，
-// 对应 ActivityNode 字段 115。
-// 字段号来自 2026-09-10 官方客户端 List/Operate 明文响应；
-// 子字段语义为结合官方活动规则与多帧差分推断命名，尚未与官方生成代码逐字段核对，
-// 详见 core/docs/pet-diary-protocol-recovery.md。
-message ActivityBodyPetDiary {
-    PetDiaryPet pet = 1;                // 115.1 比熊成长状态
-    PetDiaryHome home = 2;              // 115.2 比熊之家解锁状态
-    PetDiaryEscort escort = 3;          // 115.3 寻宝/宝藏护送状态
-    PetDiaryPhotoWall photo_wall = 4;   // 115.4 爪印手记照片墙
-    PetDiaryPouch pouch = 6;            // 115.6 锦囊
-    // 115.7 / 115.8 / 115.9 在抓包中为空子消息，含义未确认，暂不解析。
+message ExchangeShopResult {
+    corepb.Item item = 1;
+    ActivityItem cost = 2;
 }
 
-// 115.1 比熊成长状态。抓包观察到 {1: 1}、{3: 700}、{4: 1} 三个标量。
-message PetDiaryPet {
-    int64 stage = 1;      // 阶段，观察到恒为 1
-    int64 progress = 3;   // 成长进度/投喂量，推断
-    int64 state = 4;      // 状态，观察到恒为 1
+message WeatherTaskRewardLink {
+    int64 task_id = 1;
+    ActivityItem item = 2;
 }
 
-// 115.2 比熊之家状态。抓包仅观察到 {1: 1}。
-message PetDiaryHome {
-    int64 state = 1;
+message WeatherTaskOperateResult {
+    WeatherTaskRewardLink task_reward = 1;
+    corepb.Item gained = 2;
+    corepb.Item consumed = 3;
 }
 
-// 115.3 寻宝/宝藏护送状态。抓包观察到 {3: 100} 与 {4: {id:1028, count:700}}。
-// 1028 为「萌宠元气糕」，100 与规则中「100 点不可掠夺保底资金」一致。
-message PetDiaryEscort {
-    int64 guard = 3;       // 宝藏保底资金，观察到恒为 100
-    corepb.Item cake = 4;  // 元气糕相关记录，推断为寻宝消耗或库存
+message WeatherResearchOperateResult {
+    int64 node_id = 1;
+    corepb.Item reward = 2;
+    repeated int64 unlocked_node_ids = 3 [packed = true];
 }
 
-// 115.4.1 爪印手记单个相册片段。
-message PetDiaryPhotoEntry {
-    int64 id = 1;          // 片段序号，1..9
-    int64 unlocked = 2;    // 是否已解锁
-    int64 progress = 3;    // 解锁/领取进度，推断
-    string content = 4;    // JSON 字符串：{"photo": <spriteFrame>, "say": <spriteFrame>}
-    int64 claimed = 5;     // 是否已领取故事奖励
+message ActiviesChangeNotify {
+    repeated ActivityContent activities = 1;
 }
-
-message PetDiaryPhotoWall {
-    repeated PetDiaryPhotoEntry entries = 1;
-}
-
-// 115.6 锦囊。抓包观察到 {2: "f"}、{4: {1,2,3}}、{6: 1}。
-message PetDiaryPouch {
-    string flag = 2;       // 观察到恒为 "f"
-    PetDiaryPouchSlot slot = 4;
-    int64 state = 6;       // 观察到恒为 1
-}
-
-message PetDiaryPouchSlot {
-    int64 id = 1;          // 观察到 105
-    int64 type = 2;        // 观察到 1
-    int64 count = 3;       // 观察到 2
-}
-

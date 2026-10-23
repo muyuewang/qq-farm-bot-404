@@ -1,0 +1,122 @@
+[
+  {
+    "file": "recipe-1.png",
+    "path": "gui/texture/icon/icon_s4_milktea_1/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/c9/c992f60f-1b0d-4044-b818-54516a0dcd2b.0b54f.png",
+    "sha256": "a7868071193f1eed7cb9bc3d7d32aeca45695484fe6a41c49c71df5354ff4e48",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-2.png",
+    "path": "gui/texture/icon/icon_s4_milktea_2/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/6c/6c6c525c-de6a-4987-a5ab-8bee4842f967.314f8.png",
+    "sha256": "91a5e8c775afc0716fb4c3f03727adfc714c94ebd1edf8a240eede115bfe5050",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-3.png",
+    "path": "gui/texture/icon/icon_s4_milktea_3/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/0f/0fb93c67-90c0-473b-a48a-038513c505cb.98c6d.png",
+    "sha256": "443f67528761ae993cd8cd56b54ebcf795f6c82cfc5fd7d4da9fd5f5ed1c4c92",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-4.png",
+    "path": "gui/texture/icon/icon_s4_milktea_4/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/95/95d5579c-649c-4247-a5d6-3848e74876da.ce29e.png",
+    "sha256": "b23f21e1e74a2bdc416391a15b9450182a9f71f8a1965699d99e5c5756095138",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-5.png",
+    "path": "gui/texture/icon/icon_s4_milktea_5/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/c0/c0d05dcd-5ffe-4bf7-a0a0-36ad11089f0b.7a1f5.png",
+    "sha256": "5acd9de638ff09fa5b75cce82f575c62face81e3babdf8d8c170924ad1584063",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-6.png",
+    "path": "gui/texture/icon/icon_s4_milktea_6/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/ac/acb22003-c01c-461b-88a0-17c5825f8a25.1d631.png",
+    "sha256": "3f7faa611754928ad983e35a834c61600330138bd697479dbaaa94fb8044980e",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-7.png",
+    "path": "gui/texture/icon/icon_s4_milktea_7/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/e9/e9cf08b5-5c6c-43bd-bb4d-13938c628846.705a1.png",
+    "sha256": "b591af717ba37d7dbf722050cc713908b67a532e019974628e6c6cb746571475",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-8.png",
+    "path": "gui/texture/icon/icon_s4_milktea_8/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/ed/eda2ac16-3d7b-4573-baee-71d691678c29.f720f.png",
+    "sha256": "a1458ec1f308a230dae70fb950c2bc19f44acba5ce32a997cf804ea2337a15f4",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "recipe-9.png",
+    "path": "gui/texture/icon/icon_s4_milktea_9/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/ab/ab22a4f4-1059-4103-b395-bdd2a01a9a8e.42f9a.png",
+    "sha256": "55b63e42fd339456f58ec30fc8ebaf23654f9b76395a46a8ed32a4b4bf153302",
+    "width": 128,
+    "height": 128
+  },
+  {
+    "file": "logo.png",
+    "path": "gui/texture/Season/S4/S4entrance/naicha_entrance_00/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/extraRes/native/2a/2a414178-0d65-4660-b4ba-16299c3df2ce.c43c5.png",
+    "sha256": "d98d07d485815da41e962f8d3625e7d8fe05fb14aec873e4ea688efad9ec7d97",
+    "width": 112,
+    "height": 91
+  },
+  {
+    "file": "interact-1.png",
+    "path": "gui/texture/Season/S4/S4MyJob/S4interactIcon/icon_S4MyJob_interact_1/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/56/56815f00-4b62-4827-ba45-ccf19e0357d8.ac87f.png",
+    "sha256": "6f535c752f6308f28a0378a3362297dac778258227e02bec2cea151bb3306547",
+    "width": 136,
+    "height": 91
+  },
+  {
+    "file": "interact-2.png",
+    "path": "gui/texture/Season/S4/S4MyJob/S4interactIcon/icon_S4MyJob_interact_2/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/77/77aab656-d4b3-40ca-8305-2abc226bf4a4.751ab.png",
+    "sha256": "74d4a99fd8c91dd60c537d0d54ac5059db559d91f63332f47dead31349a695f9",
+    "width": 92,
+    "height": 102
+  },
+  {
+    "file": "interact-3.png",
+    "path": "gui/texture/Season/S4/S4MyJob/S4interactIcon/icon_S4MyJob_interact_3/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/63/639e73c0-5736-4088-8db8-2cdd76be59b4.69576.png",
+    "sha256": "8ab02094217ab0faf369415f55c77f5aa55385c5cf26e72e67d09f4627a99fe7",
+    "width": 136,
+    "height": 95
+  },
+  {
+    "file": "interact-4.png",
+    "path": "gui/texture/Season/S4/S4MyJob/S4interactIcon/icon_S4MyJob_interact_4/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/1d/1d6ae580-dff1-4572-b69b-6b18acc6e944.e8f78.png",
+    "sha256": "2e9d2aceb99464225ad174d27ff0dbae255a663dc1efa18316caa0293d9b2a8b",
+    "width": 142,
+    "height": 114
+  },
+  {
+    "file": "interact-5.png",
+    "path": "gui/texture/Season/S4/S4MyJob/S4interactIcon/icon_S4MyJob_interact_5/spriteFrame",
+    "url": "https://cdn-resource.nqf.qq.com/release/remote/delayRes/native/fb/fb9e243b-8433-42c3-b0ea-0aa43e1c16f7.52d85.png",
+    "sha256": "04cdeffb1dea03cb9fdccf973ce7306373d21ae006247f1cc8b1139a85fd639c",
+    "width": 152,
+    "height": 103
+  }
+]
