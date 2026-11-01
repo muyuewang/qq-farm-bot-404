@@ -16,7 +16,7 @@ const {
 } = require('../dist/utils/tsdk-runtime');
 
 const EXPECTED_QQ_CREDENTIAL_BYTES = Buffer.from(
-    "344e0d774812caf143fabc83bfe2fef9f863b450d5ee978e5c7b50dfa10f02df7b677d833d874225f604cf60c63e08da1cfa3c1ab344bfe48666fdd7a8346b0b9cffcfd95ef200bcdcf7630452636e8ccafe81eb044f6c5f35878687870003f7c94abda5d3b8",
+    "344e0d774812caf143fabc83bfe2fef9f863b450d5ee978e5c7b50dfa10f02df7b677d833d474225795bbbb8b6e396e9b32366156f4418c57f064878ff621e246f51f79f8cda9254a21844ea5c33202226af5e4d65c7a361a5fef30412b416a73a7a18efd3b8",
     "hex",
 );
 
@@ -50,7 +50,7 @@ test('bundled TSDK matches the audited official QQ build', () => {
     const wasmPath = path.join(__dirname, '..', 'src', 'utils', 'tsdk.wasm');
     const hash = crypto.createHash('sha256').update(fs.readFileSync(wasmPath)).digest('hex');
 
-    assert.equal(TSDK_VERSION, 'v3.9.0.1792566360');
+    assert.equal(TSDK_VERSION, 'v3.9.0.1793443245');
     assert.equal(hash, TSDK_SHA256);
 });
 
@@ -91,7 +91,7 @@ test('QQ host inputs reproduce the complete audited credential byte vector', asy
 
 test('WeChat loads its audited WASM and reports unsupported host calls without user data', async () => {
     const build = TSDK_BUILDS.wx;
-    assert.equal(build.version, 'v3.9.0.1792565883');
+    assert.equal(build.version, 'v3.9.0.1793442738');
     assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, '../src/utils', build.file))).digest('hex'), build.sha256);
     const originalGet = https.get;
     const originalRequest = https.request;
