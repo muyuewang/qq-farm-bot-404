@@ -100,7 +100,7 @@ test('crystal mutation uses the latest official effect_name mapping', () => {
     const effect = getMutantEffectById(14);
     assert.equal(effect.name, '晶辉');
     assert.equal(effect.icon, 'crystal');
-    assert.equal(effect.description, '紫晶土地上随机出现');
+    assert.equal(effect.description, '紫晶及以上土地上随机出现');
 
     const detail = buildLandDetail(growingLand(14, 0, {
         mutant_config_ids: [14],
