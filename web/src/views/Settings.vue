@@ -897,6 +897,7 @@ const localAutomationSettings = ref({
   fertilizerBuyNormalCount: 10,
   fertilizerBuyNormalThresholdHours: 10,
   fertilizerBuyCheckIntervalMinutes: 30,
+  emailClaimHour: 10 as number | string,
   autoAcceptFriendMinLevel: 0,
   autoAcceptRequireOwnLevel: false,
   autoAcceptHarvestStealEnabled: true,
@@ -996,6 +997,7 @@ function syncLocalAutomationSettings() {
     localAutomationSettings.value.fertilizerBuyNormalCount = settings.value.fertilizerBuyNormalCount ?? 10
     localAutomationSettings.value.fertilizerBuyNormalThresholdHours = settings.value.fertilizerBuyNormalThresholdHours ?? 10
     localAutomationSettings.value.fertilizerBuyCheckIntervalMinutes = settings.value.fertilizerBuyCheckIntervalMinutes ?? 30
+    localAutomationSettings.value.emailClaimHour = settings.value.emailClaimHour
     localAutomationSettings.value.autoAcceptFriendMinLevel = settings.value.autoAcceptFriendMinLevel ?? 0
     localAutomationSettings.value.autoAcceptRequireOwnLevel = settings.value.autoAcceptRequireOwnLevel ?? false
     localAutomationSettings.value.autoAcceptHarvestStealEnabled = settings.value.autoAcceptHarvestStealEnabled ?? true
@@ -1884,12 +1886,14 @@ async function handleResetSystemConfig() {
                   label="种植延迟 (秒)"
                   type="number"
                   min="0"
+                  max="60"
                 />
                 <BaseInput
                   v-model.number="localStrategySettings.stealDelaySeconds"
                   label="偷菜延迟 (秒)"
                   type="number"
                   min="0"
+                  max="300"
                 />
               </div>
             </div>
