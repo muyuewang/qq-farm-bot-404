@@ -1,24 +1,29 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import DecorationGoodsCard from '@/components/shop/DecorationGoodsCard.vue'
-import MallGoodsCard from '@/components/shop/MallGoodsCard.vue'
 import MysteryGoodsCard from '@/components/shop/MysteryGoodsCard.vue'
-import PetGoodsCard from '@/components/shop/PetGoodsCard.vue'
 import PurchaseQuantityModal from '@/components/shop/PurchaseQuantityModal.vue'
+import RanchCansPanel from '@/components/ranch/RanchCansPanel.vue'
+import RanchMarketPanel from '@/components/ranch/RanchMarketPanel.vue'
+import RanchSceneHost from '@/components/ranch/RanchSceneHost.vue'
+import RanchShopPanel from '@/components/ranch/RanchShopPanel.vue'
 import SeedGoodsCard from '@/components/shop/SeedGoodsCard.vue'
 import ShopAccountHeader from '@/components/shop/ShopAccountHeader.vue'
 import ShopEmptyState from '@/components/shop/ShopEmptyState.vue'
 import ShopTabToolbar from '@/components/shop/ShopTabToolbar.vue'
+import SceneSwitch from '@/components/ui/SceneSwitch.vue'
 import { createShopAvailability } from '@/composables/shop/useShopAvailability'
 import { useAccountStore } from '@/stores/account'
-import { useShopStore } from '@/stores/shop'
+import { COUPON_ITEM_ID, DIAMOND_ITEM_ID, GOLD_BEAN_ITEM_ID, GOLD_ITEM_ID, useShopStore } from '@/stores/shop'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
-import { formatCouponAmount, formatCurrencyAmountByLabel } from '@/utils/number-format'
+import { formatCurrencyAmountByLabel } from '@/utils/number-format'
+import { RANCH_VIEW_LABELS } from '@/utils/ranch'
+import type { RanchView } from '@/utils/ranch'
 
 const accountStore = useAccountStore()
 const shopStore = useShopStore()
@@ -31,32 +36,54 @@ const { currentAccountId, currentAccount } = storeToRefs(accountStore)
 const { status } = storeToRefs(statusStore)
 const {
   seeds,
-  pets,
-  decorations,
-  mallGoods,
+  propsGoods,
   mysteryOffer,
-  mysteryHistory,
   loading,
-  petLoading,
-  decorationLoading,
-  mallLoading,
+  propsLoading,
   mysteryLoading,
   error,
-  petError,
-  decorationError,
-  mallError,
+  propsError,
   mysteryError,
-  userGoldBean,
-  userDiamond,
+  seedsFromLocalConfig,
 } = storeToRefs(shopStore)
 
-const tab = ref<'seed' | 'pet' | 'decoration' | 'mall' | 'mystery'>('seed')
+const tab = ref<'seed' | 'decoration' | 'mystery'>('seed')
 const ascending = ref(true)
-const FERTILIZER_MALL_GOODS_IDS = new Set([1002, 1003])
-const SHOP_TABS = new Set(['seed', 'pet', 'decoration', 'mall', 'mystery'])
+const SHOP_TABS = new Set(['seed', 'decoration', 'mystery'])
 const mysteryAutoBuyEnabled = ref(false)
-const nowSeconds = ref(Math.floor(Date.now() / 1000))
-let mallExpiryTimer: ReturnType<typeof setInterval> | undefined
+
+/**
+ * 商城同样分属两个场景：农场商城走 /api/shop/*，牧场的商店、罐头商城和交易市场挂在
+ * game_scene_id=2 的牧场快照上，购买还要经过 quote → execute。这里只做场景切换，
+ * 两套请求与限购校验都由各自的 store 负责，不互相兜底。
+ */
+const shopScene = ref<'farm' | 'ranch'>('farm')
+const RANCH_SHOP_VIEWS = (['shop', 'cans', 'market'] as const).map(value => ({ value, label: RANCH_VIEW_LABELS[value] }))
+const ranchView = ref<RanchView>('shop')
+const ranchShopId = ref<number | null>(null)
+const ranchCansSlot = ref<number | null>(null)
+
+const ranchParams = computed(() => {
+  if (ranchView.value === 'shop' && ranchShopId.value !== null)
+    return { shopId: ranchShopId.value }
+  if (ranchView.value === 'cans' && ranchCansSlot.value !== null)
+    return { shopId: ranchCansSlot.value }
+  return {}
+})
+
+function onRanchShopId(shopId: number) {
+  ranchShopId.value = shopId
+}
+
+function onRanchCansSlot(slotType: number) {
+  ranchCansSlot.value = slotType
+}
+
+function segmentedButtonClasses(active: boolean) {
+  return active
+    ? 'text-white shadow-sm'
+    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+}
 
 const showConfirm = ref(false)
 const confirmTitle = ref('确认购买')
@@ -66,101 +93,58 @@ const pendingAction = ref<null | (() => Promise<void>)>(null)
 const quantityModal = ref({
   show: false,
   item: null as any,
-  mode: 'shop' as 'shop' | 'mall',
+  mode: 'seed' as 'seed' | 'props',
   currencyLabel: '',
-  balance: 0,
+  balance: null as number | null,
   maxQuantity: 99,
 })
 
 const currentLevel = computed(() => status.value?.status?.level || 0)
 const currentGold = computed(() => status.value?.status?.gold || 0)
-const currentCoupon = computed(() => status.value?.status?.coupon || 0)
-const isAnyLoading = computed(() => loading.value || petLoading.value || decorationLoading.value || mallLoading.value || mysteryLoading.value)
-const mysteryBalance = computed(() => {
-  if (mysteryOffer.value?.currencyId === 1002)
-    return currentCoupon.value
-  if (mysteryOffer.value?.currencyId === 1005)
-    return userGoldBean.value
-  return currentGold.value
-})
-const mysteryHistorySummary = computed(() => {
-  const currencyTotals = new Map<string, number>()
-  for (const record of mysteryHistory.value) {
-    currencyTotals.set(record.currencyName, (currencyTotals.get(record.currencyName) || 0) + record.price)
-  }
-  return [...currencyTotals.entries()].map(([name, amount]) => `${formatCurrencyAmountByLabel(amount, name)} ${name}`).join('、')
-})
-
-function formatHistoryTime(timestamp: number) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(timestamp))
-}
-const {
-  canAffordGoods,
-  canAffordDecoration,
-  canAffordMall,
-  getSeedHint,
-  getPetHint,
-  getDecorationHint,
-  getMallHint,
-  getSeedStatusLabel,
-  getPetStatusLabel,
-  getDecorationStatusLabel,
-  getMallStatusLabel,
-} = createShopAvailability({
-  currentLevel: () => currentLevel.value,
-  currentGold: () => currentGold.value,
-  currentCoupon: () => currentCoupon.value,
-  currentDiamond: () => userDiamond.value,
-  userGoldBean: () => userGoldBean.value,
-})
-
-const sortedSeeds = computed(() => {
-  return [...seeds.value].sort((a, b) => ascending.value ? a.seedLevel - b.seedLevel : b.seedLevel - a.seedLevel)
-})
-const visibleMallGoods = computed(() => mallGoods.value.filter(item => !item.endTime || nowSeconds.value <= item.endTime))
-
-const activeError = computed(() => {
-  if (tab.value === 'seed')
-    return error.value
-  if (tab.value === 'pet')
-    return petError.value
-  if (tab.value === 'decoration')
-    return decorationError.value
-  if (tab.value === 'mall')
-    return mallError.value
-  return mysteryError.value
-})
+const headerGold = computed(() => shopStore.currencyBalance(GOLD_ITEM_ID) ?? currentGold.value)
+const headerCoupon = computed(() => shopStore.currencyBalance(COUPON_ITEM_ID))
+const headerDiamond = computed(() => shopStore.currencyBalance(DIAMOND_ITEM_ID))
+const headerGoldBean = computed(() => shopStore.currencyBalance(GOLD_BEAN_ITEM_ID))
+const isAnyLoading = computed(() => loading.value || propsLoading.value || mysteryLoading.value)
 const activeIsEmpty = computed(() => {
   if (tab.value === 'seed')
     return sortedSeeds.value.length === 0
-  if (tab.value === 'pet')
-    return pets.value.length === 0
   if (tab.value === 'decoration')
-    return decorations.value.length === 0
-  if (tab.value === 'mall')
-    return visibleMallGoods.value.length === 0
-  return !mysteryOffer.value?.active
+    return propsGoods.value.length === 0
+  return !mysteryOffer.value
+})
+const activeError = computed(() => {
+  if (tab.value === 'seed')
+    return error.value
+  if (tab.value === 'decoration')
+    return propsError.value
+  return mysteryError.value
 })
 const activeEmptyMessage = computed(() => {
   switch (tab.value) {
     case 'seed':
       return '暂无种子商品，先刷新商城数据。'
-    case 'pet':
-      return '暂无宠物商品。'
     case 'decoration':
-      return '暂无装扮商品。'
-    case 'mall':
       return '暂无道具商品。'
-    case 'mystery':
+    default:
       return '神秘商人暂未出现，请稍后刷新看看。'
   }
-  return '暂无商品。'
+})
+
+const {
+  canAffordSeed,
+  canAffordProps,
+  getSeedHint,
+  getPropsHint,
+  getSeedStatusLabel,
+  getPropsStatusLabel,
+} = createShopAvailability({
+  currentLevel: () => currentLevel.value,
+  currentGold: () => currentGold.value,
+})
+
+const sortedSeeds = computed(() => {
+  return [...seeds.value].sort((a, b) => ascending.value ? a.seedLevel - b.seedLevel : b.seedLevel - a.seedLevel)
 })
 
 function openConfirm(title: string, message: string, action: () => Promise<void>) {
@@ -199,7 +183,8 @@ function closeQuantityModal() {
 }
 
 async function refreshAll() {
-  if (!currentAccountId.value)
+  // 牧场场景读的是牧场快照，农场商城的价格与限购等切回农场再拉。
+  if (!currentAccountId.value || shopScene.value === 'ranch')
     return
   await shopStore.refreshAll(currentAccountId.value)
 }
@@ -209,6 +194,8 @@ async function refreshMysteryAutoBuyStatus() {
     mysteryAutoBuyEnabled.value = false
     return
   }
+  if (shopScene.value === 'ranch')
+    return
   const requestedAccountId = String(currentAccountId.value)
   try {
     const { data } = await api.get('/api/settings', {
@@ -234,95 +221,87 @@ function syncTabFromRouteQuery() {
     tab.value = queryTab as typeof tab.value
 }
 
-async function buyGoods(item: any, quantity = 1) {
+async function buySeed(item: any, quantity = 1) {
   if (!currentAccountId.value)
     return
-  const result = await shopStore.buyGoods(currentAccountId.value, item.id, quantity, item.price)
-  if (result?.ok) {
+  const result = await shopStore.purchaseSeed(currentAccountId.value, item.id, quantity)
+  if (result.ok) {
     toast.success(`已购买 ${item.name} x${quantity}`)
-    await refreshAll()
+    await shopStore.fetchSeeds(currentAccountId.value)
   }
   else {
-    toast.error(result?.error || '购买失败')
+    toast.error(result.error || '购买失败')
   }
 }
 
-async function buyMallGoods(item: any, quantity = 1) {
+async function buyProps(item: any, quantity = 1) {
   if (!currentAccountId.value)
     return
-  const result = await shopStore.buyMallGoods(currentAccountId.value, item.goodsId, quantity)
-  if (result?.ok) {
+  // 复用后端的价格/内容漂移校验：expectedOffer 必须与最近一次 GET 的商品一致。
+  const result = await shopStore.purchasePropsGoods(
+    currentAccountId.value,
+    item.id,
+    quantity,
+    item.expectedOffer,
+  )
+  if (result.ok) {
     toast.success(`已购买 ${item.name} x${quantity}`)
-    await refreshAll()
+    if (result.data?.refreshRequired)
+      await shopStore.fetchPropsShop(currentAccountId.value)
   }
   else {
-    toast.error(result?.error || '购买失败')
+    toast.error(result.error || '购买失败')
   }
 }
 
-async function buyMysteryGoods(item: any) {
+async function buyMysteryGoods(offer: any) {
   if (!currentAccountId.value)
     return
-  const result = await shopStore.buyMysteryShopGoods(currentAccountId.value, item.npcId)
-  if (result?.ok) {
-    const count = Number(result.data?.reward?.count || item.itemCount || 0)
-    toast.success(`已从神秘商人处购买 ${item.itemName} x${count}`)
-    await shopStore.fetchMysteryShop(currentAccountId.value)
-    await shopStore.fetchMysteryHistory(currentAccountId.value)
+  const result = await shopStore.purchaseMysteryOffer(currentAccountId.value, offer.npcId)
+  if (result.ok) {
+    toast.success(`已从神秘商人处购买 ${offer.itemName} x${offer.itemCount}`)
   }
   else {
-    toast.error(result?.error || '购买失败')
+    toast.error(result.error || '购买失败')
   }
 }
 
-function confirmBuyMysteryGoods(item: any) {
+function confirmBuyMysteryGoods(offer: any) {
+  const balanceText = offer.balance === null ? '余额未确认' : `${formatCurrencyAmountByLabel(offer.price, offer.currencyName)} ${offer.currencyName}`
   openConfirm(
     '确认购买神秘商品',
-    `确定购买 ${item.itemName} x${item.itemCount} 吗？
-价格：${formatCurrencyAmountByLabel(item.price || 0, item.currencyName)} ${item.currencyName}
+    `确定购买 ${offer.itemName} x${offer.itemCount} 吗？
+价格：${balanceText}
 购买完成后神秘商人将离开。`,
-    () => buyMysteryGoods(item),
+    () => buyMysteryGoods(offer),
   )
 }
 
-async function abandonMysteryMerchant() {
-  if (!currentAccountId.value)
-    return
-  const result = await shopStore.abandonMysteryShop(currentAccountId.value)
-  if (result?.ok) {
-    toast.success('已请离神秘商人')
-    await shopStore.fetchMysteryShop(currentAccountId.value)
-  }
-  else {
-    toast.error(result?.error || '请离失败')
-  }
-}
-
-function confirmAbandonMysteryMerchant() {
-  openConfirm(
-    '请离神秘商人',
-    '确定请离当前神秘商人吗？请离后本次商品将无法购买。',
-    abandonMysteryMerchant,
-  )
-}
-
-function getShopMaxQuantity(item: any, balance: number) {
+function getSeedMaxQuantity(item: any, balance: number) {
   const price = Number(item?.price || 0)
   const byBalance = price > 0 ? Math.floor(Number(balance || 0) / price) : 99
-  const limitCount = Number(item?.limitCount || 0)
-  const boughtNum = Number(item?.boughtNum || 0)
-  const byLimit = limitCount > 0 ? Math.max(0, limitCount - boughtNum) : 99
+  const remaining = Number(item?.remainingPurchaseCount ?? -1)
+  const byLimit = remaining >= 0 ? remaining : 99
   return Math.max(1, Math.min(99, byBalance, byLimit))
 }
 
-function openQuantityModal(item: any, mode: 'shop' | 'mall', currencyLabel: string, balance: number) {
+function getPropsMaxQuantity(item: any) {
+  const price = Number(item?.price || 0)
+  const balance = item?.balance === null || item?.balance === undefined ? null : Number(item.balance)
+  const byBalance = balance === null || price <= 0 ? 99 : Math.floor(balance / price)
+  const remaining = Number(item?.remainingPurchaseCount ?? -1)
+  const byLimit = remaining >= 0 ? remaining : 99
+  return Math.max(1, Math.min(99, byBalance, byLimit))
+}
+
+function openQuantityModal(item: any, mode: 'seed' | 'props', currencyLabel: string, balance: number | null, maxQuantity: number) {
   quantityModal.value = {
     show: true,
     item,
     mode,
     currencyLabel,
     balance,
-    maxQuantity: getShopMaxQuantity(item, balance),
+    maxQuantity,
   }
 }
 
@@ -332,10 +311,10 @@ async function runQuantityPurchase(quantity: number) {
     return
   confirmLoading.value = true
   try {
-    if (quantityModal.value.mode === 'mall')
-      await buyMallGoods(target, quantity)
+    if (quantityModal.value.mode === 'props')
+      await buyProps(target, quantity)
     else
-      await buyGoods(target, quantity)
+      await buySeed(target, quantity)
     closeQuantityModal()
   }
   finally {
@@ -344,32 +323,11 @@ async function runQuantityPurchase(quantity: number) {
 }
 
 function confirmBuySeedGoods(item: any) {
-  openQuantityModal(item, 'shop', '金币', currentGold.value)
+  openQuantityModal(item, 'seed', '金币', currentGold.value, getSeedMaxQuantity(item, currentGold.value))
 }
 
-function confirmBuyGoods(item: any, currencyLabel: string) {
-  openConfirm(
-    '确认购买',
-    `确定购买 ${item.name} 吗？
-价格：${formatCurrencyAmountByLabel(item.price || 0, currencyLabel)} ${currencyLabel}`,
-    () => buyGoods(item),
-  )
-}
-
-function confirmBuyMallGoods(item: any) {
-  if (FERTILIZER_MALL_GOODS_IDS.has(Number(item.goodsId))) {
-    openQuantityModal(item, 'mall', '点券', currentCoupon.value)
-    return
-  }
-
-  const currencyName = item.currencyName || '点券'
-  const priceText = item.isFree ? '免费' : `${formatCouponAmount(item.price || 0)} ${currencyName}`
-  openConfirm(
-    '确认购买',
-    `确定购买 ${item.name} 吗？
-价格：${priceText}`,
-    () => buyMallGoods(item),
-  )
+function confirmBuyPropsGoods(item: any) {
+  openQuantityModal(item, 'props', item.currencyName || '货币', item.balance, getPropsMaxQuantity(item))
 }
 
 watch(currentAccountId, () => {
@@ -383,42 +341,42 @@ watch(
   () => syncTabFromRouteQuery(),
 )
 
+watch(shopScene, () => {
+  refreshAll()
+  refreshMysteryAutoBuyStatus()
+})
+
 onMounted(() => {
   syncTabFromRouteQuery()
   refreshAll()
   refreshMysteryAutoBuyStatus()
-  mallExpiryTimer = setInterval(() => {
-    nowSeconds.value = Math.floor(Date.now() / 1000)
-  }, 1000)
-})
-
-onUnmounted(() => {
-  if (mallExpiryTimer)
-    clearInterval(mallExpiryTimer)
 })
 </script>
 
 <template>
   <section class="space-y-4">
-    <div class="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800">
+    <div v-if="shopScene === 'farm'" class="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800">
       <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <ShopAccountHeader
           :account-name="currentAccount?.name"
           :level="currentLevel"
-          :gold="currentGold"
-          :coupon="currentCoupon"
-          :diamond="userDiamond"
-          :gold-bean="userGoldBean"
+          :gold="headerGold"
+          :coupon="headerCoupon"
+          :diamond="headerDiamond"
+          :gold-bean="headerGoldBean"
         />
 
-        <ShopTabToolbar
-          v-model:tab="tab"
-          :ascending="ascending"
-          :loading="isAnyLoading"
-          :disabled="!currentAccountId"
-          @toggle-ascending="ascending = !ascending"
-          @refresh="refreshAll"
-        />
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <SceneSwitch v-model="shopScene" farm-label="农场商城" ranch-label="牧场商店" />
+          <ShopTabToolbar
+            v-model:tab="tab"
+            :ascending="ascending"
+            :loading="isAnyLoading"
+            :disabled="!currentAccountId"
+            @toggle-ascending="ascending = !ascending"
+            @refresh="refreshAll"
+          />
+        </div>
       </div>
 
       <div v-if="!currentAccountId" class="rounded-lg bg-gray-50 p-8 text-center text-sm text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
@@ -437,6 +395,9 @@ onUnmounted(() => {
         <div v-if="error" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
           {{ error }}
         </div>
+        <div v-if="seedsFromLocalConfig" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+          后端未能读取到种子商店，以下条目来自本地配置，价格与限购均未知，无法在此购买。
+        </div>
         <ShopEmptyState v-if="!sortedSeeds.length" :message="activeEmptyMessage" />
         <div class="grid grid-cols-[repeat(auto-fill,minmax(156px,1fr))] gap-3">
           <SeedGoodsCard
@@ -444,7 +405,7 @@ onUnmounted(() => {
             :key="item.id"
             :item="item"
             :current-level="currentLevel"
-            :can-afford="canAffordGoods(item)"
+            :can-afford="canAffordSeed(item)"
             :status-label="getSeedStatusLabel(item)"
             :hint="getSeedHint(item)"
             @buy="confirmBuySeedGoods"
@@ -452,57 +413,20 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-else-if="tab === 'pet'" class="space-y-4">
-        <div v-if="petError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          {{ petError }}
-        </div>
-        <ShopEmptyState v-if="!pets.length" :message="activeEmptyMessage" />
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(156px,1fr))] gap-3">
-          <PetGoodsCard
-            v-for="item in pets"
-            :key="item.id"
-            :item="item"
-            :current-level="currentLevel"
-            :can-afford="canAffordGoods(item)"
-            :status-label="getPetStatusLabel(item)"
-            :hint="getPetHint(item)"
-            @buy="confirmBuyGoods"
-          />
-        </div>
-      </div>
-
       <div v-else-if="tab === 'decoration'" class="space-y-4">
-        <div v-if="decorationError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          {{ decorationError }}
+        <div v-if="propsError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          {{ propsError }}
         </div>
-        <ShopEmptyState v-if="!decorations.length" :message="activeEmptyMessage" />
+        <ShopEmptyState v-if="!propsGoods.length" :message="activeEmptyMessage" />
         <div class="grid grid-cols-[repeat(auto-fill,minmax(156px,1fr))] gap-3">
           <DecorationGoodsCard
-            v-for="item in decorations"
+            v-for="item in propsGoods"
             :key="item.id"
             :item="item"
-            :can-afford="canAffordDecoration(item)"
-            :status-label="getDecorationStatusLabel(item)"
-            :hint="getDecorationHint(item)"
-            @buy="confirmBuyGoods($event, '金豆豆')"
-          />
-        </div>
-      </div>
-
-      <div v-else-if="tab === 'mall'" class="space-y-4">
-        <div v-if="mallError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          {{ mallError }}
-        </div>
-        <ShopEmptyState v-if="!visibleMallGoods.length" :message="activeEmptyMessage" />
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(156px,1fr))] gap-3">
-          <MallGoodsCard
-            v-for="item in visibleMallGoods"
-            :key="item.goodsId"
-            :item="item"
-            :can-afford="canAffordMall(item)"
-            :status-label="getMallStatusLabel(item)"
-            :hint="getMallHint(item)"
-            @buy="confirmBuyMallGoods"
+            :can-afford="canAffordProps(item)"
+            :status-label="getPropsStatusLabel(item)"
+            :hint="getPropsHint(item)"
+            @buy="confirmBuyPropsGoods"
           />
         </div>
       </div>
@@ -522,55 +446,51 @@ onUnmounted(() => {
         <div v-if="mysteryError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
           {{ mysteryError }}
         </div>
-        <ShopEmptyState v-if="!mysteryOffer?.active" :message="activeEmptyMessage" />
+        <ShopEmptyState v-if="!mysteryOffer" :message="activeEmptyMessage" />
         <MysteryGoodsCard
           v-else
           :offer="mysteryOffer"
-          :balance="mysteryBalance"
           :loading="confirmLoading"
           @buy="confirmBuyMysteryGoods"
-          @abandon="confirmAbandonMysteryMerchant"
         />
-        <div class="overflow-hidden border border-gray-200 rounded-xl dark:border-gray-700">
-          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900/30">
-            <div>
-              <h3 class="text-sm text-gray-900 font-semibold dark:text-gray-100">
-                购买历史
-              </h3>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                共 {{ mysteryHistory.length }} 次<span v-if="mysteryHistorySummary">，累计花费 {{ mysteryHistorySummary }}</span>
-              </p>
-            </div>
-            <span class="text-xs text-gray-400">保留最近 100 条</span>
-          </div>
-          <div v-if="!mysteryHistory.length" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-            暂无购买记录，手动和自动购买都会记录在这里。
-          </div>
-          <div v-else class="divide-y divide-gray-100 dark:divide-gray-700">
-            <div v-for="record in mysteryHistory" :key="record.id" class="flex items-center gap-3 px-4 py-3">
-              <img v-if="record.itemImage" :src="record.itemImage" :alt="record.itemName" class="h-10 w-10 shrink-0 object-contain">
-              <div v-else class="i-carbon-gift h-10 w-10 shrink-0 text-gray-300" />
-              <div class="min-w-0 flex-1">
-                <div class="truncate text-sm text-gray-800 font-medium dark:text-gray-100">
-                  {{ record.itemName }} x{{ record.itemCount }}
-                </div>
-                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {{ formatHistoryTime(record.purchasedAt) }} · {{ record.source === 'auto' ? '自动购买' : '手动购买' }}
-                </div>
-              </div>
-              <div class="shrink-0 text-right">
-                <div class="text-sm text-gray-700 font-medium dark:text-gray-200">
-                  {{ formatCurrencyAmountByLabel(record.price, record.currencyName) }} {{ record.currencyName }}
-                </div>
-                <div v-if="record.discount" class="mt-1 text-xs text-orange-500">
-                  {{ record.discount / 10 }} 折
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="border border-gray-200 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500 leading-5 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400">
+          当前后端未提供神秘商人的购买历史与请离商人接口，因此页面不展示历史记录，也不提供请离操作；商品购买结果以刷新后的商人状态为准。
         </div>
       </div>
     </div>
+
+    <RanchSceneHost
+      v-else
+      :view="ranchView"
+      :params="ranchParams"
+      title="牧场商店"
+      icon="i-carbon-store"
+    >
+      <template #actions>
+        <SceneSwitch v-model="shopScene" farm-label="农场商城" ranch-label="牧场商店" />
+      </template>
+
+      <template #tabs>
+        <div class="h-9 inline-flex flex-wrap overflow-hidden border border-gray-200 rounded-lg bg-white p-0.5 dark:border-gray-700 dark:bg-gray-800">
+          <button
+            v-for="item in RANCH_SHOP_VIEWS"
+            :key="item.value"
+            class="min-w-24 rounded-md px-3 text-sm font-medium transition"
+            :class="segmentedButtonClasses(ranchView === item.value)"
+            :style="ranchView === item.value ? { backgroundColor: 'var(--theme-primary)' } : {}"
+            @click="ranchView = item.value"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </template>
+
+      <template #default="{ state, onRequest, activeView }">
+        <RanchShopPanel v-if="activeView === 'shop'" :state="state" @request="onRequest" @shop-id="onRanchShopId" />
+        <RanchCansPanel v-else-if="activeView === 'cans'" :state="state" @request="onRequest" @slot-type="onRanchCansSlot" />
+        <RanchMarketPanel v-else-if="activeView === 'market'" :state="state" @request="onRequest" />
+      </template>
+    </RanchSceneHost>
 
     <ConfirmModal
       :show="showConfirm"

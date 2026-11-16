@@ -140,20 +140,18 @@ async function pollWxLogin(refreshExpired = true) {
   wxChecking.value = true
   try {
     const result = await wxLoginStore.checkLogin()
-    if (result.success && result.wxid) {
+    if (result.success) {
       stopWxCheck()
-      const codeResult = await wxLoginStore.getFarmCode(result.wxid)
+      const codeResult = await wxLoginStore.getFarmCode()
       if (codeResult.success && codeResult.code) {
-        const name = wxAccountName.value.trim() || result.nickname || `微信账号${Date.now()}`
+        const name = wxAccountName.value.trim() || codeResult.nickname || `微信账号${Date.now()}`
         await addAccount({
           id: props.editData?.id,
           name: props.editData ? (props.editData.name || name) : name,
           code: codeResult.code,
           platform: 'wx',
           loginType: 'wx_qr',
-          wxid: result.wxid,
-          avatar: result.avatar,
-          wxSessionId: wxLoginStore.uuid,
+          wxid: codeResult.wxid || '',
         })
       }
     }
@@ -198,19 +196,23 @@ const { pause: stopQqCheck, resume: startQqCheck } = useIntervalFn(async () => {
     return
   }
   try {
-    const { data } = await api.post(`/api/napcat-login/tasks/${qqTaskId.value}/status`, undefined, { timeout: 20000, skipErrorToast: true } as any)
+    const { data } = await api.post(`/api/qq-login/tasks/${qqTaskId.value}/status`, undefined, { timeout: 30000, skipErrorToast: true } as any)
     if (!data?.ok)
       throw new Error(data?.error || '查询扫码状态失败')
-    qqStatus.value = data.data.status === 'scanned' ? '已扫码，请在 QQ 中确认' : '请使用 QQ 扫码登录'
-    if (data.data.status === 'confirmed') {
+    const taskStatus = String(data.data?.status || '')
+    if (taskStatus === 'cancelled' || taskStatus === 'expired' || taskStatus === 'failed')
+      throw new Error('QQ 登录任务已失效，请重新获取二维码')
+    qqStatus.value = taskStatus === 'scanned' ? '已扫码，请在 QQ 中确认' : '请使用 QQ 扫码登录'
+    if (taskStatus === 'confirmed') {
       stopQqCheck()
       qqLoading.value = true
       qqStatus.value = '正在获取农场 Code 并清理 QQ 会话…'
-      const result = await api.post(`/api/napcat-login/tasks/${qqTaskId.value}/code`, undefined, { timeout: 120000, skipErrorToast: true } as any)
+      const result = await api.post(`/api/qq-login/tasks/${qqTaskId.value}/code`, undefined, { timeout: 130000, skipErrorToast: true } as any)
       if (!result.data?.ok || !result.data.data?.code)
         throw new Error(result.data?.error || '获取农场 Code 失败')
+      const nickname = String(result.data.data.nickname || '')
       qqTaskId.value = ''
-      await addAccount({ id: props.editData?.id, name: props.editData?.name || qqAccountName.value.trim() || result.data.data.nickname || `QQ账号${result.data.data.uin || Date.now()}`, code: result.data.data.code, platform: 'qq', loginType: 'qq_napcat', qq: result.data.data.uin || '', uin: result.data.data.uin || '', startAfterSave: true })
+      await addAccount({ id: props.editData?.id, name: props.editData?.name || qqAccountName.value.trim() || nickname || `QQ账号${Date.now()}`, code: String(result.data.data.code), platform: 'qq', loginType: 'qq_napcat', startAfterSave: true })
     }
   }
   catch (e: any) {
@@ -222,8 +224,9 @@ const { pause: stopQqCheck, resume: startQqCheck } = useIntervalFn(async () => {
 
 async function loadQqCapability() {
   try {
-    const { data } = await api.get('/api/napcat-login/capability')
-    qqEnabled.value = data?.ok && data.data?.enabled === true
+    // 上游用同一份登录方式配置控制 NapCat 扫码，未开启时后端会直接拒绝创建任务。
+    const { data } = await api.get('/api/settings/login-config', { timeout: 10000, skipErrorToast: true } as any)
+    qqEnabled.value = data?.ok && data.data?.qqQrLogin === true
   }
   catch { qqEnabled.value = false }
 }
@@ -236,24 +239,24 @@ async function cancelQqTask() {
   qqQrCreatedAt.value = 0
   if (id) {
     try {
-      await api.post(`/api/napcat-login/tasks/${id}/cancel`, undefined, { timeout: 30000, skipErrorToast: true } as any)
+      await api.post(`/api/qq-login/tasks/${id}/cancel`, undefined, { timeout: 30000, skipErrorToast: true } as any)
     }
     catch {}
   }
 }
 
-async function startQqLogin(forceRefresh = Boolean(qqQrImage.value)) {
+async function startQqLogin() {
   if (qqLoading.value)
     return
   qqLoading.value = true
   qqError.value = ''
   await cancelQqTask()
   try {
-    const { data } = await api.post('/api/napcat-login/tasks', { refresh: forceRefresh }, { timeout: 30000, skipErrorToast: true } as any)
-    if (!data?.ok || !data.data?.taskId)
+    const { data } = await api.post('/api/qq-login/tasks', {}, { timeout: 30000, skipErrorToast: true } as any)
+    if (!data?.ok || !data.data?.task_id)
       throw new Error(data?.error || '获取 QQ 二维码失败')
-    qqTaskId.value = data.data.taskId
-    qqQrImage.value = data.data.qrImage
+    qqTaskId.value = String(data.data.task_id)
+    qqQrImage.value = String(data.data.qr_image || '')
     qqQrCreatedAt.value = Date.now()
     qqStatus.value = '请使用 QQ 扫码并确认登录'
     startQqCheck()
@@ -263,17 +266,10 @@ async function startQqLogin(forceRefresh = Boolean(qqQrImage.value)) {
 }
 
 async function loadCaptureConfig() {
-  try {
-    const { data } = await api.get('/api/capture/config')
-    captureEnabled.value = data?.ok && data.data?.enabled === true
-    if (!captureEnabled.value && activeTab.value === 'capture')
-      activeTab.value = 'manual'
-  }
-  catch {
-    captureEnabled.value = false
-    if (activeTab.value === 'capture')
-      activeTab.value = 'manual'
-  }
+  // 上游后端未提供 /api/capture/*，抓包登录入口保留但置灰，等后端补回再放开。
+  captureEnabled.value = false
+  if (activeTab.value === 'capture')
+    activeTab.value = 'manual'
 }
 
 async function cancelCaptureSession() {
@@ -441,20 +437,23 @@ async function submitManual() {
   if (parsedInput.platform)
     form.platform = parsedInput.platform
 
+  // 上游要求备注非空，留空时按平台生成默认名，保持旧版“留空用默认账号名”的行为。
+  const name = form.name.trim() || props.editData?.name || `${form.platform === 'qq' ? 'QQ' : '微信'}账号${Date.now()}`
+
   let payload: any = {}
   if (props.editData) {
     const onlyNameChanged = !parsedInput.gatewayUrl
-      && form.name !== props.editData.name
+      && name !== props.editData.name
       && form.code === (props.editData.code || '')
       && form.platform === (props.editData.platform || 'qq')
 
     if (onlyNameChanged) {
-      payload = { id: props.editData.id, name: form.name }
+      payload = { id: props.editData.id, name }
     }
     else {
       payload = {
         id: props.editData.id,
-        name: form.name,
+        name,
         code,
         platform: form.platform,
         loginType: 'manual',
@@ -464,7 +463,7 @@ async function submitManual() {
   }
   else {
     payload = {
-      name: form.name,
+      name,
       code,
       platform: form.platform,
       loginType: 'manual',
@@ -602,16 +601,19 @@ useModalFocus(() => props.show, modalSurface, close)
             微信扫码
           </button>
           <button
-            v-if="captureEnabled"
             class="flex-1 py-2 text-center text-sm font-medium transition-colors"
-            :class="activeTab === 'capture' ? 'border-b-2' : 'opacity-60'"
+            :class="captureEnabled
+              ? (activeTab === 'capture' ? 'border-b-2' : 'opacity-60')
+              : 'cursor-not-allowed opacity-40'"
             :style="{
               color: activeTab === 'capture' ? 'var(--theme-primary)' : 'var(--theme-text)',
               borderColor: 'var(--theme-primary)',
             }"
-            @click="activeTab = 'capture'"
+            :disabled="!captureEnabled"
+            :title="captureEnabled ? '抓包登录' : '当前后端版本未提供抓包登录'"
+            @click="captureEnabled && (activeTab = 'capture')"
           >
-            抓包登录
+            抓包登录<span v-if="!captureEnabled" class="ml-1 text-[10px] opacity-80">未提供</span>
           </button>
         </div>
 

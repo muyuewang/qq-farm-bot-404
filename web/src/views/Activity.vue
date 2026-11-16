@@ -6,13 +6,13 @@ import api from '@/api'
 import CharityFlowerActivityPanel from '@/components/activity/CharityFlowerActivityPanel.vue'
 import HeluExchangePanel from '@/components/activity/HeluExchangePanel.vue'
 import HeluPassportPanel from '@/components/activity/HeluPassportPanel.vue'
-import SolarTermsActivityPanel from '@/components/activity/SolarTermsActivityPanel.vue'
 import HeluSolarTermsPanel from '@/components/activity/HeluSolarTermsPanel.vue'
 import QixiActivityPanel from '@/components/activity/QixiActivityPanel.vue'
 import RainPoemActivityPanel from '@/components/activity/RainPoemActivityPanel.vue'
+import SolarTermsActivityPanel from '@/components/activity/SolarTermsActivityPanel.vue'
 import StarRecordPanel from '@/components/activity/StarRecordPanel.vue'
-import BaseButton from '@/components/ui/BaseButton.vue'
 import WishShareActivityPanel from '@/components/activity/WishShareActivityPanel.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useAccountStore } from '@/stores/account'
 import { useActivityStore } from '@/stores/activity'
@@ -91,9 +91,7 @@ const {
   qixiActivity,
   qixiFriends,
   qixiLoading,
-  qixiBuildLoading,
   qixiGiftLoading,
-  qixiDewLoading,
   rainPoemActivity,
   rainPoemLoading,
   charityFlowerActivity,
@@ -116,23 +114,39 @@ const petDiaryActivityActive = computed(() => isWithinActivityWindowMs(PET_DIARY
 const selectedActivity = ref<string | null>(null)
 const activityStatusFilter = ref<'active' | 'upcoming' | 'ended'>('active')
 const activeSection = ref<ActivitySectionKey>('journey')
-const activityDirectoryWindows = ref<Array<{ id: number, title: string, startTime: number, endTime: number, imageUrl?: string }>>([])
-interface ActivityDirectoryNode {
-  id: number
-  parentId?: number
-  title?: string
-  type?: number
-  status?: number
-  startTime?: number
-  endTime?: number
-  visible?: boolean
-  enabled?: boolean
-  sort?: number
-  features?: Record<string, boolean>
-  children?: ActivityDirectoryNode[]
-  payload?: Record<string, unknown> | null
-  error?: string
+type AdaptedActivityKey = 'pet-diary' | 'rain-poem' | 'charity-flower' | 'milk-tea' | 'wish-sign' | 'share-reward'
+
+// 服务端玩法标识（activity-gameplay-registry）到本页详情面板的映射。
+const ACTIVITY_DETAIL_TARGET_KEYS: Record<string, AdaptedActivityKey | undefined> = {
+  pet: 'pet-diary',
+  weather: 'rain-poem',
+  charity: 'charity-flower',
+  milk: 'milk-tea',
+  wish: 'wish-sign',
+  happy: 'share-reward',
 }
+const ACTIVITY_GAMEPLAY_LABELS: Record<string, string> = {
+  pet: '萌宠成长',
+  weather: '气象玩法',
+  charity: '公益玩法',
+  milk: '奶茶经营',
+  wish: '祈愿玩法',
+  happy: '分享奖励',
+  qixi: '七夕玩法',
+  qingmei: '青梅酿酒',
+  stellar: '星垂野',
+}
+
+interface ActivityDirectoryWindow {
+  id: number
+  title: string
+  startTime: number
+  endTime: number
+  activityIds: number[]
+  gameplayKeys: string[]
+  detailTarget?: string | null
+}
+const activityDirectoryWindows = ref<ActivityDirectoryWindow[]>([])
 interface ActivityClientPreview {
   source: string
   entryId: number
@@ -159,10 +173,7 @@ const ACTIVITY_CLIENT_PREVIEWS: Array<{ ids: number[], title: string, preview: A
     },
   },
 ]
-const activityDirectoryActivities = ref<ActivityDirectoryNode[]>([])
-const activityDirectoryGroups = ref<ActivityDirectoryNode[]>([])
-const unknownActivityIds = ref(new Set<number>())
-const activityScanLoading = ref(false)
+const activityDirectoryError = ref('')
 const ACTIVITY_REFRESH_INTERVAL_MS = 30_000
 const sections = computed<ActivitySection[]>(() => [
   ...(SHOW_QIXI_ACTIVITY ? [{ key: 'qixi' as const, label: '鹊桥寄情', icon: 'i-carbon-favorite', count: qixiActivity.value?.gift.remainingCount || 0 }] : []),
@@ -181,38 +192,59 @@ function activityWindowStatus(window: { startMs: number, endMs: number }): 'upco
 }
 
 const activityCards = computed(() => {
-  const groups: Array<{ id: number, title: string, startTime: number, endTime: number, imageUrl?: string, activityIds: number[] }> = []
+  // 服务端已按同名且时间重叠的活动窗口归组，这里只做一次防御性合并。
+  const groups: ActivityDirectoryWindow[] = []
   for (const item of activityDirectoryWindows.value) {
     const existing = groups.find(group => group.title === item.title
       && group.startTime <= item.endTime && item.startTime <= group.endTime)
     if (existing) {
-      existing.activityIds.push(item.id)
-      existing.startTime = Math.min(existing.startTime, item.startTime)
+      for (const id of item.activityIds) {
+        if (!existing.activityIds.includes(id))
+          existing.activityIds.push(id)
+      }
+      // 服务端用 0 表示时间未知，直接取 min 会把进行中的活动误判成已结束。
+      existing.startTime = existing.startTime > 0 && item.startTime > 0 ? Math.min(existing.startTime, item.startTime) : Math.max(existing.startTime, item.startTime)
       existing.endTime = Math.max(existing.endTime, item.endTime)
-      if (!existing.imageUrl && item.imageUrl)
-        existing.imageUrl = item.imageUrl
+      existing.detailTarget = existing.detailTarget || item.detailTarget || null
+      for (const key of item.gameplayKeys) {
+        if (!existing.gameplayKeys.includes(key))
+          existing.gameplayKeys.push(key)
+      }
       if (!String(existing.id).endsWith('00') && String(item.id).endsWith('00'))
         existing.id = item.id
     }
     else {
-      groups.push({ ...item, activityIds: [item.id] })
+      groups.push({ ...item, activityIds: [...item.activityIds], gameplayKeys: [...item.gameplayKeys] })
     }
   }
-  const source = groups.length
-    ? groups
-    : [{
-        id: 2026070300,
-        title: '雨落成诗',
-        startTime: RAIN_POEM_ACTIVITY_WINDOW.startMs / 1000,
-        endTime: RAIN_POEM_ACTIVITY_WINDOW.endMs / 1000,
-        activityIds: [2026070300],
-      }]
-  if (!source.some(group => group.activityIds.includes(2026110100))) source.push({ id: 2026110100, title: '奶茶热销中', startTime: 1792029600, endTime: 1794844799, activityIds: [2026110100] })
+  const fallbackGroups: ActivityDirectoryWindow[] = [{
+    id: 2026070300,
+    title: '雨落成诗',
+    startTime: RAIN_POEM_ACTIVITY_WINDOW.startMs / 1000,
+    endTime: RAIN_POEM_ACTIVITY_WINDOW.endMs / 1000,
+    activityIds: [2026070300],
+    gameplayKeys: ['weather'],
+  }]
+  const source = groups.length ? groups : fallbackGroups
+  if (!source.some(group => group.activityIds.includes(2026110100)))
+    source.push({ id: 2026110100, title: '奶茶热销中', startTime: 1792029600, endTime: 1794844799, activityIds: [2026110100], gameplayKeys: ['milk'] })
   const cards = source.map((group) => {
-    const adaptedKey = group.id === 2026090100
-      ? 'pet-diary' as const
-      : group.activityIds.includes(2026070300) ? 'rain-poem' as const : group.activityIds.includes(2026090900) ? 'charity-flower' as const : null
-    const adapted = group.activityIds.includes(2026110100) ? 'milk-tea' as const : group.activityIds.includes(2026092400) ? 'wish-sign' as const : group.activityIds.includes(2026092500) ? 'share-reward' as const : adaptedKey
+    // 服务端按活动 ID 静态登记的玩法标识决定详情页用哪个面板；缺标识即未适配。
+    const adapted = ACTIVITY_DETAIL_TARGET_KEYS[group.detailTarget || '']
+      ?? (group.activityIds.includes(2026110100)
+        ? 'milk-tea'
+        : group.activityIds.includes(2026092400)
+          ? 'wish-sign'
+          : group.activityIds.includes(2026092500)
+            ? 'share-reward'
+            : group.activityIds.includes(2026070300)
+              ? 'rain-poem'
+              : group.activityIds.includes(2026090900)
+                ? 'charity-flower'
+                : group.id === 2026090100
+                  ? 'pet-diary'
+                  : null)
+                ?? null
     const window = { startMs: group.startTime * 1000, endMs: group.endTime * 1000 }
     const hue = Math.abs(group.id * 37) % 360
     return {
@@ -231,25 +263,23 @@ const activityCards = computed(() => {
         'milk-tea': 'i-carbon-cafe',
         'pet-diary': 'i-fa-solid-paw',
         'charity-flower': 'i-carbon-favorite',
-        'rain-poem': 'i-carbon-rain-heavy', 'wish-sign': 'i-carbon-sun', 'share-reward': 'i-carbon-share',
+        'rain-poem': 'i-carbon-rain-heavy',
+        'wish-sign': 'i-carbon-sun',
+        'share-reward': 'i-carbon-share',
       }[adapted || ''] || 'i-carbon-calendar',
-      image: adapted === 'milk-tea' ? '/activity/milk-tea/img_s4Main_bg.png' : adapted === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : adapted === 'wish-sign' ? '/activity/wish-sign/card-bg.svg' : adapted === 'share-reward' ? '/activity/share-reward/card-bg.svg' : group.imageUrl || (adapted === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : ''),
+      image: adapted === 'milk-tea' ? '/activity/milk-tea/img_s4Main_bg.png' : adapted === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : adapted === 'wish-sign' ? '/activity/wish-sign/card-bg.svg' : adapted === 'share-reward' ? '/activity/share-reward/card-bg.svg' : adapted === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : '',
       imagePosition: adapted === 'pet-diary' ? 'center 64%' : 'center',
       window,
       updatedMs: window.startMs,
       status: activityWindowStatus(window),
-      pending: !adapted && group.activityIds.some(id => unknownActivityIds.value.has(id)),
+      gameplayLabels: (group.gameplayKeys || []).map(key => ACTIVITY_GAMEPLAY_LABELS[key] || key),
+      pending: !adapted,
       backgroundStyle: {
         background: `radial-gradient(circle at 84% 18%, hsl(${(hue + 42) % 360} 82% 68% / 0.38), transparent 34%), radial-gradient(circle at 12% 92%, hsl(${(hue + 310) % 360} 75% 58% / 0.26), transparent 38%), linear-gradient(135deg, hsl(${hue} 52% 38%), hsl(${(hue + 32) % 360} 58% 18%))`,
       },
     }
   })
-  cards.push({ permanent: true, key: 'solar-terms', activityIds: [], adaptedKey: null,
-    title: '节令小札', description: '查看各节令赠礼与领取状态', icon: 'i-carbon-notebook',
-    image: '', imagePosition: 'center', window: { startMs: 0, endMs: 0 },
-    updatedMs: Date.parse('2026-10-15T00:00:00+08:00'), status: 'active', pending: false,
-    backgroundStyle: { background: '#385c46' },
-  })
+  cards.push({ permanent: true, key: 'solar-terms', activityIds: [], adaptedKey: null, title: '节令小札', description: '查看各节令赠礼与领取状态', icon: 'i-carbon-notebook', image: '', imagePosition: 'center', window: { startMs: 0, endMs: 0 }, updatedMs: Date.parse('2026-10-15T00:00:00+08:00'), status: 'active', pending: false, gameplayLabels: ['节令'], backgroundStyle: { background: '#385c46' } })
   return cards.sort((left, right) => {
     return right.updatedMs - left.updatedMs
       || right.window.startMs - left.window.startMs
@@ -263,32 +293,6 @@ const selectedActivityClientPreview = computed(() => {
     return null
   return ACTIVITY_CLIENT_PREVIEWS.find(item => item.title === card.title
     || item.ids.some(id => card.activityIds.includes(id)))?.preview || null
-})
-const selectedActivityDetails = computed(() => {
-  const card = selectedActivityCard.value
-  if (!card)
-    return []
-  const ids = new Set(card.activityIds.map(Number))
-  const matchingGroups = activityDirectoryGroups.value.filter(group => ids.has(Number(group.id))
-    || (group.title && group.title === card.title))
-  if (matchingGroups.length)
-    return matchingGroups
-
-  const matchingActivities = activityDirectoryActivities.value.filter(node => ids.has(Number(node.id))
-    || ids.has(Number(node.parentId))
-    || (node.title && node.title === card.title))
-  if (!matchingActivities.length)
-    return []
-  const byId = new Map(matchingActivities.map(node => [Number(node.id), { ...node, children: [] as ActivityDirectoryNode[] }]))
-  const roots: ActivityDirectoryNode[] = []
-  for (const node of byId.values()) {
-    const parent = byId.get(Number(node.parentId))
-    if (parent)
-      parent.children?.push(node)
-    else
-      roots.push(node)
-  }
-  return roots
 })
 const activityStatusFilters = [
   { key: 'active' as const, label: '进行中' },
@@ -307,66 +311,32 @@ function formatActivityDateTime(timestampMs: number) {
   }).format(new Date(timestampMs))
 }
 
-function applyActivityDirectoryReport(report: any) {
-  activityDirectoryWindows.value = Array.isArray(report?.online?.activityWindows) ? report.online.activityWindows : []
-  activityDirectoryActivities.value = Array.isArray(report?.online?.activities) ? report.online.activities : []
-  activityDirectoryGroups.value = Array.isArray(report?.online?.groups) ? report.online.groups : []
-  unknownActivityIds.value = new Set((report?.online?.unknownActivityIds || []).map(Number))
-}
-
-function flattenActivityDetails(node: ActivityDirectoryNode): ActivityDirectoryNode[] {
-  return [node, ...(node.children || []).flatMap(flattenActivityDetails)]
-}
-
-function activityFeatureLabels(node: ActivityDirectoryNode) {
-  const labels: Record<string, string> = {
-    exchangeShop: '兑换商店',
-    randomShop: '随机商店',
-    draw: '抽奖',
-    starRecord: '图鉴',
-    qixiBridge: '阶段建设',
-    qixiGift: '好友赠礼',
-    weatherTasks: '活动任务',
-    weatherResearch: '阶段研究',
-  }
-  return Object.entries(node.features || {}).filter(([, enabled]) => enabled).map(([key]) => labels[key] || key)
-}
-
-function activityRuleSections(nodes: ActivityDirectoryNode[]) {
-  return nodes.flatMap(flattenActivityDetails).flatMap((node) => {
-    const tips = node.payload?.tips
-    if (!tips || typeof tips !== 'object')
-      return []
-    const value = tips as Record<string, unknown>
-    const lines = Array.isArray(value.txt)
-      ? value.txt.filter(item => typeof item === 'string' || typeof item === 'number').map(item => String(item).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim()).filter(Boolean)
-      : []
-    return lines.length ? [{ id: node.id, title: String(value.title || '活动说明').replace(/<[^>]+>/g, ''), lines }] : []
-  })
-}
-
 async function loadActivityDirectory() {
-  try {
-    const { data } = await api.get('/api/activity/directory')
-    applyActivityDirectoryReport({ online: data })
+  if (!currentAccountId.value) {
+    activityDirectoryWindows.value = []
+    return
   }
-  catch {
-    // 活动中心仍可使用本地已登记活动作为回退。
-  }
-}
-
-async function rescanActivityDirectory() {
-  activityScanLoading.value = true
   try {
-    const { data } = await api.post('/api/activity/update/scan')
-    applyActivityDirectoryReport(data.report)
-    toast.success('活动目录已更新')
+    const { data } = await api.get('/api/activity-center/activities')
+    if (!data?.ok)
+      throw new Error(data?.error || '活动目录读取失败')
+    const entries: any[] = Array.isArray(data.data?.activities) ? data.data.activities : []
+    activityDirectoryWindows.value = entries
+      .map((entry: any) => ({
+        id: Number(entry?.id) || 0,
+        title: String(entry?.name || ''),
+        startTime: Number(entry?.startTime) || 0,
+        endTime: Number(entry?.endTime) || 0,
+        detailTarget: entry?.detailTarget || null,
+        gameplayKeys: Array.isArray(entry?.gameplayKeys) ? entry.gameplayKeys.map(String) : [],
+        activityIds: (Array.isArray(entry?.activityIds) ? entry.activityIds : [entry?.id]).map(Number).filter(Boolean),
+      }))
+      .filter(entry => entry.id > 0)
+    activityDirectoryError.value = ''
   }
   catch (error: any) {
-    toast.error(error?.response?.data?.error || error.message || '活动目录更新失败')
-  }
-  finally {
-    activityScanLoading.value = false
+    activityDirectoryWindows.value = []
+    activityDirectoryError.value = error?.response?.data?.error || error?.message || '活动目录读取失败'
   }
 }
 
@@ -386,7 +356,7 @@ async function refreshAll() {
     if (shareRewardActivityActive.value)
       requests.push(activityStore.fetchShareRewardActivity(String(currentAccountId.value)))
     // 萌宠日记不在此处拉取：PetDiaryActivityPanel 自己订阅 usePetDiaryStore，
-    // 走 /api/activity/pet-diary/state 完整快照，无需旧只读接口。
+    // 走 /api/activity-center/pet-diary 完整快照，无需旧只读接口。
     await Promise.all(requests)
   }
 }
@@ -394,30 +364,16 @@ async function refreshAll() {
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
     nowMs.value = Date.now()
+    loadActivityDirectory()
     refreshAll()
   }
 }
 
-async function buildQixi() {
+async function giftQixi(friendGid: number) {
   if (!currentAccountId.value)
     return
-  const result = await activityStore.buildQixiBridge(String(currentAccountId.value))
-  result?.ok ? toast.success(result.completed ? '鹊桥已全部完成' : '驻建鹊桥成功') : toast.error(result?.error || '驻建鹊桥失败')
-}
-async function useQixiDew() {
-  if (!currentAccountId.value)
-    return
-  const result = await activityStore.useQixiDew(String(currentAccountId.value))
-  result?.ok
-    ? toast.success(result.usedCount ? `已使用 ${result.usedCount} 个鹊羽灵露` : result.reason === 'daily_limit' ? '今日使用次数已达上限' : '暂无符合条件的土地')
-    : toast.error(result?.error || '使用鹊羽灵露失败')
-}
-
-async function giftQixi(friendGid: number, count: number) {
-  if (!currentAccountId.value)
-    return
-  const result = await activityStore.sendQixiSachet(String(currentAccountId.value), friendGid, count)
-  result?.ok ? toast.success(`已赠送 ${result.sentCount || count} 个鹊羽香囊`) : toast.error(result?.error || '香囊赠送失败')
+  const result = await activityStore.sendQixiSachet(String(currentAccountId.value), friendGid)
+  result?.ok ? toast.success(result?.data?.message || '香囊赠送成功') : toast.error(result?.error || '香囊赠送失败')
 }
 
 async function claimRecords() {
@@ -425,8 +381,8 @@ async function claimRecords() {
     return
   const result = await activityStore.claimStarRecords(currentAccountId.value)
   if (result?.ok) {
-    const count = result.recordIds?.length || 0
-    toast.success(count ? `已点亮并领取 ${count} 个星宿奖励` : '观星礼录领取完成')
+    // 点亮成功回包不含奖励明细，奖励由服务端结算，因此提示不报具体数量。
+    toast.success(result?.data?.outcome === 'nothingToClaim' ? result?.data?.message || '今日星宿奖励已经领取' : '已点亮今日星宿')
   }
   else {
     toast.error(result?.error || '观星礼录领取失败')
@@ -460,6 +416,8 @@ async function exchangeStarSand(item: { id: number, itemName?: string, name?: st
 
 watch(currentAccountId, () => {
   activityStore.clearActivityData()
+  selectedActivity.value = null
+  loadActivityDirectory()
   refreshAll()
 })
 watch(rainPoemActivityActive, (active) => {
@@ -543,9 +501,10 @@ onUnmounted(() => {
           <BaseButton variant="primary" :loading="heluLoading" :disabled="!currentAccountId" @click="refreshAll">
             {{ L.refresh }}
           </BaseButton>
-          <BaseButton v-if="userStore.isAdmin" variant="secondary" :loading="activityScanLoading" @click="rescanActivityDirectory">
+          <BaseButton v-if="userStore.isAdmin" variant="secondary" disabled title="当前后端版本未提供活动目录扫描">
             <span class="i-carbon-renew mr-1.5" />
             更新活动目录
+            <span class="ml-1 text-[10px]">未提供</span>
           </BaseButton>
         </div>
       </div>
@@ -573,9 +532,10 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
-        <BaseButton v-if="userStore.isAdmin" variant="secondary" :loading="activityScanLoading" @click="rescanActivityDirectory">
+        <BaseButton v-if="userStore.isAdmin" variant="secondary" disabled title="当前后端版本未提供活动目录扫描">
           <span class="i-carbon-renew mr-1.5" />
           更新活动目录
+          <span class="ml-1 text-[10px]">未提供</span>
         </BaseButton>
       </header>
 
@@ -651,14 +611,22 @@ onUnmounted(() => {
       </div>
     </div>
     <div v-else-if="selectedActivityCard?.adaptedKey === 'wish-sign' && selectedActivityCard.status === 'active'" class="space-y-3">
-      <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null"><span class="i-carbon-arrow-left" />返回活动列表</button>
+      <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null">
+        <span class="i-carbon-arrow-left" />返回活动列表
+      </button>
       <WishShareActivityPanel v-if="wishSignActivityActive && currentAccountId" kind="wish" :activity="wishSignActivity" :loading="wishSignLoading" @refresh="refreshAll" />
-      <div v-else-if="wishSignActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">{{ L.needAccount }}</div>
+      <div v-else-if="wishSignActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">
+        {{ L.needAccount }}
+      </div>
     </div>
     <div v-else-if="selectedActivityCard?.adaptedKey === 'share-reward' && selectedActivityCard.status === 'active'" class="space-y-3">
-      <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null"><span class="i-carbon-arrow-left" />返回活动列表</button>
+      <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null">
+        <span class="i-carbon-arrow-left" />返回活动列表
+      </button>
       <WishShareActivityPanel v-if="shareRewardActivityActive && currentAccountId" kind="share" :activity="shareRewardActivity" :loading="shareRewardLoading" @refresh="refreshAll" />
-      <div v-else-if="shareRewardActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">{{ L.needAccount }}</div>
+      <div v-else-if="shareRewardActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">
+        {{ L.needAccount }}
+      </div>
     </div>
     <!--
       萌宠日记面板自带游戏风格顶栏与返回按钮，且直接读 usePetDiaryStore，
@@ -667,7 +635,7 @@ onUnmounted(() => {
     <div v-else-if="selectedActivityCard?.adaptedKey === 'milk-tea' && selectedActivityCard.status === 'active'">
       <MilkTeaActivityPanel @back="selectedActivity = null" />
     </div>
-    <div v-else-if="selectedActivityCard?.adaptedKey === 'pet-diary'  && selectedActivityCard.status === 'active'">
+    <div v-else-if="selectedActivityCard?.adaptedKey === 'pet-diary' && selectedActivityCard.status === 'active'">
       <PetDiaryActivityPanel v-if="petDiaryActivityActive && currentAccountId" @back="selectedActivity = null" />
       <div v-else-if="petDiaryActivityActive && !currentAccountId" class="space-y-3">
         <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null">
@@ -775,67 +743,29 @@ onUnmounted(() => {
               </div>
             </div>
           </section>
-          <template v-if="selectedActivityDetails.length">
-            <div class="flex items-baseline gap-2">
-              <h2 class="text-gray-900 font-semibold dark:text-white">
-                扫描内容
-              </h2>
-              <span class="text-xs text-gray-400">{{ selectedActivityDetails.flatMap(flattenActivityDetails).length }} 个节点</span>
-            </div>
-            <div class="mt-3 space-y-3">
-              <article v-for="group in selectedActivityDetails" :key="group.id" class="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 class="text-gray-900 font-medium dark:text-white">
-                      {{ group.title || selectedActivityCard.title }}
-                    </h3>
-                    <code class="mt-1 block text-xs text-gray-400">ID {{ group.id }}<template v-if="group.type != null"> · 类型 {{ group.type }}</template></code>
-                  </div>
-                  <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                    {{ group.enabled === false ? '未启用' : group.visible === false ? '未展示' : '服务端已收录' }}
-                  </span>
-                </div>
-                <div v-if="group.children?.length" class="grid mt-4 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  <div v-for="node in group.children" :key="node.id" class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-                    <div class="flex items-start justify-between gap-2">
-                      <span class="text-sm text-gray-800 font-medium dark:text-gray-100">{{ node.title || `功能节点 ${node.id}` }}</span>
-                      <code class="shrink-0 text-xs text-gray-400">{{ node.id }}</code>
-                    </div>
-                    <div v-if="activityFeatureLabels(node).length" class="mt-2 flex flex-wrap gap-1.5">
-                      <span v-for="label in activityFeatureLabels(node)" :key="label" class="rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">{{ label }}</span>
-                    </div>
-                    <p v-else class="mt-2 text-xs text-gray-400">
-                      已发现节点，玩法字段尚未确认
-                    </p>
-                  </div>
-                </div>
-                <p v-else-if="group.error" class="mt-3 text-sm text-amber-700 dark:text-amber-300">
-                  读取详情失败：{{ group.error }}
-                </p>
-                <p v-else class="mt-3 text-sm text-gray-500">
-                  服务端仅返回活动基础信息，暂未发现子功能节点。
-                </p>
-              </article>
-            </div>
-            <div v-if="activityRuleSections(selectedActivityDetails).length" class="mt-5 space-y-3">
-              <section v-for="section in activityRuleSections(selectedActivityDetails)" :key="section.id" class="rounded-lg bg-gray-50 p-4 dark:bg-gray-900/40">
-                <h3 class="text-gray-900 font-medium dark:text-white">
-                  {{ section.title }}
-                </h3>
-                <p v-for="(line, index) in section.lines" :key="`${section.id}-${index}`" class="mt-2 whitespace-pre-line text-sm text-gray-600 leading-6 dark:text-gray-300">
-                  {{ line }}
-                </p>
-              </section>
-            </div>
-          </template>
-          <div v-else class="border border-gray-200 rounded-lg border-dashed p-6 text-center dark:border-gray-700">
-            <p class="text-sm text-gray-500">
-              服务端当前只返回活动名称和时间，尚未下发可展示的动态节点或规则。
-            </p>
-            <p class="mt-1 text-xs text-gray-400">
-              {{ selectedActivityClientPreview ? '上方内容来自官方客户端静态资源，不代表最终玩法规则。' : '活动开放后重新扫描可能取得更多只读信息。' }}
-            </p>
+          <div v-if="activityDirectoryError" class="border border-red-200 rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300">
+            活动目录读取失败：{{ activityDirectoryError }}
           </div>
+          <section v-else class="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-gray-900 font-semibold dark:text-white">
+                服务端收录内容
+              </h2>
+              <span class="text-xs text-gray-400">{{ selectedActivityCard.activityIds.length }} 个活动 ID</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              <code v-for="id in selectedActivityCard.activityIds" :key="id" class="rounded bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">{{ id }}</code>
+            </div>
+            <div v-if="selectedActivityCard.gameplayLabels.length" class="mt-3 flex flex-wrap gap-1.5">
+              <span v-for="label in selectedActivityCard.gameplayLabels" :key="label" class="rounded bg-cyan-50 px-1.5 py-0.5 text-[11px] text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">{{ label }}</span>
+            </div>
+            <p v-else class="mt-3 text-xs text-gray-400">
+              服务端仅登记活动名称与开放时间，玩法节点尚未下发。
+            </p>
+            <p v-if="selectedActivityClientPreview" class="mt-3 text-xs text-gray-400">
+              上方客户端静态预解析来自官方客户端资源，不代表最终玩法规则。
+            </p>
+          </section>
         </div>
       </section>
     </div>
@@ -863,11 +793,7 @@ onUnmounted(() => {
         v-else-if="SHOW_QIXI_ACTIVITY && activeSection === 'qixi'"
         :activity="qixiActivity"
         :friends="qixiFriends"
-        :build-loading="qixiBuildLoading || qixiLoading"
-        :gift-loading="qixiGiftLoading"
-        :dew-loading="qixiDewLoading"
-        @build="buildQixi"
-        @dew="useQixiDew"
+        :gift-loading="qixiGiftLoading || qixiLoading"
         @gift="giftQixi"
       />
       <div v-else-if="activeSection === 'shop'" class="space-y-3">

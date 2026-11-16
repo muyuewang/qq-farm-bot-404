@@ -9,9 +9,17 @@ defineEmits<{ refresh: [] }>()
 const completedResearchCount = computed(() => props.activity?.research.stages.filter(stage => stage.completed).length || 0)
 const totalResearchCount = computed(() => props.activity?.research.stages.length || 0)
 const collectionLimit = computed(() => props.activity?.collection.dailyUseLimit || 0)
-const collectionRemaining = computed(() => props.activity?.collection.remainingUseCount || 0)
-const collectionUsed = computed(() => Math.max(0, collectionLimit.value - collectionRemaining.value))
-const collectionProgress = computed(() => collectionLimit.value ? Math.min(100, collectionUsed.value / collectionLimit.value * 100) : 0)
+/** 新协议不下发今日剩余采集次数，null 时页面显示「—」而不是 0。 */
+const collectionRemaining = computed(() => props.activity?.collection.remainingUseCount ?? null)
+const collectionUsed = computed(() => collectionRemaining.value === null
+  ? null
+  : Math.max(0, collectionLimit.value - collectionRemaining.value))
+const collectionProgress = computed(() => collectionUsed.value === null || !collectionLimit.value
+  ? 0
+  : Math.min(100, collectionUsed.value / collectionLimit.value * 100))
+const collectionRewards = computed(() => (props.activity?.collection.rewards || [])
+  .map(item => `${item.itemName || '活动道具'} ×${item.itemCount}`)
+  .join('、'))
 
 function taskProgress(task: RainPoemActivityData['tasks'][number]) {
   if (!task.target)
@@ -111,17 +119,17 @@ function formatDateTime(seconds?: number) {
               今日雷雨采集
             </h3>
             <p class="mt-0.5 text-xs text-gray-500">
-              使用采集瓶后可获得 {{ activity?.collection.reward.itemName || '雷雨召唤瓶' }}
+              使用采集瓶后可获得 {{ collectionRewards || '以服务端结算为准' }}
             </p>
           </div>
-          <strong class="shrink-0 text-xl text-gray-900 dark:text-white">{{ collectionRemaining }}<span class="text-sm text-gray-400 font-normal">/{{ collectionLimit }}</span></strong>
+          <strong class="shrink-0 text-xl text-gray-900 dark:text-white">{{ collectionRemaining ?? '—' }}<span class="text-sm text-gray-400 font-normal">/{{ collectionLimit }}</span></strong>
         </div>
         <div class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
           <div class="h-full rounded-full bg-cyan-500 transition-all" :style="{ width: `${collectionProgress}%` }" />
         </div>
         <div class="mt-2 flex justify-between text-xs text-gray-500">
-          <span>已采集 {{ collectionUsed }} 次</span>
-          <span>单次奖励 ×{{ activity?.collection.reward.itemCount || 0 }}</span>
+          <span>已采集 {{ collectionUsed ?? '—' }} 次</span>
+          <span>每日上限 {{ collectionLimit }} 次</span>
         </div>
       </article>
 
@@ -132,15 +140,24 @@ function formatDateTime(seconds?: number) {
               每日补给
             </h3>
             <p class="mt-0.5 text-xs text-gray-500">
-              天气采集瓶每日限购 {{ activity?.shop.dailyLimit || 0 }} 个
+              {{ activity?.shop ? `天气采集瓶每日限购 ${activity.shop.dailyLimit || 0} 个` : '当前活动未下发商店档位' }}
             </p>
           </div>
           <span
+            v-if="activity?.shop"
             class="inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium"
-            :class="activity?.shop.purchasedToday ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : activity?.shop.available ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700'"
+            :class="activity.shop.purchasedToday ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : activity.shop.available ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700'"
           >
-            <span :class="activity?.shop.purchasedToday ? 'i-carbon-checkmark-filled' : 'i-carbon-time'" />
-            {{ activity?.shop.purchasedToday ? '今日已购买' : activity?.shop.available ? '今日可购买' : '暂不可购买' }}
+            <span :class="activity.shop.purchasedToday ? 'i-carbon-checkmark-filled' : 'i-carbon-time'" />
+            {{ activity.shop.purchasedToday ? '今日已购买' : activity.shop.available ? '今日可购买' : '暂不可购买' }}
+          </span>
+          <span
+            v-else
+            class="inline-flex shrink-0 items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1 text-xs text-gray-500 font-medium dark:bg-gray-700"
+            title="当前后端版本未下发每日补给商店数据"
+          >
+            <span class="i-carbon-warning-alt" />
+            未下发
           </span>
         </div>
         <div class="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-sm dark:border-gray-700">

@@ -13,7 +13,7 @@ const accountStore = useAccountStore()
 const petStore = usePetStore()
 const toast = useToastStore()
 const { currentAccountId } = storeToRefs(accountStore)
-const { overview, logs, capitalMode, loading, mutating } = storeToRefs(petStore)
+const { overview, logs, capitalMode, capitalModeSupported, loading, mutating } = storeToRefs(petStore)
 const tab = ref<PetTab>('pets')
 const feedCounts = reactive<Record<number, number>>({})
 const draft = reactive({ enabled: false, dogId: 0, leadSeconds: 10 })
@@ -367,7 +367,16 @@ onMounted(load)
     </section>
 
     <section v-else class="ui-card flex flex-col rounded-lg lg:min-h-0 lg:flex-1 lg:overflow-hidden">
-      <div class="grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(260px,0.75fr)_minmax(0,1.25fr)]">
+      <div v-if="!capitalModeSupported" class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center" role="status">
+        <span class="i-carbon-warning text-3xl text-amber-500" />
+        <h2 class="text-base text-gray-900 font-semibold dark:text-gray-100">
+          资本模式暂不可用
+        </h2>
+        <p class="max-w-sm text-sm text-gray-500 leading-6 dark:text-gray-400">
+          当前后端版本未提供宠物自动守护接口；手动派出、召回与喂狗粮不受影响。
+        </p>
+      </div>
+      <div v-else class="grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(260px,0.75fr)_minmax(0,1.25fr)]">
         <div class="flex flex-col justify-between border-b border-gray-200 p-5 lg:border-b-0 lg:border-r dark:border-gray-700 sm:p-6">
           <div>
             <div class="grid h-12 w-12 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--theme-primary)_12%,transparent)] text-[var(--theme-primary)]">

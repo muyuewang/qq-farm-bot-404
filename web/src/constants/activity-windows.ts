@@ -32,6 +32,10 @@ export const SHARE_REWARD_ACTIVITY_WINDOW = {
   updatedMs: 1790179200 * 1000,
 }
 
+// 快乐不独享的新接口按实例 ID 白名单读取（core/src/activity-data/share-reward-instances.json），
+// 2026092501 是这期秋日分享活动的实例；奶茶组下的实例在 milk-tea 适配器里单独登记。
+export const SHARE_REWARD_ACTIVITY_ID = '2026092501'
+
 export function isWithinActivityWindowMs(window: { startMs: number, endMs: number }, nowMs = Date.now()) {
   return nowMs >= window.startMs && nowMs <= window.endMs
 }

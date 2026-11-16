@@ -121,6 +121,8 @@ export interface UIConfig {
   theme?: string
 }
 
+export const AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE = '当前后端版本未提供微信定时刷新重登设置'
+
 export interface AutoCodeRefreshConfig {
   enabled: boolean
   intervalMinutes: number
@@ -343,45 +345,13 @@ export const useSettingStore = defineStore('setting', () => {
     }
   }
 
-  async function saveAutoCodeRefresh(accountId: string, config: AutoCodeRefreshConfig) {
-    if (!accountId)
-      return { ok: false, error: '未选择账号' }
-    loading.value = true
-    try {
-      const { data } = await api.post('/api/settings/auto-code-refresh', config, {
-        headers: { 'x-account-id': accountId },
-      })
-      if (data && data.ok) {
-        settings.value.autoCodeRefresh = {
-          ...createDefaultAutoCodeRefresh(),
-          ...(data.data?.autoCodeRefresh || config),
-        }
-        return { ok: true }
-      }
-      return { ok: false, error: data?.error || '保存失败' }
-    }
-    catch (e: any) {
-      return { ok: false, error: e.response?.data?.error || e.message }
-    }
-    finally {
-      loading.value = false
-    }
+  // 上游后端不再有微信定时刷新重登设置，入口保留但置灰，避免保存看似成功实际无效。
+  async function saveAutoCodeRefresh(_accountId: string, _config: AutoCodeRefreshConfig) {
+    return { ok: false, error: AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE }
   }
 
-  async function runAutoCodeRefresh(accountId: string) {
-    if (!accountId)
-      return { ok: false, error: '未选择账号' }
-    try {
-      const { data } = await api.post('/api/settings/auto-code-refresh/run', {}, {
-        headers: { 'x-account-id': accountId },
-      })
-      if (data && data.ok)
-        return { ok: true }
-      return { ok: false, error: data?.error || '刷新失败' }
-    }
-    catch (e: any) {
-      return { ok: false, error: e.response?.data?.error || e.message }
-    }
+  async function runAutoCodeRefresh(_accountId: string) {
+    return { ok: false, error: AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE }
   }
 
   return {

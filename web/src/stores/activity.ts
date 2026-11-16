@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/api'
+import { SHARE_REWARD_ACTIVITY_ID } from '@/constants/activity-windows'
 import { useAccountStore } from '@/stores/account'
+import {
+  mapCharityFlowerActivity,
+  mapQixiActivity,
+  mapRainPoemActivity,
+  mapStarActivity,
+} from '@/utils/activity-center'
+import { mapShareRewardActivity, mapWishSignActivity } from '@/utils/autumn-activity'
 
 export interface ActivityExchangeShopItem {
   id: number
@@ -51,8 +59,8 @@ export interface HeluDrawResult {
 
 export interface HeluSeasonRewardTier {
   level: number
-  freeRewards: HeluDrawReward[]
-  premiumRewards: HeluDrawReward[]
+  /** 新协议每个通行证节点只有一份奖励列表，不再区分免费/珍藏两轨。 */
+  rewards: HeluDrawReward[]
 }
 
 export interface HeluSeasonPassport {
@@ -106,8 +114,9 @@ export interface StarRecordItem {
   title: string
   category: string
   explain: string
-  graph: string
-  featured: boolean
+  /** 新协议星宿图鉴不下发星图与精选标记，缺省即未提供。 */
+  graph?: string
+  featured?: boolean
   unlocked: boolean
   claimed: boolean
   claimable: boolean
@@ -140,7 +149,14 @@ export interface StarActivityData {
   warning?: string
 }
 
-export interface QixiItem { itemId: number, itemCount: number, itemName: string, image?: string }
+export interface QixiItem {
+  itemId: number
+  itemCount: number
+  itemName: string
+  image?: string
+  /** 服务端没读到背包时余额为 null，此时 itemCount 不可信，页面显示「-」而不是 0。 */
+  countKnown?: boolean
+}
 export interface QixiFriend { gid: number, name: string, avatar?: string, level?: number }
 export interface QixiActivityData {
   uid: string
@@ -150,16 +166,13 @@ export interface QixiActivityData {
   endTime: number
   active: boolean
   items: { feather: QixiItem, dew: QixiItem, sachet: QixiItem }
-  dewUsage: { dailyLimit: number, limitReached: boolean }
   bridge: {
     stages: Array<{ id: number, status: number, claimed: boolean, cost: QixiItem, rewards: QixiItem[] }>
     completedCount: number
     nextStage?: { id: number, status: number, claimed: boolean, cost: QixiItem, rewards: QixiItem[] } | null
-    canBuild: boolean
   }
   gift: {
     sentCount: number
-    receivedCount: number
     maxCount: number
     remainingCount: number
     cost: QixiItem
@@ -174,9 +187,14 @@ export interface RainPoemActivityData {
   endTime: number
   active: boolean
   items: { collectionBottles: number, summonBottles: number, frogPrankBottles: number, cloudPrankBottles: number, badges: number }
-  shop: { purchasedToday: boolean, available: boolean, dailyLimit: number, cost: QixiItem, item: QixiItem }
-  collection: { remainingUseCount: number, dailyUseLimit: number, reward: QixiItem }
-  summon: { itemId: number, dailyUseLimit: number, durationSeconds: number, usedToday: number }
+  /** 服务端没下发商店档位时为 null，页面显示未下发而不是「不可购买」。 */
+  shop: { purchasedToday: boolean, available: boolean, dailyLimit: number, cost: QixiItem, item: QixiItem } | null
+  collection: {
+    dailyUseLimit: number
+    /** 新协议不下发今日剩余采集次数，null 表示未提供。 */
+    remainingUseCount: number | null
+    rewards: QixiItem[]
+  }
   weather?: { type: number, status: number, startTime?: number, endTime?: number, rainstorm: boolean, error?: string }
   tasks: Array<{ id: number, itemId: number, desc: string, target: number, progress: number, reward: QixiItem }>
   research: { currentStage: number, stages: Array<{ id: number, status: number, available: boolean, completed: boolean, claimed: boolean, cost: QixiItem, reward: QixiItem }> }
@@ -190,64 +208,13 @@ export interface CharityFlowerActivityData {
   endTime: number
   active: boolean
   love: { itemId: number, count: number, personalScore: number, canDonate: boolean }
-  global: { score: number, target: number, amountYuan: number, targetYuan: number, reached: boolean }
-  share: { status: number, claimable: boolean, claimed: boolean, rewards: QixiItem[] }
-  personalRewards: Array<{ needScore: number, reached: boolean, claimed: boolean, rewards: QixiItem[] }>
-  finalReward: { threshold: number, settlementTime: number, settled: boolean, eligible: boolean, rewards: QixiItem[] }
-  publicFund: { status: number, claimable: boolean, claimed: boolean, complianceAgreed: boolean, rewards: QixiItem[], successCount: number }
-}
-
-export interface PetDiaryPhotoSlot {
-  id: number
-  unlocked: boolean
-  claimed: boolean
-  claimable: boolean
-  progress: number
-  photo: string
-  say: string
-}
-
-export interface PetDiaryActivityData {
-  uid: string
-  title: string
-  activityId: number
-  groupActivityId: number
-  giftActivityId?: number
-  shopActivityId?: number
-  startTime: number
-  endTime: number
-  active: boolean
-  pet: { stage: number, progress: number, state: number }
-  home: { state: number }
-  escort: { guard: number, cake: { itemId: number, count: number, name: string } | null }
-  photoWall: {
-    slots: PetDiaryPhotoSlot[]
-    totalCount: number
-    unlockedCount: number
-    claimedCount: number
-    claimableCount: number
-  }
-  pouch: { flag: string, state: number, slot: { id: number, type: number, count: number } }
-  gifts: {
-    status: number
-    openedDays: number
-    records: StarRecordItem[]
-    totalCount: number
-    unlockedCount: number
-    claimedCount: number
-    claimableCount: number
-  }
-  shop: ActivityExchangeShopItem[]
-  balances: { cake: number, star: number }
-  items: { cake: number, star: number }
-  summary: {
-    photoUnlocked: number
-    photoTotal: number
-    photoClaimable: number
-    giftClaimable: number
-    shopCount: number
-  }
-  warning?: string
+  /** 新协议只按爱心计数，没有爱心到公益金的换算字段，因此不再有金额。 */
+  global: { score: number, target: number, reached: boolean }
+  share: { claimed: boolean, claimable: boolean, rewards: QixiItem[] }
+  personalRewards: Array<{ needScore: number, reached: boolean, claimed: boolean, claimable: boolean, rewards: QixiItem[] }>
+  finalReward: { threshold: number, eligible: boolean, rewards: QixiItem[] }
+  /** 公益金只下发日期与状态码，状态码语义未确认，页面不猜成「已送出」。 */
+  publicFund: { date: number, statusCode: string } | null
 }
 
 export type HeluSubActivityKey = 'giftLotus' | 'shop' | 'journey' | 'notes'
@@ -366,23 +333,15 @@ export const useActivityStore = defineStore('activity', () => {
   const wishSignLoading = ref(false)
   const shareRewardActivity = ref<any | null>(null)
   const shareRewardLoading = ref(false)
-  const petDiaryActivity = ref<PetDiaryActivityData | null>(null)
-  const petDiaryLoading = ref(false)
-  const petDiaryError = ref('')
   const qixiFriends = ref<QixiFriend[]>([])
   const qixiLoading = ref(false)
-  const qixiBuildLoading = ref(false)
   const qixiGiftLoading = ref(false)
-  const qixiDewLoading = ref(false)
 
   const heluLoading = ref(false)
-  const drawLoading = ref(false)
   const exchangeLoading = ref(false)
   const passportClaimLoading = ref(false)
   const solarClaimLoading = ref(false)
   const starRecordClaimLoading = ref(false)
-  const qingmeiClaimLoading = ref(false)
-  const qingmeiSellLoading = ref(false)
 
   const heluError = ref('')
 
@@ -395,29 +354,44 @@ export const useActivityStore = defineStore('activity', () => {
     charityFlowerActivity.value = null
     wishSignActivity.value = null
     shareRewardActivity.value = null
-    petDiaryActivity.value = null
-    petDiaryError.value = ''
     qixiFriends.value = []
     heluLoading.value = false
-    drawLoading.value = false
     exchangeLoading.value = false
     passportClaimLoading.value = false
     solarClaimLoading.value = false
     starRecordClaimLoading.value = false
-    qingmeiClaimLoading.value = false
-    qingmeiSellLoading.value = false
-    petDiaryLoading.value = false
     heluError.value = ''
+  }
+
+  /** 新后端把好友列表独立到 /api/friends，读取失败不影响活动详情本身。 */
+  async function fetchQixiFriends(accountId: string) {
+    try {
+      const { data } = await api.get('/api/friends', {
+        headers: { 'x-account-id': accountId },
+        skipErrorToast: true,
+      } as any)
+      if (!isCurrentAccount(String(accountId)))
+        return
+      qixiFriends.value = (Array.isArray(data?.data) ? data.data : [])
+        .map((friend: any) => ({
+          gid: Number(friend?.gid),
+          name: String(friend?.name || friend?.nickname || ''),
+          level: Number(friend?.level) || undefined,
+        }))
+        .filter((friend: any) => Number.isFinite(friend.gid) && friend.gid > 0)
+    }
+    catch {
+      qixiFriends.value = []
+    }
   }
 
   async function fetchQixiActivity(accountId: string) {
     qixiLoading.value = true
     try {
-      const { data } = await api.get('/api/activity/qixi', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId))) {
-        qixiActivity.value = data.activity || null
-        qixiFriends.value = data.friends || []
-      }
+      const { data } = await api.get('/api/activity-center/qixi', { headers: { 'x-account-id': accountId } })
+      if (data?.ok && isCurrentAccount(String(accountId)))
+        qixiActivity.value = mapQixiActivity(data.data)
+      void fetchQixiFriends(accountId)
       return data
     }
     finally { qixiLoading.value = false }
@@ -426,9 +400,10 @@ export const useActivityStore = defineStore('activity', () => {
   async function fetchRainPoemActivity(accountId: string) {
     rainPoemLoading.value = true
     try {
-      const { data } = await api.get('/api/activity/rain-poem', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId)))
-        rainPoemActivity.value = data.activity || null
+      // 雨落成诗现在挂在 activity-center 的天气活动快照下，时间为秒、物品 id 为十进制字符串。
+      const { data } = await api.get('/api/activity-center/weather', { headers: { 'x-account-id': accountId } })
+      if (data?.ok && isCurrentAccount(String(accountId)))
+        rainPoemActivity.value = mapRainPoemActivity(data.data)
       return data
     }
     finally { rainPoemLoading.value = false }
@@ -437,9 +412,10 @@ export const useActivityStore = defineStore('activity', () => {
   async function fetchCharityFlowerActivity(accountId: string) {
     charityFlowerLoading.value = true
     try {
-      const { data } = await api.get('/api/activity/charity-flower', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId)))
-        charityFlowerActivity.value = data.activity || null
+      // 公益小红花的活动 ID 由服务端固定，未下发该活动活动时 data 为 null。
+      const { data } = await api.get('/api/activity-center/charity-red-flower', { headers: { 'x-account-id': accountId } })
+      if (data?.ok && isCurrentAccount(String(accountId)))
+        charityFlowerActivity.value = mapCharityFlowerActivity(data.data)
       return data
     }
     finally { charityFlowerLoading.value = false }
@@ -448,8 +424,10 @@ export const useActivityStore = defineStore('activity', () => {
   async function fetchWishSignActivity(accountId: string) {
     wishSignLoading.value = true
     try {
-      const { data } = await api.get('/api/activity/wish-sign', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId))) wishSignActivity.value = data.activity || null
+      // 秋祈良愿现在挂在 commerce 的秋季活动接口下，时间是毫秒、物品 id 是数字。
+      const { data } = await api.get('/api/activities/autumn/wish', { headers: { 'x-account-id': accountId } })
+      if (data?.ok && isCurrentAccount(String(accountId)))
+        wishSignActivity.value = mapWishSignActivity(data.data)
       return data
     }
     finally { wishSignLoading.value = false }
@@ -458,65 +436,22 @@ export const useActivityStore = defineStore('activity', () => {
   async function fetchShareRewardActivity(accountId: string) {
     shareRewardLoading.value = true
     try {
-      const { data } = await api.get('/api/activity/share-reward', { headers: { 'x-account-id': accountId } })
-      if (data.ok && isCurrentAccount(String(accountId))) shareRewardActivity.value = data.activity || null
+      // 快乐不独享改成按实例 ID 读取，实例白名单见 core/src/activity-data/share-reward-instances.json。
+      const { data } = await api.get(`/api/activities/share-reward/${SHARE_REWARD_ACTIVITY_ID}`, { headers: { 'x-account-id': accountId } })
+      if (data?.ok && isCurrentAccount(String(accountId)))
+        shareRewardActivity.value = mapShareRewardActivity(data.data)
       return data
     }
     finally { shareRewardLoading.value = false }
   }
 
-  async function fetchPetDiaryActivity(accountId: string) {
-    if (!accountId)
-      return
-    const requestedId = String(accountId)
-    petDiaryLoading.value = true
-    petDiaryError.value = ''
-    try {
-      const { data } = await api.get('/api/activity/pet-diary', { headers: { 'x-account-id': accountId } })
-      if (!isCurrentAccount(requestedId))
-        return
-      if (data.ok)
-        petDiaryActivity.value = data.activity || null
-      else
-        petDiaryError.value = data.error || '获取萌宠日记失败'
-      return data
-    }
-    catch (err: any) {
-      if (isCurrentAccount(requestedId))
-        petDiaryError.value = err?.response?.data?.error || err?.message || '获取萌宠日记失败'
-    }
-    finally {
-      petDiaryLoading.value = false
-    }
-  }
-
-  async function buildQixiBridge(accountId: string) {
-    qixiBuildLoading.value = true
-    try {
-      const { data } = await api.post('/api/activity/qixi/bridge/build', {}, { headers: { 'x-account-id': accountId } })
-      if (data.ok && data.activity && isCurrentAccount(String(accountId)))
-        qixiActivity.value = data.activity
-      return data
-    }
-    finally { qixiBuildLoading.value = false }
-  }
-  async function useQixiDew(accountId: string) {
-    qixiDewLoading.value = true
-    try {
-      const { data } = await api.post('/api/activity/qixi/dew/use', {}, { headers: { 'x-account-id': accountId } })
-      if (data.ok && data.activity && isCurrentAccount(String(accountId)))
-        qixiActivity.value = data.activity
-      return data
-    }
-    finally { qixiDewLoading.value = false }
-  }
-
-  async function sendQixiSachet(accountId: string, friendGid: number, count: number) {
+  async function sendQixiSachet(accountId: string, friendGid: number) {
     qixiGiftLoading.value = true
     try {
-      const { data } = await api.post('/api/activity/qixi/gift', { friendGid, count }, { headers: { 'x-account-id': accountId } })
-      if (data.ok && data.activity && isCurrentAccount(String(accountId)))
-        qixiActivity.value = data.activity
+      // 新接口每次固定赠出 1 个香囊，份数由服务端决定，页面不再让用户自选数量。
+      const { data } = await api.post('/api/activity-center/qixi/gift', { friendGid: String(friendGid) }, { headers: { 'x-account-id': accountId } })
+      if (data?.ok && isCurrentAccount(String(accountId)))
+        await fetchQixiActivity(accountId)
       return data
     }
     finally { qixiGiftLoading.value = false }
@@ -536,15 +471,15 @@ export const useActivityStore = defineStore('activity', () => {
     heluLoading.value = true
     heluError.value = ''
     try {
-      const { data } = await api.get('/api/activity/star', {
+      const { data } = await api.get('/api/activity-center/stellar', {
         headers: { 'x-account-id': accountId },
       })
       if (requestId !== heluRequestId || !isCurrentAccount(requestedId))
         return
-      if (data.ok)
-        heluActivity.value = data.activity || null
+      if (data?.ok)
+        heluActivity.value = mapStarActivity(data.data)
       else
-        heluError.value = data.error || '获取心许千灯星垂野失败'
+        heluError.value = data?.error || '获取心许千灯星垂野失败'
     }
     catch (err: any) {
       if (requestId === heluRequestId && isCurrentAccount(requestedId))
@@ -556,15 +491,20 @@ export const useActivityStore = defineStore('activity', () => {
     }
   }
 
+  /**
+   * 星垂野写操作的回包只带自身段落（shop / pass / constellation），没有整份赛季聚合视图，
+   * 因此成功后统一重读 /stellar，避免页面在领取或兑换后继续停留在旧进度。
+   */
   async function claimStarRecords(accountId: string) {
     const requestedId = String(accountId)
     starRecordClaimLoading.value = true
     try {
-      const { data } = await api.post('/api/activity/star/records/claim', {}, {
+      // 「一键点亮领取」对应新后端的点亮今日星宿；奖励由服务端结算，回包不返回奖励明细列表。
+      const { data } = await api.post('/api/activity-center/constellation/light', {}, {
         headers: { 'x-account-id': accountId },
       })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
+      if (data?.ok && isCurrentAccount(requestedId))
+        await fetchHeluActivity(accountId)
       return data
     }
     finally {
@@ -572,53 +512,19 @@ export const useActivityStore = defineStore('activity', () => {
     }
   }
 
-  async function drawHelu(accountId: string, payload: { mode?: string, count?: number } = {}) {
-    const requestedId = String(accountId)
-    drawLoading.value = true
-    try {
-      const { data } = await api.post('/api/activity/helu/draw', payload, {
-        headers: { 'x-account-id': accountId },
-      })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
-      return data
-    }
-    finally {
-      drawLoading.value = false
-    }
-  }
-
-  async function exchangeHelu(accountId: string, slotId: number, count: number) {
+  async function exchangeStarSand(accountId: string, goodsId: number, count: number) {
     const requestedId = String(accountId)
     exchangeLoading.value = true
     try {
-      const { data } = await api.post('/api/activity/helu/exchange', {
-        slotId,
-        count,
+      // 兑换走赛季星砂商店，goodsId/count 都是正十进制整数。
+      const { data } = await api.post('/api/activity-center/shop/exchange', {
+        goodsId: String(goodsId),
+        count: String(count),
       }, {
         headers: { 'x-account-id': accountId },
       })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
-      return data
-    }
-    finally {
-      exchangeLoading.value = false
-    }
-  }
-
-  async function exchangeStarSand(accountId: string, slotId: number, count: number) {
-    const requestedId = String(accountId)
-    exchangeLoading.value = true
-    try {
-      const { data } = await api.post('/api/activity/star/exchange', {
-        slotId,
-        count,
-      }, {
-        headers: { 'x-account-id': accountId },
-      })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
+      if (data?.ok && isCurrentAccount(requestedId))
+        await fetchHeluActivity(accountId)
       return data
     }
     finally {
@@ -630,11 +536,11 @@ export const useActivityStore = defineStore('activity', () => {
     const requestedId = String(accountId)
     passportClaimLoading.value = true
     try {
-      const { data } = await api.post('/api/activity/star/passport/claim', {}, {
+      const { data } = await api.post('/api/activity-center/pass/claim', {}, {
         headers: { 'x-account-id': accountId },
       })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
+      if (data?.ok && isCurrentAccount(requestedId))
+        await fetchHeluActivity(accountId)
       return data
     }
     finally {
@@ -644,54 +550,20 @@ export const useActivityStore = defineStore('activity', () => {
 
   async function claimHeluSolar(accountId: string, termId?: number) {
     const requestedId = String(accountId)
+    // 节令 ID 走路径参数，服务端只接受正十进制整数，非法值直接在前端挡掉。
+    if (!Number.isInteger(termId) || Number(termId) <= 0)
+      return { ok: false, error: '节令 ID 无效，未发起领取' }
     solarClaimLoading.value = true
     try {
-      const { data } = await api.post('/api/activity/star/solar/claim', {
-        termId,
-      }, {
+      const { data } = await api.post(`/api/activity-center/solar-terms/${termId}/claim`, {}, {
         headers: { 'x-account-id': accountId },
       })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
+      if (data?.ok && isCurrentAccount(requestedId))
+        await fetchHeluActivity(accountId)
       return data
     }
     finally {
       solarClaimLoading.value = false
-    }
-  }
-
-  async function claimQingmeiSeeds(accountId: string) {
-    const requestedId = String(accountId)
-    qingmeiClaimLoading.value = true
-    try {
-      const { data } = await api.post('/api/activity/qingmei/claim', {}, {
-        headers: { 'x-account-id': accountId },
-      })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity) {
-        heluActivity.value = data.activity
-      }
-      return data
-    }
-    finally {
-      qingmeiClaimLoading.value = false
-    }
-  }
-
-  async function brewAndSellQingmeiWine(accountId: string) {
-    const requestedId = String(accountId)
-    qingmeiSellLoading.value = true
-    try {
-      const { data } = await api.post('/api/activity/qingmei/wine/sell', {
-        share: true,
-      }, {
-        headers: { 'x-account-id': accountId },
-      })
-      if (isCurrentAccount(requestedId) && data.ok && data.activity)
-        heluActivity.value = data.activity
-      return data
-    }
-    finally {
-      qingmeiSellLoading.value = false
     }
   }
 
@@ -706,22 +578,14 @@ export const useActivityStore = defineStore('activity', () => {
     wishSignLoading,
     shareRewardActivity,
     shareRewardLoading,
-    petDiaryActivity,
-    petDiaryLoading,
-    petDiaryError,
     qixiFriends,
     qixiLoading,
-    qixiBuildLoading,
     qixiGiftLoading,
-    qixiDewLoading,
     heluLoading,
-    drawLoading,
     exchangeLoading,
     passportClaimLoading,
     solarClaimLoading,
     starRecordClaimLoading,
-    qingmeiClaimLoading,
-    qingmeiSellLoading,
     heluError,
     clearActivityData,
     fetchHeluActivity,
@@ -730,17 +594,10 @@ export const useActivityStore = defineStore('activity', () => {
     fetchCharityFlowerActivity,
     fetchWishSignActivity,
     fetchShareRewardActivity,
-    fetchPetDiaryActivity,
-    buildQixiBridge,
-    useQixiDew,
     sendQixiSachet,
     claimStarRecords,
-    drawHelu,
-    exchangeHelu,
     exchangeStarSand,
     claimHeluPassport,
     claimHeluSolar,
-    claimQingmeiSeeds,
-    brewAndSellQingmeiWine,
   }
 })

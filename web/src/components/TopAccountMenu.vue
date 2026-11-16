@@ -22,6 +22,7 @@ const careerLoading = ref(false)
 const careerError = ref('')
 const careerItems = ref<any[]>([])
 const careerProfile = ref<Record<string, any>>({})
+const careerDetailAvailable = ref(false)
 const accountToEdit = ref<any>(null)
 const failedAvatars = ref(new Set<string>())
 
@@ -140,13 +141,24 @@ async function loadCareer() {
   careerLoading.value = true
   careerError.value = ''
   try {
-    const { data } = await api.get('/api/career', {
+    // 上游后端不再提供 /api/career，生涯汇总随 /api/lands 的 career 字段下发
+    const { data } = await api.get('/api/lands', {
       headers: { 'x-account-id': accountId },
     })
     if (!data?.ok)
       throw new Error(data?.error || '生涯记录读取失败')
-    careerProfile.value = data.data || {}
-    careerItems.value = data.data?.items || []
+    const career = data?.data?.career
+    if (!career || !Number(career.gid))
+      throw new Error('当前账号暂无生涯记录')
+    careerProfile.value = {
+      gid: career.gid,
+      name: career.name,
+      level: career.level,
+      totalHarvestCount: career.harvest,
+      totalStealCount: career.steal,
+    }
+    careerItems.value = []
+    careerDetailAvailable.value = false
   }
   catch (error: any) {
     careerError.value = error?.response?.data?.error || error?.message || '生涯记录读取失败'
@@ -404,6 +416,7 @@ async function handleAccountSaved() {
         :account="currentAccount"
         :profile="careerProfile"
         :items="careerItems"
+        :detail-available="careerDetailAvailable"
         :loading="careerLoading"
         :error="careerError"
         @close="showCareerModal = false"

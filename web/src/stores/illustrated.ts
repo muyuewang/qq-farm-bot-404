@@ -1,61 +1,211 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import api from '@/api'
 import { useAccountStore } from '@/stores/account'
 
-export interface IllustratedItem {
-  seedId: number
-  illustratedTier?: number
+export const CROP_ILLUSTRATED_TYPE = 1
+export const MUTANT_ILLUSTRATED_TYPE = 2
+
+export interface IllustratedReward {
+  itemId: number
+  count: number
   name: string
   image?: string
-  level: number
-  layer?: number
-  unlocked: boolean
-  plantedCount?: number
-  harvestCount?: number
-  wishProgress?: {
-    type: number
-    current: number
-    total: number
-  } | null
-  canBuy?: boolean
-  goodsId?: number
-  price?: number
 }
 
-export interface IllustratedSummary {
-  total: number
-  unlocked: number
-  locked: number
-  canBuy: number
+export interface IllustratedAttribute {
+  type: number
+  param: number
+  value: number
+}
+
+export interface IllustratedShopSeed {
+  seedId: number
+  goodsId: number
+  name?: string
+  price: number | null
+  itemCount: number
+  remainingPurchaseCount: number | null
+  requiredLevel: number
+  requiresUnlockCard: boolean
+  locked: boolean
+  soldOut: boolean
+  /** 后端商店读取失败时的本地备选标记，价格与限购未知 */
+  unknownMeta?: boolean
+}
+
+export interface IllustratedItem {
+  seedId: number
+  name: string
+  image?: string
+  unlocked: boolean
+  progress: number
+  isNew: boolean
+  group: string
+  sort: number
+  rewardCategory: number
+  cropCategory: number
+  reward: IllustratedReward | null
+  attributes: IllustratedAttribute[]
+  shopSeed?: IllustratedShopSeed | null
+}
+
+export interface IllustratedLevel {
+  level: number
+  progress: number
+  claimed: boolean
+  canClaim: boolean
+  rewards: IllustratedReward[]
+}
+
+export interface IllustratedBook {
+  type: number
+  level: number
+  progress: number
+  nextLevelProgress: number
+  claimable: boolean
+  rewards: IllustratedReward[]
+  buffs: any[]
+  currentBuffs: any[]
+  items: IllustratedItem[]
+  levels: IllustratedLevel[]
+}
+
+export interface IllustratedSnapshot {
+  crop: IllustratedBook | null
+  mutant: IllustratedBook | null
+  updatedAt: number
+}
+
+export interface IllustratedActionResult {
+  ok: boolean
+  data?: any
+  error?: string
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const result = Number(value)
+  return Number.isFinite(result) ? result : fallback
+}
+
+function toNullableNumber(value: unknown) {
+  if (value === null || value === undefined || value === '')
+    return null
+  const result = Number(value)
+  return Number.isFinite(result) ? result : null
+}
+
+function mapReward(raw: any): IllustratedReward | null {
+  if (!raw)
+    return null
+  return {
+    itemId: toNumber(raw.itemId),
+    count: toNumber(raw.count),
+    name: String(raw.name || ''),
+    image: typeof raw.image === 'string' ? raw.image : '',
+  }
+}
+
+function mapRewards(raw: any): IllustratedReward[] {
+  return (Array.isArray(raw) ? raw : []).map(mapReward).filter(Boolean) as IllustratedReward[]
+}
+
+function mapShopSeed(raw: any): IllustratedShopSeed | null {
+  if (!raw)
+    return null
+  const unknownMeta = raw.unknownMeta === true
+  return {
+    seedId: toNumber(raw.seedId),
+    goodsId: toNumber(raw.goodsId),
+    name: String(raw.name || ''),
+    price: unknownMeta ? null : toNullableNumber(raw.price),
+    itemCount: Math.max(1, toNumber(raw.itemCount, 1)),
+    remainingPurchaseCount: unknownMeta ? null : toNullableNumber(raw.remainingPurchaseCount),
+    requiredLevel: toNumber(raw.requiredLevel),
+    requiresUnlockCard: raw.requiresUnlockCard === true,
+    locked: raw.locked === true,
+    soldOut: raw.soldOut === true,
+    unknownMeta,
+  }
+}
+
+function mapItem(raw: any): IllustratedItem {
+  return {
+    seedId: toNumber(raw?.seedId),
+    name: String(raw?.name || ''),
+    image: typeof raw?.image === 'string' ? raw.image : '',
+    unlocked: raw?.unlocked === true,
+    progress: toNumber(raw?.progress),
+    isNew: raw?.isNew === true,
+    group: String(raw?.group || ''),
+    sort: toNumber(raw?.sort),
+    rewardCategory: toNumber(raw?.rewardCategory),
+    cropCategory: toNumber(raw?.cropCategory),
+    reward: mapReward(raw?.reward),
+    attributes: (Array.isArray(raw?.attributes) ? raw.attributes : []).map((entry: any) => ({
+      type: toNumber(entry?.type),
+      param: toNumber(entry?.param),
+      value: toNumber(entry?.value),
+    })),
+    shopSeed: mapShopSeed(raw?.shopSeed),
+  }
+}
+
+function mapBook(raw: any): IllustratedBook | null {
+  if (!raw)
+    return null
+  return {
+    type: toNumber(raw.type),
+    level: toNumber(raw.level),
+    progress: toNumber(raw.progress),
+    nextLevelProgress: toNumber(raw.nextLevelProgress),
+    claimable: raw.claimable === true,
+    rewards: mapRewards(raw.rewards),
+    buffs: Array.isArray(raw.buffs) ? raw.buffs : [],
+    currentBuffs: Array.isArray(raw.currentBuffs) ? raw.currentBuffs : [],
+    items: (Array.isArray(raw.items) ? raw.items : []).map(mapItem),
+    levels: (Array.isArray(raw.levels) ? raw.levels : []).map((entry: any) => ({
+      level: toNumber(entry?.level),
+      progress: toNumber(entry?.progress),
+      claimed: entry?.claimed === true,
+      canClaim: entry?.canClaim === true,
+      rewards: mapRewards(entry?.rewards),
+    })),
+  }
+}
+
+function mapSnapshot(raw: any): IllustratedSnapshot {
+  return {
+    crop: mapBook(raw?.crop),
+    mutant: mapBook(raw?.mutant),
+    updatedAt: toNumber(raw?.updatedAt),
+  }
 }
 
 export const useIllustratedStore = defineStore('illustrated', () => {
-  const items = ref<IllustratedItem[]>([])
-  const summary = ref<IllustratedSummary>({
-    total: 0,
-    unlocked: 0,
-    locked: 0,
-    canBuy: 0,
-  })
-  const userLevel = ref(0)
+  const snapshot = ref<IllustratedSnapshot>({ crop: null, mutant: null, updatedAt: 0 })
+  /** 后端一次请求同时返回作物与变异两本图鉴，没有按类型查询的参数 */
+  const loaded = ref(false)
   const loading = ref(false)
-  const buying = ref(false)
+  const claiming = ref(false)
   const error = ref('')
+  /** 领取成功后到下一次快照刷新前的提示，避免用旧进度冒充最新值 */
+  const refreshRequired = ref(false)
+
   let fetchRequestId = 0
 
+  const bookByType = computed(() => ({
+    [CROP_ILLUSTRATED_TYPE]: snapshot.value.crop,
+    [MUTANT_ILLUSTRATED_TYPE]: snapshot.value.mutant,
+  } as Record<number, IllustratedBook | null>))
+
   function clearIllustratedData() {
-    items.value = []
-    summary.value = {
-      total: 0,
-      unlocked: 0,
-      locked: 0,
-      canBuy: 0,
-    }
-    userLevel.value = 0
+    snapshot.value = { crop: null, mutant: null, updatedAt: 0 }
+    loaded.value = false
     loading.value = false
-    buying.value = false
+    claiming.value = false
     error.value = ''
+    refreshRequired.value = false
   }
 
   function isCurrentAccount(accountId: string) {
@@ -64,7 +214,7 @@ export const useIllustratedStore = defineStore('illustrated', () => {
     return currentId === String(accountId)
   }
 
-  async function fetchList(accountId: string, refresh = false, illustratedType = 1) {
+  async function fetchSnapshot(accountId: string) {
     if (!accountId)
       return
     const requestedId = String(accountId)
@@ -73,23 +223,27 @@ export const useIllustratedStore = defineStore('illustrated', () => {
     error.value = ''
     try {
       const { data } = await api.get('/api/illustrated', {
-        params: { refresh, illustrated_type: illustratedType },
         headers: { 'x-account-id': accountId },
       })
       if (requestId !== fetchRequestId || !isCurrentAccount(requestedId))
         return
-      if (data.ok) {
-        items.value = data.data?.items || []
-        summary.value = data.data?.summary || summary.value
-        userLevel.value = data.data?.userLevel || 0
+      if (data?.ok) {
+        snapshot.value = mapSnapshot(data.data)
+        loaded.value = true
+        refreshRequired.value = false
       }
       else {
-        error.value = data.error || '获取图鉴失败'
+        snapshot.value = { crop: null, mutant: null, updatedAt: 0 }
+        loaded.value = false
+        error.value = String(data?.error || data?.errorMessage || '获取图鉴失败')
       }
     }
     catch (err: any) {
-      if (requestId === fetchRequestId && isCurrentAccount(requestedId))
-        error.value = err.message || '获取图鉴失败'
+      if (requestId === fetchRequestId && isCurrentAccount(requestedId)) {
+        snapshot.value = { crop: null, mutant: null, updatedAt: 0 }
+        loaded.value = false
+        error.value = String(err?.response?.data?.error || err?.response?.data?.errorMessage || err?.message || '获取图鉴失败')
+      }
     }
     finally {
       if (requestId === fetchRequestId)
@@ -97,47 +251,52 @@ export const useIllustratedStore = defineStore('illustrated', () => {
     }
   }
 
-  async function buySeed(accountId: string, goodsId: number, price: number) {
-    buying.value = true
+  async function claimRewards(accountId: string, type: number): Promise<IllustratedActionResult> {
+    if (!accountId)
+      return { ok: false, error: '请先选择账号' }
+    const requestedId = String(accountId)
+    claiming.value = true
     try {
-      const { data } = await api.post('/api/illustrated/buy', {
-        goodsId,
-        price,
-      }, {
+      const { data } = await api.post('/api/illustrated/claim', { type }, {
         headers: { 'x-account-id': accountId },
       })
-      return data
+      if (data?.ok) {
+        if (data.data?.snapshot && isCurrentAccount(requestedId)) {
+          snapshot.value = mapSnapshot(data.data.snapshot)
+          loaded.value = true
+          refreshRequired.value = false
+        }
+        else if (isCurrentAccount(requestedId)) {
+          refreshRequired.value = true
+        }
+        return { ok: true, data: data.data }
+      }
+      return {
+        ok: false,
+        error: String(data?.error || data?.errorMessage || '领取图鉴奖励失败'),
+      }
+    }
+    catch (err: any) {
+      return {
+        ok: false,
+        error: String(err?.response?.data?.error || err?.response?.data?.errorMessage || err?.message || '领取图鉴奖励失败'),
+      }
     }
     finally {
-      buying.value = false
-    }
-  }
-
-  async function buyAllSeeds(accountId: string, illustratedType = 1) {
-    buying.value = true
-    try {
-      const { data } = await api.post('/api/illustrated/buy-all', {
-        illustrated_type: illustratedType,
-      }, {
-        headers: { 'x-account-id': accountId },
-      })
-      return data
-    }
-    finally {
-      buying.value = false
+      claiming.value = false
     }
   }
 
   return {
-    items,
-    summary,
-    userLevel,
+    snapshot,
+    loaded,
     loading,
-    buying,
+    claiming,
     error,
+    refreshRequired,
+    bookByType,
     clearIllustratedData,
-    fetchList,
-    buySeed,
-    buyAllSeeds,
+    fetchSnapshot,
+    claimRewards,
   }
 })

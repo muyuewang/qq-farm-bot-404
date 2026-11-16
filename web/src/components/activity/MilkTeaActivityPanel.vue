@@ -3,6 +3,19 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import api from '@/api'
 import { isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useAccountStore } from '@/stores/account'
+import {
+  buildMilkTeaRequest,
+  buildMilkTeaView,
+  mapMilkTeaShare,
+  MILK_TEA_ACTION_PAGES,
+  MILK_TEA_ENDPOINT,
+  MILK_TEA_MODAL_PAGES,
+  MILK_TEA_MODAL_RECORDS,
+  MILK_TEA_SHARE_ACTIVITY_ID,
+  MILK_TEA_SHARE_ACTIONS,
+  MILK_TEA_SHARE_ENDPOINT,
+  MILK_TEA_TAB_PAGES,
+} from '@/stores/milk-tea'
 import MilkTeaCraftDialog from './MilkTeaCraftDialog.vue'
 import MilkTeaShopDialogs from './MilkTeaShopDialogs.vue'
 
@@ -39,7 +52,19 @@ function fitGame() {
     gameWidth.value = width
 }
 
-const state = ref<any>(null)
+/**
+ * 新版后端只按页面下发快照（GET /api/activities/milk-tea?page=…），旧模板仍消费单一
+ * activity 视图；这里保留已抓取的分页快照，按写入先后折叠成旧形状 state。
+ */
+const pages = ref<Array<{ page: string, snapshot: any }>>([])
+// 快乐不独享是同一活动组下的独立实例，单独读一份快照再并回旧 share 段落。
+const share = ref<any | null>(null)
+const shareNotice = ref('')
+const state = computed(() => {
+  if (!pages.value.length)
+    return null
+  return { ...buildMilkTeaView(pages.value), share: share.value, shareUnavailable: shareNotice.value }
+})
 const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -63,67 +88,166 @@ function clampPurchase() {
 function totalCost(cost: any) {
   return (BigInt(cost.count || 0) * BigInt(Number.isSafeInteger(purchaseCount.value) && purchaseCount.value >= 1 ? purchaseCount.value : 0)).toString()
 }
-const records = ref<any>(null)
+// records 直接取合并视图里对应的段落，后台动作写回后弹窗会跟着刷新。
+const records = computed(() => {
+  const section = MILK_TEA_MODAL_RECORDS[modal.value]
+  return section ? state.value?.[section] ?? null : null
+})
 const shopName = ref('奶茶冲鸭')
 const now = ref(Date.now())
 let timer: ReturnType<typeof setInterval>
 let generation = 0
 const img = (name: string) => `/activity/milk-tea/${name}.png`
 const currencyIcon = (item: any) => ({ 1001: '/game-config/resource-icons/gold.png', 1004: '/game-config/resource-icons/diamond.png', 1041: img('icon_s4_ticket') } as Record<string, string>)[String(item.id ?? item.itemId)] || item.image || ''
-const money = (id: string) => state.value?.balances?.find((x: any) => String(x.itemId ?? x.id) === id)?.count || '0'
+// 余额缺失表示后端这一页没有取过该项，显示未确认而不是 0。
+const money = (id: string) => {
+  const entry = state.value?.balances?.find((x: any) => String(x.itemId ?? x.id) === id)
+  return entry?.count == null ? '—' : String(entry.count)
+}
 const goods = computed(() => (state.value?.goods || []).filter((g: any) => filter.value === '全部' || (filter.value === '种子' ? g.category_tag === 'seed' : g.category_tag !== 'seed')))
 const recipes = computed(() => (state.value?.recipes || []).filter((x: any) => x.unlocked).sort((a: any, b: any) => Number(a.recipe_id) - Number(b.recipe_id)))
 const shelfRecipes = computed(() => [...recipes.value].sort((a: any, b: any) => Number(b.stock_cups === '-1') - Number(a.stock_cups === '-1') || Number(b.recipe_id) - Number(a.recipe_id)))
+const hireHours = computed(() => {
+  const duration = (state.value?.durations || []).find((x: any) => Number(x.duration_id) === Number(records.value?.duration_id))
+  return duration ? Number(duration.duration_sec) / 3600 : null
+})
 const remaining = computed(() => {
   const seconds = Math.max(0, (Number(state.value?.endTime || 0) * 1000 - now.value) / 1000)
   return `${Math.floor(seconds / 86400)}天${Math.floor(seconds % 86400 / 3600)}时`
 })
 const date = (sec: number) => new Date(sec * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
 const duration = (sec: number) => `${Math.floor(Math.max(0, sec) / 3600).toString().padStart(2, '0')}:${Math.floor(Math.max(0, sec) % 3600 / 60).toString().padStart(2, '0')}`
+const reason = (e: any) => e?.response?.data?.error || e?.errorMessage || e?.message || e?.error || '活动数据读取失败'
+function applySnapshot(page: string, snapshot: any) {
+  pages.value = [...pages.value.filter(entry => entry.page !== page), { page, snapshot }]
+}
+async function loadPage(page: string, accountId: string, query: Record<string, any> = {}) {
+  const { data } = await api.get(MILK_TEA_ENDPOINT, {
+    params: { page, ...query },
+    headers: { 'x-account-id': accountId },
+    timeout: 100000,
+  })
+  // 新后端的失败也是 HTTP 200 + { ok: false }，必须自己判。
+  if (!data?.ok || !data.data)
+    throw new Error(data?.error || '活动数据读取失败')
+  return data.data
+}
+async function loadShare(accountId: string) {
+  const { data } = await api.get(`${MILK_TEA_SHARE_ENDPOINT}/${MILK_TEA_SHARE_ACTIVITY_ID}`, {
+    headers: { 'x-account-id': accountId },
+    timeout: 100000,
+  })
+  if (!data?.ok || !data.data)
+    throw new Error(data?.error || '快乐不独享数据读取失败')
+  return data.data
+}
+async function syncShare(accountId: string) {
+  const token = generation
+  try {
+    const dto = await loadShare(accountId)
+    if (token !== generation || accounts.currentAccountId !== accountId)
+      return
+    share.value = mapMilkTeaShare(dto)
+    shareNotice.value = ''
+  }
+  catch (e: any) {
+    if (token !== generation || accounts.currentAccountId !== accountId)
+      return
+    // 读取失败就显式回到未接入提示，不把上一次的进度当成最新值。
+    share.value = null
+    shareNotice.value = reason(e)
+  }
+}
 async function refresh() {
   if (loading.value || busy.value || !accounts.currentAccountId || !isWithinActivityWindowMs(MILK_TEA_ACTIVITY_WINDOW))
     return
   const token = generation
   const accountId = accounts.currentAccountId
   loading.value = true
+  const failures: string[] = []
+  for (const page of MILK_TEA_TAB_PAGES[tab.value] || []) {
+    try {
+      const snapshot = await loadPage(page, accountId)
+      if (token !== generation || accounts.currentAccountId !== accountId)
+        return
+      applySnapshot(page, snapshot)
+    }
+    catch (e: any) {
+      if (token !== generation)
+        return
+      failures.push(reason(e))
+    }
+  }
+  if (token === generation) {
+    error.value = failures[0] || ''
+    loading.value = false
+  }
+  // 后台自动化会领走每日快乐值和档位奖励，弹窗开着时同步这份独立快照，避免页面长期停留在旧进度。
+  if (token === generation && modal.value === 'share' && accounts.currentAccountId === accountId)
+    await syncShare(accountId)
+}
+async function actShare(action: string, accountId: string) {
+  const token = generation
+  busy.value = true
+  error.value = ''
   try {
-    const { data } = await api.get('/api/activity/milk-tea', { headers: { 'x-account-id': accountId }, timeout: 100000 })
+    const { data } = await api.post(`${MILK_TEA_SHARE_ENDPOINT}/${MILK_TEA_SHARE_ACTIVITY_ID}/${action}`, {}, { headers: { 'x-account-id': accountId }, timeout: 190000 })
     if (token !== generation)
       return
-    if (!data.ok || !data.activity)
-      throw new Error(data.error || '活动数据读取失败')
-    state.value = data.activity
-    error.value = ''
+    if (!data?.ok)
+      throw new Error(data?.error || '操作失败')
+    // 写回自带最新进度，直接消费它，省掉一次读请求。
+    if (data.data?.activity)
+      share.value = mapMilkTeaShare(data.data.activity)
+    else
+      await syncShare(accountId)
+    if (data.data?.refreshRequired)
+      shareNotice.value = '操作已完成，但最新状态读取失败，请稍候刷新确认，勿重复提交'
   }
   catch (e: any) {
     if (token === generation)
-      error.value = e.response?.data?.error || e.message
+      error.value = reason(e)
   }
   finally {
     if (token === generation)
-      loading.value = false
+      busy.value = false
   }
 }
 async function act(action: string, params: any = {}) {
   if (busy.value || loading.value || !accounts.currentAccountId)
     return
+  const shareAction = MILK_TEA_SHARE_ACTIONS[action]
+  if (shareAction) {
+    await actShare(shareAction, accounts.currentAccountId)
+    return
+  }
+  const request = buildMilkTeaRequest(action, params, state.value || {})
+  if (!request.action) {
+    error.value = request.error || '当前后端未提供该操作'
+    return
+  }
   const token = generation
+  const accountId = accounts.currentAccountId
   busy.value = true
   error.value = ''
   try {
-    const { data } = await api.post('/api/activity/milk-tea/operate', { accountId: accounts.currentAccountId, action, params }, { headers: { 'x-account-id': accounts.currentAccountId }, timeout: 190000 })
+    const { data } = await api.post(`${MILK_TEA_ENDPOINT}/${request.action}`, request.body, { headers: { 'x-account-id': accountId }, timeout: 190000 })
     if (token !== generation)
       return
-    if (!data.ok)
-      throw new Error(data.error || '操作失败')
-    state.value = data.activity
-    if (!['shareDaily', 'shareRewards', 'fundRewards', 'upgrade'].includes(action))
+    if (!data?.ok)
+      throw new Error(data?.error || '操作失败')
+    const page = MILK_TEA_ACTION_PAGES[request.action]
+    if (page && data.data?.activity)
+      applySnapshot(page, data.data.activity)
+    if (data.data?.refreshRequired)
+      error.value = '操作已完成，但最新状态读取失败，请稍候刷新确认，勿重复提交'
+    if (!['upgrade', 'fundClaim'].includes(request.action))
       modal.value = ''
   }
   catch (e: any) {
     if (token === generation) {
-      const message = e.response?.data?.error || e.message
-      error.value = action === 'buy' && (e.code === 'ECONNABORTED' || /timeout/i.test(message || ''))
+      const message = reason(e)
+      error.value = request.action === 'exchange' && (e.code === 'ECONNABORTED' || /timeout/i.test(message || ''))
         ? '兑换结果暂未确认，请等待数据刷新后核对库存和限购，勿重复提交'
         : message
     }
@@ -138,21 +262,28 @@ async function open(kind: string) {
     return
   modal.value = kind
   error.value = ''
-  records.value = null
-  if (!['sales', 'rank', 'hireList'].includes(kind))
+  // 快乐不独享读的是独立实例，不属于奶茶分页；其余弹窗必须各自有分页才打开。
+  const page = kind === 'share' ? '' : MILK_TEA_MODAL_PAGES[kind]
+  if (!page)
+    return
+  if (!accounts.currentAccountId)
     return
   busy.value = true
   const token = generation
+  const accountId = accounts.currentAccountId
   try {
-    const { data } = await api.post('/api/activity/milk-tea/records', { accountId: accounts.currentAccountId, kind }, { headers: { 'x-account-id': accounts.currentAccountId }, timeout: 100000 })
-    if (!data.ok)
-      throw new Error(data.error || '记录读取失败')
-    if (token === generation && modal.value === kind)
-      records.value = data
+    if (kind === 'share') {
+      await syncShare(accountId)
+      return
+    }
+    const snapshot = await loadPage(page, accountId)
+    if (token !== generation || modal.value !== kind)
+      return
+    applySnapshot(page, snapshot)
   }
   catch (e: any) {
     if (token === generation)
-      error.value = e.response?.data?.error || e.message
+      error.value = reason(e)
   }
   finally {
     if (token === generation)
@@ -165,10 +296,15 @@ function visible() {
 }
 watch(() => accounts.currentAccountId, () => {
   generation++
-  state.value = null
+  pages.value = []
+  share.value = null
+  shareNotice.value = ''
   loading.value = false
   busy.value = false
   modal.value = ''
+  void refresh()
+})
+watch(tab, () => {
   void refresh()
 })
 onMounted(() => {
@@ -242,7 +378,7 @@ onUnmounted(() => {
           <div class="shop-level">
             <b>{{ state.shop.level }}</b><span>店铺等级</span>
           </div><div>
-            <strong>{{ state.summary.shop_name || '奶茶小铺' }}</strong><button class="edit image-button" @click="open('rename')">
+            <strong>{{ state.summary?.shop_name || '奶茶小铺' }}</strong><button class="edit image-button" @click="open('rename')">
               <img :src="img('img_s4TeaUI_editBtn')" alt="修改店名">
             </button><p>营业额： <img class="revenue-ticket" :src="img('img_s4TeaUI_rewardpng')" alt="奶茶券"> {{ state.shop.total_revenue }}</p>
           </div><button class="upgrade image-button" @click="open('upgrade')">
@@ -266,7 +402,7 @@ onUnmounted(() => {
         </button>
         <div class="employees">
           <div v-for="slot in state.shop.slots" :key="slot.slot_index" class="employee">
-            <strong>{{ slot.employee.name }}</strong><span>{{ slot.talent_name }}</span><div class="hamster" :style="{ backgroundImage: `url(${img('hamster-idle')})` }" /><b>{{ duration(Number(slot.end_at) - now / 1000) }}后下班</b>
+            <strong>{{ slot.employee?.name }}</strong><span>{{ slot.talent_name }}</span><div class="hamster" :style="{ backgroundImage: `url(${img('hamster-idle')})` }" /><b>{{ duration(Number(slot.end_at) - now / 1000) }}后下班</b>
           </div><button v-if="!state.shop.slots.length" class="employ" @click="open('hireList')">
             雇佣员工
           </button><div v-if="Number(state.shop.level) < 3" class="employee locked-worker">
@@ -284,10 +420,10 @@ onUnmounted(() => {
             <img :src="img('img_s4TeaUI_rewardBtn')" alt="成长基金"><span>成长基金</span>
           </button>
         </aside>
-        <button v-if="!Number(state.summary.shop_open_at)" class="make gold-button" :disabled="busy" @click="open('create')">
+        <button v-if="!Number(state.summary?.shop_open_at)" class="make gold-button" :disabled="busy" @click="open('create')">
           开店营业
         </button>
-        <button v-else class="make gold-button" :disabled="busy || state.phase !== 'business'" @click="open('craft')">
+        <button v-else class="make gold-button" :disabled="busy || state.phase !== 'business' || state.actionAvailability?.craft === false" :title="state.actionAvailability?.craft === false ? '当前不可制作奶茶' : ''" @click="open('craft')">
           <span class="make-cup" aria-hidden="true" />制作奶茶
         </button>
       </main>
@@ -303,12 +439,15 @@ onUnmounted(() => {
           </button>
         </div>
         <div class="goods-grid">
-          <button v-for="g in goods" :key="g.id" class="goods" :class="{ unavailable: !g.unlocked || !g.remaining }" :style="{ backgroundImage: `url(${img(Number(g.background_type) >= 2 ? 'img_s4Shop_itemBg3' : 'img_s4Shop_itemBg1')})` }" @click="open(`goods:${g.id}`)">
-            <strong>{{ g.name }}</strong><img :src="g.items[0]?.image || g.items[0]?.imageUrl || img('img_exchange_item1')" :alt="g.name"><span v-if="!g.unlocked" class="goods-lock">🔒<br>店铺{{ g.cond_hints.find((x: any) => !x.satisfied)?.target }}级解锁</span><small>{{ ({ 1: '每日', 2: '每周', 4: '永久' } as any)[g.restriction_type] || '' }}限购{{ g.remaining }}/{{ g.purchase_limit }}</small><b v-if="!g.remaining">已售罄</b><b v-else class="goods-costs"><span v-for="cost in g.costs" :key="cost.id"><img v-if="currencyIcon(cost)" :src="currencyIcon(cost)" :alt="cost.name"><span v-else>{{ cost.name }}</span>{{ cost.count }}</span></b>
+          <button v-for="g in goods" :key="g.id" class="goods" :class="{ unavailable: !g.available }" :style="{ backgroundImage: `url(${img('img_s4Shop_itemBg1')})` }" @click="open(`goods:${g.id}`)">
+            <strong>{{ g.name }}</strong><img :src="g.items[0]?.image || img('img_exchange_item1')" :alt="g.name"><span v-if="!g.unlocked" class="goods-lock">🔒<br>店铺{{ g.conditions.find((x: any) => !x.satisfied)?.target ?? '未知' }}级解锁</span><small>{{ g.limit_label }}{{ g.remaining === null ? '不限购' : `限购${g.remaining}/${g.purchase_limit}` }}</small><b v-if="g.remaining === 0">已售罄</b><b v-else class="goods-costs"><span v-for="cost in g.costs" :key="cost.id"><img v-if="currencyIcon(cost)" :src="currencyIcon(cost)" :alt="cost.name"><span v-else>{{ cost.name }}</span>{{ cost.count }}</span></b>
           </button>
         </div>
+        <p v-if="!goods.length" class="goods-empty">
+          {{ loading || busy ? '正在加载兑换商店…' : '暂无兑换商品，或兑换商店未返回' }}
+        </p>
       </main>
-      <main v-else class="paper work-paper" :style="{ backgroundImage: `url(${img('img_s4_commonBg')})` }">
+      <main v-else-if="state.work" class="paper work-paper" :style="{ backgroundImage: `url(${img('img_s4_commonBg')})` }">
         <div class="work-scene">
           <img :src="img('img_S4MyJob_bg_3')" alt=""><div class="work-sign" :style="{ backgroundImage: `url(${img('img_S4MyJob_bg_4')})` }">
             {{ state.work.my_shift ? '工作中' : '空闲中' }}
@@ -330,9 +469,14 @@ onUnmounted(() => {
           <img :src="img('img_s4_null1')" alt=""><p>暂无工作记录</p>
         </div><div v-for="slip in state.work.slips" :key="slip.shift_id" class="work-record">
           <strong>{{ slip.shop_name }}</strong><p>{{ date(Number(slip.begin_at)) }} — {{ date(Number(slip.end_at)) }}</p>
-        </div><button v-if="state.summary.has_unclaimed_wage" class="gold-button" :disabled="busy" @click="act('wages')">
+        </div><button v-if="state.summary?.has_unclaimed_wage" class="gold-button" :disabled="busy" @click="act('wages')">
           领取工资
         </button>
+      </main>
+      <main v-else class="paper work-paper" :style="{ backgroundImage: `url(${img('img_s4_commonBg')})` }">
+        <p class="work-empty">
+          {{ loading || busy ? '正在加载我的工作数据…' : '暂未读取到打工数据，请点击刷新或稍后再试' }}
+        </p>
       </main>
       <nav class="milk-tabs" :style="{ backgroundImage: `url(${img('img_s4Main_bottomBg')})` }">
         <button v-for="(t, i) in (['shop', 'exchange', 'work'] as const)" :key="t" :class="{ active: tab === t }" @click="tab = t">
@@ -373,12 +517,12 @@ onUnmounted(() => {
               </div>
               <input v-model.number="purchaseCount" class="purchase-range" type="range" min="1" :max="Math.max(1, purchaseMax)" step="1" aria-label="滑动选择兑换数量" :disabled="busy || purchaseMax <= 1">
               <p class="purchase-limit">
-                {{ ({ 1: '每日', 2: '每周', 4: '永久' } as any)[g.restriction_type] || '' }}剩余限购 {{ g.remaining }} · 当前最多可兑换 {{ purchaseMax }}
+                {{ g.limit_label }}剩余限购 {{ g.remaining === null ? '不限' : g.remaining }} · 当前最多可兑换 {{ purchaseMax }}
               </p>
               <div class="purchase-costs">
                 <span v-for="cost in g.costs" :key="cost.id"><img v-if="currencyIcon(cost)" :src="currencyIcon(cost)" :alt="cost.name"><span v-else>{{ cost.name }}</span>{{ totalCost(cost) }}</span>
               </div>
-              <button class="gold-button" :disabled="busy || loading || !validPurchase || !g.unlocked || g.paid" @click="act('buy', { goodsId: g.id, count: purchaseCount })">
+              <button class="gold-button" :disabled="busy || loading || !validPurchase || !g.unlocked || g.paid || state.actionAvailability?.exchange === false" :title="state.actionAvailability?.exchange === false ? '兑换商店未开放或已结束' : ''" @click="act('buy', { goodsId: g.id, count: purchaseCount })">
                 {{ g.paid ? '不支持钻石购买' : `兑换 ×${validPurchase ? purchaseCount : 0}` }}
               </button>
             </template>
@@ -386,8 +530,8 @@ onUnmounted(() => {
           <template v-else-if="modal === 'hireList'">
             <h2>雇佣员工</h2><p v-if="!records">
               {{ busy ? '加载中…' : '暂无可雇佣员工' }}
-            </p><button v-for="worker in [...(records?.friends || []), ...(records?.robots || [])]" :key="worker.friend.gid" class="recipe-row" :disabled="busy || Number(worker.state) !== 0" @click="act('hire', { targetGid: worker.friend.gid, durationId: 1, slotIndex: 0 })">
-              {{ worker.friend.name }} · {{ worker.talent_name }} · 4小时 🎟{{ records.wage_total }}
+            </p><button v-for="worker in [...(records?.friends || []), ...(records?.robots || [])]" :key="worker.friend?.gid" class="recipe-row" :disabled="busy || Number(worker.state) !== 0 || state.actionAvailability?.hire === false" :title="state.actionAvailability?.hire === false ? '结算期不可雇佣' : ''" @click="act('hire', { targetGid: worker.friend?.gid })">
+              {{ worker.friend?.name }} · {{ worker.talent_name }} · {{ hireHours ? `${hireHours}小时` : '时长未确认' }} 🎟{{ records?.wage_total }}
             </button>
           </template>
 
@@ -396,7 +540,7 @@ onUnmounted(() => {
           </template>
 
           <template v-else>
-            <h2>{{ ({ invite: '邀请好友雇佣我', share: '快乐不独享', fund: '成长基金' } as any)[modal] }}</h2><p>{{ modal === 'fund' ? '付费基金暂不支持在网页购买' : '此功能需要 QQ 原生分享' }}</p>
+            <h2>{{ ({ invite: '邀请好友雇佣我' } as any)[modal] }}</h2><p>{{ modal === 'invite' ? '此功能需要 QQ 原生分享' : '' }}</p>
           </template>
         </section>
       </div>
@@ -985,6 +1129,14 @@ onUnmounted(() => {
 }
 .work-paper {
   text-align: center;
+}
+.goods-empty,
+.work-empty {
+  margin-top: 8%;
+  text-align: center;
+  font-size: 3.2cqw;
+  font-weight: 900;
+  color: #9b9170;
 }
 .work-scene {
   position: relative;

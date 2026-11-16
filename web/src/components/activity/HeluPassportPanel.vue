@@ -31,8 +31,6 @@ const T = {
   tierUnit: '\u5C42',
   levelPrefix: '\u7B2C',
   levelUnit: '\u7EA7',
-  freeTrack: '\u6E38\u8BB0',
-  premiumTrack: '\u73CD\u85CF',
 }
 
 function formatNumber(value?: number) {
@@ -54,11 +52,11 @@ function rewardSummary(items?: HeluDrawReward[]) {
 }
 
 function previewRewards(tier: HeluSeasonRewardTier) {
-  return [...(tier.freeRewards || []), ...(tier.premiumRewards || [])].slice(0, 3)
+  return tier.rewards.slice(0, 3)
 }
 
 function tierThumb(tier: HeluSeasonRewardTier) {
-  return tier.freeRewards?.[0] || tier.premiumRewards?.[0] || null
+  return tier.rewards[0] || null
 }
 
 function tierState(passport: HeluSeasonPassport | null | undefined, level: number) {
@@ -245,10 +243,7 @@ function progressText(passport?: HeluSeasonPassport | null) {
           </div>
           <div class="mt-2 text-[11px] text-gray-500 leading-5 space-y-1 dark:text-gray-400">
             <div class="line-clamp-2">
-              {{ T.freeTrack }}: {{ rewardSummary(tier.freeRewards) }}
-            </div>
-            <div class="line-clamp-2">
-              {{ T.premiumTrack }}: {{ rewardSummary(tier.premiumRewards) }}
+              {{ rewardSummary(tier.rewards) }}
             </div>
           </div>
         </div>

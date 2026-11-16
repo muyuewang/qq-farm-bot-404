@@ -139,31 +139,29 @@ export const useFarmStore = defineStore('farm', () => {
   async function fertilizeLand(accountId: string, landId: number) {
     if (!accountId)
       return
-    const { data } = await api.post('/api/land/fertilize', { landId }, {
+    // 上游接口要求显式化肥类型；页面确认文案一直是“有机肥料催熟”。
+    const { data } = await api.post('/api/farm/fertilize', { landId, fertilizerType: 'organic' }, {
       headers: { 'x-account-id': accountId },
     })
     await fetchLands(accountId)
     return data
   }
 
+  // 上游后端只保留了 services/farm/api.ts 的 removePlant，未再接出 HTTP/IPC 路由，
+  // 这里不猜测替代操作，直接把不可用状态抛给调用方展示。
+  const landRemovalSupported = false
+
   async function removePlant(accountId: string, landId: number) {
+    void landId
     if (!accountId)
       return
-    const { data } = await api.post('/api/land/remove', { landId }, {
-      headers: { 'x-account-id': accountId },
-    })
-    await fetchLands(accountId)
-    return data
+    throw new Error('当前后端版本未提供铲除单个作物的接口')
   }
 
   async function removeAllPlants(accountId: string) {
     if (!accountId)
       return
-    const { data } = await api.post('/api/land/remove-all', {}, {
-      headers: { 'x-account-id': accountId },
-    })
-    await fetchLands(accountId)
-    return data
+    throw new Error('当前后端版本未提供一键铲除作物的接口')
   }
 
   return {
@@ -184,5 +182,6 @@ export const useFarmStore = defineStore('farm', () => {
     fertilizeLand,
     removePlant,
     removeAllPlants,
+    landRemovalSupported,
   }
 })

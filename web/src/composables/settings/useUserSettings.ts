@@ -73,6 +73,10 @@ const DEVICE_PROTOCOL_PRESETS = [
   },
 ] as const
 
+// 上游把设备信息合并进全局 /api/settings/system-config 的 deviceInfo，
+// 旧的按用户维度设备协议接口不再存在，入口保留但置灰。
+export const DEVICE_PROTOCOL_UNSUPPORTED_MESSAGE = '当前后端版本改由全局系统配置下发设备信息，未提供单独的设备协议开关'
+
 const CHANNEL_DOCS: Record<string, string> = {
   webhook: '',
   qmsg: 'https://qmsg.zendee.cn/',
@@ -169,14 +173,6 @@ export function useUserSettings(showAlert: (message: string, type?: AlertType) =
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  function applyDeviceProtocolConfig(config?: Partial<DeviceProtocolConfig>) {
-    deviceProtocolForm.value = {
-      ...DEFAULT_DEVICE_PROTOCOL,
-      ...config,
-      enabled: config?.enabled === true,
-    }
-  }
-
   function randomDigits(length: number) {
     let result = ''
     while (result.length < length) {
@@ -238,51 +234,6 @@ export function useUserSettings(showAlert: (message: string, type?: AlertType) =
     deviceProtocolForm.value.userAgent = preset.config.userAgent
     deviceProtocolForm.value.deviceBrand = preset.config.deviceBrand
     deviceProtocolForm.value.deviceModel = preset.config.deviceModel
-  }
-
-  async function fetchDeviceProtocol() {
-    deviceProtocolLoading.value = true
-    try {
-      const { data } = await api.get('/api/user/device-protocol')
-      if (data?.ok)
-        applyDeviceProtocolConfig(data.config)
-    }
-    catch (e) {
-      console.error('加载设备协议配置失败', e)
-    }
-    finally {
-      deviceProtocolLoading.value = false
-    }
-  }
-
-  async function handleSaveDeviceProtocol() {
-    deviceProtocolSaving.value = true
-    try {
-      const payload = {
-        enabled: !!deviceProtocolForm.value.enabled,
-        userAgent: String(deviceProtocolForm.value.userAgent || '').trim(),
-        deviceBrand: String(deviceProtocolForm.value.deviceBrand || '').trim(),
-        deviceModel: String(deviceProtocolForm.value.deviceModel || '').trim(),
-        deviceMac: String(deviceProtocolForm.value.deviceMac || '').trim(),
-        deviceId: String(deviceProtocolForm.value.deviceId || '').trim(),
-        imei: String(deviceProtocolForm.value.imei || '').trim(),
-      }
-      const { data } = await api.post('/api/user/device-protocol', payload)
-      if (data?.ok) {
-        applyDeviceProtocolConfig(data.config)
-        showAlert('设备协议配置已保存', 'primary')
-      }
-      else {
-        showAlert(`保存失败: ${data?.error || '未知错误'}`, 'danger')
-      }
-    }
-    catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || '请求失败'
-      showAlert(`保存失败: ${msg}`, 'danger')
-    }
-    finally {
-      deviceProtocolSaving.value = false
-    }
   }
 
   function syncLocalOfflineSettings() {
@@ -349,9 +300,7 @@ export function useUserSettings(showAlert: (message: string, type?: AlertType) =
     fillRandomDeviceId,
     fillRandomImei,
     applyDevicePreset,
-    fetchDeviceProtocol,
     syncLocalOfflineSettings,
-    handleSaveDeviceProtocol,
     handleSaveOffline,
     handleTestOffline,
   }

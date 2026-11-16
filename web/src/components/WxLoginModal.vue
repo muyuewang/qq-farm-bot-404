@@ -37,11 +37,11 @@ const { pause: stopCheck, resume: startCheck } = useIntervalFn(async () => {
   try {
     const result = await wxLoginStore.checkLogin()
 
-    if (result.success && result.wxid) {
+    if (result.success) {
       stopCheck()
 
       // 自动添加账号
-      await handleAutoAddAccount(result.wxid, result.nickname, result.avatar)
+      await handleAutoAddAccount()
     }
   }
   finally {
@@ -56,21 +56,19 @@ function shouldRefreshQr() {
 }
 
 // 自动添加账号
-async function handleAutoAddAccount(wxid: string, nickname?: string, avatar?: string) {
+async function handleAutoAddAccount() {
   try {
-    const result = await wxLoginStore.getFarmCode(wxid)
+    const result = await wxLoginStore.getFarmCode()
 
     if (result.success && result.code) {
-      const name = accountName.value.trim() || nickname || `微信账号${Date.now()}`
+      const name = accountName.value.trim() || result.nickname || `微信账号${Date.now()}`
 
       await accountStore.addAccount({
         name,
         code: result.code,
         platform: 'wx',
         loginType: 'wx_qr',
-        wxid,
-        avatar,
-        wxSessionId: wxLoginStore.uuid,
+        wxid: result.wxid || '',
       })
       emit('saved')
       close()

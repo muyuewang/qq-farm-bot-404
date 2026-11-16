@@ -7,10 +7,12 @@ import FarmScene from '@/components/FarmScene.vue'
 import { useAccountStore } from '@/stores/account'
 import { useFarmStore } from '@/stores/farm'
 import { useStatusStore } from '@/stores/status'
+import { useToastStore } from '@/stores/toast'
 
 const farmStore = useFarmStore()
 const accountStore = useAccountStore()
 const statusStore = useStatusStore()
+const toast = useToastStore()
 const { lands, summary, weather, loading, dogSkillGiftPendingCount, dogSkillGiftLoading, dogSkillGiftError } = storeToRefs(farmStore)
 const { currentAccountId, currentAccount } = storeToRefs(accountStore)
 const { status, loading: statusLoading, realtimeConnected, currentStatusReady } = storeToRefs(statusStore)
@@ -57,6 +59,9 @@ async function executeOperate() {
     else if (config.landAction === 'remove') {
       await farmStore.removePlant(currentAccountId.value, Number(config.land.id))
     }
+  }
+  catch (error: any) {
+    toast.error(String(error?.response?.data?.error || error?.message || '操作失败'))
   }
   finally {
     operating.value = false
@@ -126,6 +131,11 @@ function handleLandFertilize(land: any) {
 function handleLandRemove(land: any) {
   if (!currentAccountId.value)
     return
+
+  if (!farmStore.landRemovalSupported) {
+    toast.error('当前后端版本未提供铲除作物功能')
+    return
+  }
 
   confirmConfig.value = {
     title: '确认铲除',
@@ -260,7 +270,8 @@ onUnmounted(() => {
           </button>
           <button
             class="flex items-center justify-center gap-1.5 rounded bg-red-600 px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed hover:bg-red-700 disabled:opacity-50"
-            :disabled="operating"
+            :disabled="operating || !farmStore.landRemovalSupported"
+            :title="farmStore.landRemovalSupported ? '铲除全部已种植作物' : '当前后端版本未提供一键铲除功能'"
             @click="handleRemoveAllPlants"
           >
             <div class="i-carbon-trash-can" />

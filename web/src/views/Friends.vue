@@ -9,6 +9,9 @@ import FriendsFriendList from '@/components/friends/FriendsFriendList.vue'
 import FriendsPageHeader from '@/components/friends/FriendsPageHeader.vue'
 import FriendsSyncSettings from '@/components/friends/FriendsSyncSettings.vue'
 import FriendsTabs from '@/components/friends/FriendsTabs.vue'
+import RanchFriendsPanel from '@/components/ranch/RanchFriendsPanel.vue'
+import RanchSceneHost from '@/components/ranch/RanchSceneHost.vue'
+import SceneSwitch from '@/components/ui/SceneSwitch.vue'
 import { useAccountStore } from '@/stores/account'
 import { useFriendStore } from '@/stores/friend'
 import { useStatusStore } from '@/stores/status'
@@ -25,7 +28,6 @@ const { currentAccountId, currentAccount } = storeToRefs(accountStore)
 const {
   friends,
   loading,
-  dogInfoLoading,
   friendLands,
   friendLandsLoading,
   blacklist,
@@ -47,6 +49,15 @@ const TABS = [
 ] as const
 
 const activeTab = ref<FriendTabKey>('friends')
+
+/**
+ * 好友同样分属两个场景：农场好友走 /api/friends/*，牧场的「好友牧场」挂在
+ * game_scene_id=2 的快照上，串门与牧场互动要先进场景再 quote → execute。
+ * 黑名单、访客记录这些只有农场才有的概念在牧场场景下不展示。
+ */
+const friendsScene = ref<'farm' | 'ranch'>('farm')
+const ranchHostGid = ref('')
+const ranchParams = computed(() => (ranchHostGid.value ? { hostGid: ranchHostGid.value } : {}))
 const showConfirm = ref(false)
 const confirmMessage = ref('')
 const confirmLoading = ref(false)
@@ -174,6 +185,10 @@ const sortedFriends = computed(() => {
   })
 })
 
+// 上游不再批量下发好友狗形象，没有 dogId 时不能把“未知”当成“无护主犬”。
+const hasDogInfo = computed(() =>
+  sortedFriends.value.some((friend: any) => friend?.dogId !== undefined && friend?.dogId !== null),
+)
 const guardDogCount = computed(() =>
   sortedFriends.value.filter((friend: any) => Number(friend?.dogId) === 90021).length,
 )
@@ -234,6 +249,9 @@ const filteredInteractRecords = computed(() => {
 const visibleInteractRecords = computed(() => filteredInteractRecords.value.slice(0, 50))
 
 async function loadData() {
+  // 牧场场景只读牧场快照，农场好友数据等切回农场时再拉。
+  if (friendsScene.value === 'ranch')
+    return
   if (currentAccountId.value) {
     const acc = currentAccount.value
     if (!acc)
@@ -285,6 +303,10 @@ watch(() => [currentAccount.value?.id, currentAccount.value?.running] as const, 
     loadData()
 })
 
+watch(friendsScene, () => {
+  loadData()
+})
+
 async function handleRefreshFriends() {
   if (!currentAccountId.value)
     return
@@ -297,26 +319,6 @@ async function handleRefreshFriends() {
     // ignore
   }
   await friendStore.fetchFriends(currentAccountId.value, true)
-}
-
-async function handleFetchDogInfo() {
-  if (!currentAccountId.value)
-    return
-  if (friends.value.length === 0) {
-    toast.error('好友列表为空，请先刷新好友列表')
-    return
-  }
-  toast.info('开始获取好友狗信息，请耐心等待，处理中请勿频繁访问好友界面...')
-  const result = await friendStore.fetchFriendsDogInfo(currentAccountId.value)
-  if (result.ok) {
-    const guardText = Number.isFinite(result.guardDogCount)
-      ? `，护主犬 ${result.guardDogCount} 个`
-      : ''
-    toast.success(`获取完成${guardText}，无狗 ${result.failCount || 0} 个，黑名单 ${result.blacklistCount || 0} 个`)
-  }
-  else {
-    toast.error(result.error || '正在获取狗信息，好友多请耐心等待几分钟')
-  }
 }
 
 function toggleFriend(friendId: string) {
@@ -634,346 +636,361 @@ async function handleBatchAddKnownFriendGids() {
 
 <template>
   <div class="p-4">
-    <FriendsPageHeader
-      v-model:search-keyword="searchKeyword"
-      :active-tab="activeTab"
-      :friends-count="friends.length"
-      :filtered-friends-count="filteredFriends.length"
-      :blacklist-count="blacklist.length"
-      :interact-records-count="interactRecords.length"
-      :filtered-interact-records-count="filteredInteractRecords.length"
-    />
-
-    <FriendsTabs
-      v-model:active-tab="activeTab"
-      :tabs="TABS"
-      :blacklist-count="blacklist.length"
-    />
-
-    <div v-if="showInitialLoading" class="flex justify-center py-12">
-      <div class="i-svg-spinners-90-ring-with-bg text-4xl text-blue-500" />
+    <div class="mb-4">
+      <SceneSwitch v-model="friendsScene" farm-label="农场好友" ranch-label="牧场好友" />
     </div>
 
-    <div v-else-if="!currentAccountId" class="flex flex-col items-center justify-center gap-4 rounded-lg bg-white p-12 text-center text-gray-500 shadow dark:bg-gray-800">
-      <div class="i-carbon-user-offline text-4xl text-gray-400" />
-      <div>
-        <div class="text-lg text-gray-700 font-medium dark:text-gray-300">
-          未登录账号
-        </div>
-        <div class="mt-1 text-sm text-gray-400">
-          请先添加农场账号
-        </div>
+    <template v-if="friendsScene === 'farm'">
+      <FriendsPageHeader
+        v-model:search-keyword="searchKeyword"
+        :active-tab="activeTab"
+        :friends-count="friends.length"
+        :filtered-friends-count="filteredFriends.length"
+        :blacklist-count="blacklist.length"
+        :interact-records-count="interactRecords.length"
+        :filtered-interact-records-count="filteredInteractRecords.length"
+      />
+
+      <FriendsTabs
+        v-model:active-tab="activeTab"
+        :tabs="TABS"
+        :blacklist-count="blacklist.length"
+      />
+
+      <div v-if="showInitialLoading" class="flex justify-center py-12">
+        <div class="i-svg-spinners-90-ring-with-bg text-4xl text-blue-500" />
       </div>
-    </div>
 
-    <div v-else-if="currentAccountDisconnected && !hasAnyFriendData" class="flex flex-col items-center justify-center gap-4 rounded-lg bg-white p-12 text-center text-gray-500 shadow dark:bg-gray-800">
-      <div class="i-carbon-connection-signal-off text-4xl text-gray-400" />
-      <div>
-        <div class="text-lg text-gray-700 font-medium dark:text-gray-300">
-          账号未登录
-        </div>
-        <div class="mt-1 text-sm text-gray-400">
-          请先运行账号或检查网络连接
-        </div>
-      </div>
-    </div>
-
-    <template v-else>
-      <div v-if="activeTab === 'friends'" class="space-y-4">
-        <FriendsSyncSettings
-          v-if="currentAccountId && isQqAccount"
-          v-model:known-friend-gid-sync-cooldown-sec="localKnownFriendGidSyncCooldownSec"
-          v-model:friends-list-cache-ttl-sec="localFriendsListCacheTtlSec"
-          :known-friend-gid-count="knownFriendGidCount"
-          :unsynced-gid-count="unsyncedGidCount"
-          :loading="knownFriendSettingsLoading"
-          :saving="knownFriendSettingsSaving"
-          @open-gid-list="openGidListModal"
-          @refresh-settings="handleRefreshKnownFriendSettings"
-          @save-settings="handleSaveKnownFriendSettings"
-          @open-batch-add="showBatchAddGidModal = true"
-        />
-
-        <div v-if="friends.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
-          <div class="i-carbon-user-multiple mx-auto mb-3 text-4xl text-gray-300" />
-          <div class="text-base text-gray-700 font-medium dark:text-gray-200">
-            暂无好友数据
+      <div v-else-if="!currentAccountId" class="flex flex-col items-center justify-center gap-4 rounded-lg bg-white p-12 text-center text-gray-500 shadow dark:bg-gray-800">
+        <div class="i-carbon-user-offline text-4xl text-gray-400" />
+        <div>
+          <div class="text-lg text-gray-700 font-medium dark:text-gray-300">
+            未登录账号
           </div>
-          <p class="mt-2 text-sm text-gray-400">
-            可以先刷新好友列表，或等待最近访客为 QQ 账号补充新的 GID。
-          </p>
+          <div class="mt-1 text-sm text-gray-400">
+            请先添加农场账号
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="currentAccountDisconnected && !hasAnyFriendData" class="flex flex-col items-center justify-center gap-4 rounded-lg bg-white p-12 text-center text-gray-500 shadow dark:bg-gray-800">
+        <div class="i-carbon-connection-signal-off text-4xl text-gray-400" />
+        <div>
+          <div class="text-lg text-gray-700 font-medium dark:text-gray-300">
+            账号未登录
+          </div>
+          <div class="mt-1 text-sm text-gray-400">
+            请先运行账号或检查网络连接
+          </div>
+        </div>
+      </div>
+
+      <template v-else>
+        <div v-if="activeTab === 'friends'" class="space-y-4">
+          <FriendsSyncSettings
+            v-if="currentAccountId && isQqAccount"
+            v-model:known-friend-gid-sync-cooldown-sec="localKnownFriendGidSyncCooldownSec"
+            v-model:friends-list-cache-ttl-sec="localFriendsListCacheTtlSec"
+            :known-friend-gid-count="knownFriendGidCount"
+            :unsynced-gid-count="unsyncedGidCount"
+            :loading="knownFriendSettingsLoading"
+            :saving="knownFriendSettingsSaving"
+            @open-gid-list="openGidListModal"
+            @refresh-settings="handleRefreshKnownFriendSettings"
+            @save-settings="handleSaveKnownFriendSettings"
+            @open-batch-add="showBatchAddGidModal = true"
+          />
+
+          <div v-if="friends.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
+            <div class="i-carbon-user-multiple mx-auto mb-3 text-4xl text-gray-300" />
+            <div class="text-base text-gray-700 font-medium dark:text-gray-200">
+              暂无好友数据
+            </div>
+            <p class="mt-2 text-sm text-gray-400">
+              可以先刷新好友列表，或等待最近访客为 QQ 账号补充新的 GID。
+            </p>
+          </div>
+
+          <template v-else>
+            <div class="flex flex-wrap items-center gap-2 rounded-lg bg-white p-3 shadow dark:bg-gray-800">
+              <button
+                v-for="filter in dogFilters"
+                :key="filter.key"
+                class="rounded-full px-3 py-1 text-xs transition"
+                :class="dogFilter === filter.key
+                  ? 'text-white'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+                :style="dogFilter === filter.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
+                @click="dogFilter = filter.key"
+              >
+                {{ filter.label }}
+                <span v-if="hasDogInfo" class="ml-1 opacity-75">
+                  ({{
+                    filter.key === 'guardDog'
+                      ? guardDogCount
+                      : filter.key === 'noGuardDog'
+                        ? noGuardDogCount
+                        : friends.length
+                  }})
+                </span>
+              </button>
+              <span v-if="!hasDogInfo" class="text-xs text-gray-400">
+                当前后端版本未提供好友狗信息
+              </span>
+              <div class="flex-1" />
+              <button
+                class="rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-600 transition dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 disabled:opacity-50 dark:hover:bg-gray-600"
+                :disabled="loading"
+                @click="handleRefreshFriends"
+              >
+                <div v-if="loading" class="i-svg-spinners-90-ring-with-bg mr-1 inline-block align-text-bottom" />
+                刷新列表
+              </button>
+              <button
+                class="cursor-not-allowed rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-400 opacity-60 dark:bg-gray-700 dark:text-gray-500"
+                disabled
+                title="当前后端版本未提供好友狗信息批量获取"
+              >
+                获取狗信息
+                <span class="ml-1 text-[10px]">未提供</span>
+              </button>
+            </div>
+
+            <FriendsFriendList
+              v-model:current-page="currentPage"
+              :friends="paginatedFriends"
+              :total-friends="filteredFriends.length"
+              :total-pages="totalPages"
+              :page-size="pageSize"
+              :blacklist-gid-set="blacklistGidSet"
+              :known-friend-gid-set="knownFriendGidSet"
+              :expanded-friends="expandedFriends"
+              :friend-lands="friendLands"
+              :friend-lands-loading="friendLandsLoading"
+              :is-qq-account="isQqAccount"
+              :can-show-friend-avatar="canShowFriendAvatar"
+              :get-friend-avatar="getFriendAvatar"
+              :get-friend-level="getFriendLevel"
+              :get-friend-gold="getFriendGold"
+              :format-friend-gold="formatFriendGold"
+              :get-friend-status-text="getFriendStatusText"
+              :get-friend-status-hint="getFriendStatusHint"
+              @toggle-friend="toggleFriend"
+              @operate="handleOp"
+              @toggle-blacklist="handleToggleBlacklist"
+              @remove-known-friend-gid="handleRemoveKnownFriendGid"
+              @friend-avatar-error="handleFriendAvatarError"
+            />
+          </template>
         </div>
 
-        <template v-else>
-          <div class="flex flex-wrap items-center gap-2 rounded-lg bg-white p-3 shadow dark:bg-gray-800">
+        <div v-else-if="activeTab === 'blacklist'" class="space-y-4">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                黑名单数量
+              </div>
+              <div class="mt-1 text-lg font-semibold">
+                {{ blacklist.length }}
+              </div>
+            </div>
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                好友总数
+              </div>
+              <div class="mt-1 text-lg font-semibold">
+                {{ friends.length }}
+              </div>
+            </div>
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                说明
+              </div>
+              <div class="mt-1 text-sm text-gray-700 font-medium dark:text-gray-200">
+                自动偷菜与帮助会跳过这些好友
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              加入黑名单的好友在自动偷菜和帮助时会被跳过。
+            </p>
+          </div>
+
+          <div v-if="blacklist.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
+            <div class="i-carbon-list-blocked mx-auto mb-3 text-4xl text-gray-300" />
+            <div class="text-base text-gray-700 font-medium dark:text-gray-200">
+              暂无黑名单好友
+            </div>
+            <p class="mt-2 text-sm text-gray-400">
+              被加入黑名单的好友会在自动偷菜和帮助时被跳过，只有明确不想互动的对象才建议放进来。
+            </p>
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="item in blacklist"
+              :key="item.gid"
+              class="flex items-center justify-between rounded-lg bg-white p-4 shadow dark:bg-gray-800"
+            >
+              <div class="flex items-center gap-3">
+                <div class="h-10 w-10 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 ring-1 ring-gray-100 dark:bg-gray-600 dark:ring-gray-700">
+                  <img
+                    v-if="item.avatarUrl"
+                    :src="item.avatarUrl"
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                    @error="($event.target as HTMLImageElement).style.display = 'none'"
+                  >
+                  <div v-else class="i-carbon-user text-gray-400" />
+                </div>
+                <div>
+                  <span class="font-medium">{{ item.name || `GID:${item.gid}` }}</span>
+                  <span class="ml-2 text-sm text-gray-400">({{ item.gid }})</span>
+                </div>
+              </div>
+              <button
+                class="rounded bg-red-100 px-3 py-1.5 text-sm text-red-600 dark:bg-red-900/30 hover:bg-red-200 dark:text-red-400 dark:hover:bg-red-900/50"
+                @click="handleRemoveFromBlacklist(item.gid)"
+              >
+                移出黑名单
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'visitors'" class="space-y-4">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                访客总数
+              </div>
+              <div class="mt-1 text-lg font-semibold">
+                {{ interactRecords.length }}
+              </div>
+            </div>
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                偷菜记录
+              </div>
+              <div class="mt-1 text-lg font-semibold">
+                {{ interactRecords.filter(record => Number(record?.actionType) === 1).length }}
+              </div>
+            </div>
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                帮忙记录
+              </div>
+              <div class="mt-1 text-lg font-semibold">
+                {{ interactRecords.filter(record => Number(record?.actionType) === 2).length }}
+              </div>
+            </div>
+            <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                捣乱记录
+              </div>
+              <div class="mt-1 text-lg font-semibold">
+                {{ interactRecords.filter(record => Number(record?.actionType) === 3).length }}
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
             <button
-              v-for="filter in dogFilters"
-              :key="filter.key"
+              v-for="item in interactFilters"
+              :key="item.key"
               class="rounded-full px-3 py-1 text-xs transition"
-              :class="dogFilter === filter.key
+              :class="interactFilter === item.key
                 ? 'text-white'
                 : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
-              :style="dogFilter === filter.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
-              @click="dogFilter = filter.key"
+              :style="interactFilter === item.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
+              @click="interactFilter = item.key"
             >
-              {{ filter.label }}
-              <span class="ml-1 opacity-75">
-                ({{
-                  filter.key === 'guardDog'
-                    ? guardDogCount
-                    : filter.key === 'noGuardDog'
-                      ? noGuardDogCount
-                      : friends.length
-                }})
-              </span>
-            </button>
-            <div class="flex-1" />
-            <button
-              class="rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-600 transition dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 disabled:opacity-50 dark:hover:bg-gray-600"
-              :disabled="loading"
-              @click="handleRefreshFriends"
-            >
-              <div v-if="loading" class="i-svg-spinners-90-ring-with-bg mr-1 inline-block align-text-bottom" />
-              刷新列表
+              {{ item.label }}
             </button>
             <button
-              class="rounded bg-blue-100 px-3 py-1.5 text-sm text-blue-700 transition dark:bg-blue-900/30 hover:bg-blue-200 dark:text-blue-400 disabled:opacity-50 dark:hover:bg-blue-900/50"
-              :disabled="dogInfoLoading || friends.length === 0"
-              @click="handleFetchDogInfo"
+              class="rounded bg-gray-100 px-3 py-1.5 text-xs text-gray-600 transition disabled:cursor-not-allowed dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 disabled:opacity-60 dark:hover:bg-gray-600"
+              :disabled="interactLoading"
+              @click="refreshInteractRecords"
             >
-              <div v-if="dogInfoLoading" class="i-svg-spinners-90-ring-with-bg mr-1 inline-block align-text-bottom" />
-              获取狗信息
+              {{ interactLoading ? '刷新中...' : '刷新' }}
             </button>
-          </div>
-
-          <FriendsFriendList
-            v-model:current-page="currentPage"
-            :friends="paginatedFriends"
-            :total-friends="filteredFriends.length"
-            :total-pages="totalPages"
-            :page-size="pageSize"
-            :blacklist-gid-set="blacklistGidSet"
-            :known-friend-gid-set="knownFriendGidSet"
-            :expanded-friends="expandedFriends"
-            :friend-lands="friendLands"
-            :friend-lands-loading="friendLandsLoading"
-            :is-qq-account="isQqAccount"
-            :can-show-friend-avatar="canShowFriendAvatar"
-            :get-friend-avatar="getFriendAvatar"
-            :get-friend-level="getFriendLevel"
-            :get-friend-gold="getFriendGold"
-            :format-friend-gold="formatFriendGold"
-            :get-friend-status-text="getFriendStatusText"
-            :get-friend-status-hint="getFriendStatusHint"
-            @toggle-friend="toggleFriend"
-            @operate="handleOp"
-            @toggle-blacklist="handleToggleBlacklist"
-            @remove-known-friend-gid="handleRemoveKnownFriendGid"
-            @friend-avatar-error="handleFriendAvatarError"
-          />
-        </template>
-      </div>
-
-      <div v-else-if="activeTab === 'blacklist'" class="space-y-4">
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              黑名单数量
-            </div>
-            <div class="mt-1 text-lg font-semibold">
-              {{ blacklist.length }}
+            <div class="text-xs text-gray-400">
+              仅展示最近 50 条访客记录
             </div>
           </div>
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              好友总数
-            </div>
-            <div class="mt-1 text-lg font-semibold">
-              {{ friends.length }}
-            </div>
-          </div>
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              说明
-            </div>
-            <div class="mt-1 text-sm text-gray-700 font-medium dark:text-gray-200">
-              自动偷菜与帮助会跳过这些好友
-            </div>
-          </div>
-        </div>
 
-        <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            加入黑名单的好友在自动偷菜和帮助时会被跳过。
-          </p>
-        </div>
-
-        <div v-if="blacklist.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
-          <div class="i-carbon-list-blocked mx-auto mb-3 text-4xl text-gray-300" />
-          <div class="text-base text-gray-700 font-medium dark:text-gray-200">
-            暂无黑名单好友
+          <div v-if="!!interactError" class="rounded-lg bg-red-50 px-4 py-6 text-center text-sm text-red-600 dark:bg-red-900/20 dark:text-red-300">
+            {{ interactError }}
           </div>
-          <p class="mt-2 text-sm text-gray-400">
-            被加入黑名单的好友会在自动偷菜和帮助时被跳过，只有明确不想互动的对象才建议放进来。
-          </p>
-        </div>
 
-        <div v-else class="space-y-2">
-          <div
-            v-for="item in blacklist"
-            :key="item.gid"
-            class="flex items-center justify-between rounded-lg bg-white p-4 shadow dark:bg-gray-800"
-          >
-            <div class="flex items-center gap-3">
-              <div class="h-10 w-10 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 ring-1 ring-gray-100 dark:bg-gray-600 dark:ring-gray-700">
+          <div v-else-if="visibleInteractRecords.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
+            <div class="i-carbon-user-activity mx-auto mb-3 text-4xl text-gray-300" />
+            <div class="text-base text-gray-700 font-medium dark:text-gray-200">
+              暂无访客记录
+            </div>
+            <p class="mt-2 text-sm text-gray-400">
+              有新访客后会同步展示在这里，QQ 账号也会用它补充已知 GID；如果这里长期为空，好友同步也会相对受限。
+            </p>
+          </div>
+
+          <div v-else class="space-y-3">
+            <div
+              v-for="record in visibleInteractRecords"
+              :key="record.key"
+              class="flex items-start gap-3 rounded-lg bg-white p-4 shadow dark:bg-gray-800"
+            >
+              <div class="h-12 w-12 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 ring-1 ring-gray-100 dark:bg-gray-700 dark:ring-gray-600">
                 <img
-                  v-if="item.avatarUrl"
-                  :src="item.avatarUrl"
+                  v-if="canShowInteractAvatar(record)"
+                  :src="getInteractAvatar(record)"
                   class="h-full w-full object-cover"
                   loading="lazy"
-                  @error="($event.target as HTMLImageElement).style.display = 'none'"
+                  @error="handleInteractAvatarError(record)"
                 >
-                <div v-else class="i-carbon-user text-gray-400" />
+                <div v-else class="i-carbon-user-avatar text-xl text-gray-400" />
               </div>
-              <div>
-                <span class="font-medium">{{ item.name || `GID:${item.gid}` }}</span>
-                <span class="ml-2 text-sm text-gray-400">({{ item.gid }})</span>
+              <div class="min-w-0 flex-1">
+                <div class="mb-1 flex flex-wrap items-center gap-2">
+                  <span class="max-w-full truncate text-base text-gray-800 font-medium dark:text-gray-100">
+                    {{ record.nick || `GID:${record.visitorGid}` }}
+                  </span>
+                  <span
+                    class="rounded-full px-2 py-0.5 text-xs font-medium"
+                    :class="getInteractBadgeClass(record.actionType)"
+                  >
+                    {{ record.actionLabel }}
+                  </span>
+                  <span v-if="record.level" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                    Lv.{{ record.level }}
+                  </span>
+                  <span v-if="record.visitorGid" class="text-xs text-gray-400">
+                    GID {{ record.visitorGid }}
+                  </span>
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                  {{ record.actionDetail || record.actionLabel }}
+                </div>
               </div>
-            </div>
-            <button
-              class="rounded bg-red-100 px-3 py-1.5 text-sm text-red-600 dark:bg-red-900/30 hover:bg-red-200 dark:text-red-400 dark:hover:bg-red-900/50"
-              @click="handleRemoveFromBlacklist(item.gid)"
-            >
-              移出黑名单
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div v-else-if="activeTab === 'visitors'" class="space-y-4">
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              访客总数
-            </div>
-            <div class="mt-1 text-lg font-semibold">
-              {{ interactRecords.length }}
-            </div>
-          </div>
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              偷菜记录
-            </div>
-            <div class="mt-1 text-lg font-semibold">
-              {{ interactRecords.filter(record => Number(record?.actionType) === 1).length }}
-            </div>
-          </div>
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              帮忙记录
-            </div>
-            <div class="mt-1 text-lg font-semibold">
-              {{ interactRecords.filter(record => Number(record?.actionType) === 2).length }}
-            </div>
-          </div>
-          <div class="rounded-2xl bg-white px-4 py-3 shadow dark:bg-gray-800">
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              捣乱记录
-            </div>
-            <div class="mt-1 text-lg font-semibold">
-              {{ interactRecords.filter(record => Number(record?.actionType) === 3).length }}
-            </div>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <button
-            v-for="item in interactFilters"
-            :key="item.key"
-            class="rounded-full px-3 py-1 text-xs transition"
-            :class="interactFilter === item.key
-              ? 'text-white'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
-            :style="interactFilter === item.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
-            @click="interactFilter = item.key"
-          >
-            {{ item.label }}
-          </button>
-          <button
-            class="rounded bg-gray-100 px-3 py-1.5 text-xs text-gray-600 transition disabled:cursor-not-allowed dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 disabled:opacity-60 dark:hover:bg-gray-600"
-            :disabled="interactLoading"
-            @click="refreshInteractRecords"
-          >
-            {{ interactLoading ? '刷新中...' : '刷新' }}
-          </button>
-          <div class="text-xs text-gray-400">
-            仅展示最近 50 条访客记录
-          </div>
-        </div>
-
-        <div v-if="!!interactError" class="rounded-lg bg-red-50 px-4 py-6 text-center text-sm text-red-600 dark:bg-red-900/20 dark:text-red-300">
-          {{ interactError }}
-        </div>
-
-        <div v-else-if="visibleInteractRecords.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
-          <div class="i-carbon-user-activity mx-auto mb-3 text-4xl text-gray-300" />
-          <div class="text-base text-gray-700 font-medium dark:text-gray-200">
-            暂无访客记录
-          </div>
-          <p class="mt-2 text-sm text-gray-400">
-            有新访客后会同步展示在这里，QQ 账号也会用它补充已知 GID；如果这里长期为空，好友同步也会相对受限。
-          </p>
-        </div>
-
-        <div v-else class="space-y-3">
-          <div
-            v-for="record in visibleInteractRecords"
-            :key="record.key"
-            class="flex items-start gap-3 rounded-lg bg-white p-4 shadow dark:bg-gray-800"
-          >
-            <div class="h-12 w-12 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 ring-1 ring-gray-100 dark:bg-gray-700 dark:ring-gray-600">
-              <img
-                v-if="canShowInteractAvatar(record)"
-                :src="getInteractAvatar(record)"
-                class="h-full w-full object-cover"
-                loading="lazy"
-                @error="handleInteractAvatarError(record)"
-              >
-              <div v-else class="i-carbon-user-avatar text-xl text-gray-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="mb-1 flex flex-wrap items-center gap-2">
-                <span class="max-w-full truncate text-base text-gray-800 font-medium dark:text-gray-100">
-                  {{ record.nick || `GID:${record.visitorGid}` }}
-                </span>
-                <span
-                  class="rounded-full px-2 py-0.5 text-xs font-medium"
-                  :class="getInteractBadgeClass(record.actionType)"
-                >
-                  {{ record.actionLabel }}
-                </span>
-                <span v-if="record.level" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-300">
-                  Lv.{{ record.level }}
-                </span>
-                <span v-if="record.visitorGid" class="text-xs text-gray-400">
-                  GID {{ record.visitorGid }}
-                </span>
-              </div>
-              <div class="text-sm text-gray-600 dark:text-gray-300">
-                {{ record.actionDetail || record.actionLabel }}
+              <div class="shrink-0 text-right text-xs text-gray-400">
+                {{ formatInteractTime(record.serverTimeMs) }}
               </div>
             </div>
-            <div class="shrink-0 text-right text-xs text-gray-400">
-              {{ formatInteractTime(record.serverTimeMs) }}
+
+            <div v-if="filteredInteractRecords.length > visibleInteractRecords.length" class="text-center text-xs text-gray-400">
+              仅展示最近 {{ visibleInteractRecords.length }} 条
             </div>
           </div>
-
-          <div v-if="filteredInteractRecords.length > visibleInteractRecords.length" class="text-center text-xs text-gray-400">
-            仅展示最近 {{ visibleInteractRecords.length }} 条
-          </div>
         </div>
-      </div>
+      </template>
     </template>
+
+    <RanchSceneHost v-else view="friends" :params="ranchParams" title="好友牧场" icon="i-carbon-user-multiple">
+      <template #default="{ state, onRequest }">
+        <RanchFriendsPanel :state="state" @request="onRequest" @host-gid="ranchHostGid = $event" />
+      </template>
+    </RanchSceneHost>
 
     <ConfirmModal
       :show="showConfirm"

@@ -6,6 +6,7 @@ import { onMounted, onUnmounted, ref, watch } from 'vue'
 import api from '@/api'
 import { useAccountStore } from '@/stores/account'
 import { useToastStore } from '@/stores/toast'
+import { mapSolarTerms } from '@/utils/activity-center'
 import HeluSolarTermsPanel from './HeluSolarTermsPanel.vue'
 
 defineProps<{ labels: ActivityLabels }>()
@@ -23,13 +24,14 @@ async function refresh() {
   const version = generation
   busy.value = true
   try {
-    const { data } = await api.get('/api/activity/solar-terms')
+    const { data } = await api.get('/api/activity-center/solar-terms')
     if (version !== generation) return
-    solar.value = data.solarTerms
+    if (!data?.ok) throw new Error(data?.error || '节令读取失败')
+    solar.value = mapSolarTerms(data.data)
     error.value = ''
   }
   catch (e: any) {
-    if (version === generation) error.value = e.response?.data?.error || e.message || '节令读取失败'
+    if (version === generation) error.value = e.response?.data?.error || e?.message || '节令读取失败'
   }
   finally {
     busy.value = false
@@ -38,16 +40,21 @@ async function refresh() {
 }
 async function claim(term: { id: number }) {
   if (disposed || busy.value || !currentAccountId.value) return
+  if (!Number.isInteger(term.id) || term.id <= 0) {
+    toast.error('节令编号无效，无法领取')
+    return
+  }
   const version = generation
   busy.value = true
   try {
-    const { data } = await api.post('/api/activity/solar-terms/claim', { termId: term.id })
+    const { data } = await api.post(`/api/activity-center/solar-terms/${term.id}/claim`)
     if (version !== generation) return
-    if (!data.ok) throw new Error(data.error || '领取失败')
-    solar.value = data.solarTerms
+    if (!data?.ok) throw new Error(data?.error || '领取失败')
+    const mapped = mapSolarTerms(data.data?.snapshot?.solarTerms)
+    if (mapped) solar.value = mapped
     toast.success('节令奖励领取完成')
   }
-  catch (e: any) { if (version === generation) toast.error(e.response?.data?.error || e.message) }
+  catch (e: any) { if (version === generation) toast.error(e.response?.data?.error || e?.message) }
   finally {
     busy.value = false
     if (version !== generation && currentAccountId.value) refresh()

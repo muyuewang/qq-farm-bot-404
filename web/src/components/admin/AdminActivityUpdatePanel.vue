@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import api from '@/api'
+import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import { useToastStore } from '@/stores/toast'
 
 interface ActivityUpdateReport {
   scannedAt: number
@@ -97,12 +95,13 @@ interface ActivityGroup {
   error?: string
 }
 
-const toast = useToastStore()
-const loading = ref(false)
+// 上游后端已移除活动更新扫描服务，/api/activity/update/scan 与 /status 都没有后继端点。
+// 面板入口按约定保留但置灰，不再发起必然失败的请求。
+const ACTIVITY_UPDATE_UNSUPPORTED_MESSAGE = '当前后端版本未提供活动更新扫描，无法自动发现新活动节点'
+
 const report = ref<ActivityUpdateReport | null>(null)
-const error = ref('')
+const error = ref(ACTIVITY_UPDATE_UNSUPPORTED_MESSAGE)
 const intervalMs = ref(0)
-const nextScanAt = ref(0)
 const activityStatusFilter = ref<'all' | 'active' | 'upcoming' | 'ended' | 'disabled' | 'unknown'>('all')
 const selectedActivityId = ref<number | null>(null)
 
@@ -326,50 +325,6 @@ function activityNodeDescription(node: ActivityGroup) {
     return '当前在线接口仅返回基础元数据；可能关联香囊赠礼或情谊记录，具体字段仍需活动开放后的协议样本确认。'
   return node.parentId ? '服务端活动树中的功能子节点。' : '活动组根节点，负责活动入口和起止时间。'
 }
-
-async function scanUpdates() {
-  loading.value = true
-  error.value = ''
-  try {
-    const { data } = await api.post('/api/activity/update/scan')
-    if (!data.ok)
-      throw new Error(data.error || '活动更新扫描失败')
-    report.value = data.report
-    intervalMs.value = Number(data.intervalMs) || intervalMs.value
-    nextScanAt.value = Number(data.nextScanAt) || nextScanAt.value
-    if (data.report?.status === 'update-found')
-      toast.warning(`发现 ${data.report.unknownActivityIds.length} 个候选活动 ID`)
-    else
-      toast.success('活动更新扫描完成')
-  }
-  catch (err: any) {
-    error.value = err?.response?.data?.error || err.message || '活动更新扫描失败'
-  }
-  finally {
-    loading.value = false
-  }
-}
-
-async function loadUpdateStatus() {
-  loading.value = true
-  error.value = ''
-  try {
-    const { data } = await api.get('/api/activity/update/status')
-    if (!data.ok)
-      throw new Error(data.error || '读取活动更新状态失败')
-    report.value = data.report || null
-    intervalMs.value = Number(data.intervalMs) || 0
-    nextScanAt.value = Number(data.nextScanAt) || 0
-  }
-  catch (err: any) {
-    error.value = err?.response?.data?.error || err.message || '读取活动更新状态失败'
-  }
-  finally {
-    loading.value = false
-  }
-}
-
-onMounted(loadUpdateStatus)
 </script>
 
 <template>
@@ -392,9 +347,10 @@ onMounted(loadUpdateStatus)
             {{ allActivityGroups.length }} 个活动 · {{ report.online?.activities.length || 0 }} 个节点 · 每 {{ Math.round(intervalMs / 60000) || 30 }} 分钟更新
           </p>
         </div>
-        <BaseButton variant="primary" :loading="loading" @click="scanUpdates">
+        <BaseButton variant="primary" disabled :title="ACTIVITY_UPDATE_UNSUPPORTED_MESSAGE">
           <span class="i-carbon-search mr-2" />
           重新分析
+          <span class="ml-1 text-[10px]">未提供</span>
         </BaseButton>
       </div>
 

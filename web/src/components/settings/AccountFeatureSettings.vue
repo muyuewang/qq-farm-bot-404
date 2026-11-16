@@ -8,8 +8,10 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { useRanchStore } from '@/stores/ranch'
+import { isRanchSwitchDefaultOn, RANCH_AUTOMATION_DEFAULTS, RANCH_AUTOMATION_GROUPS, RANCH_AUTOMATION_LIMITS, RANCH_AUTOMATION_SWITCHES, RANCH_BAG_FALLBACK_OPTIONS, RANCH_STRATEGY_OPTIONS, ranchUsesPreferredAnimal } from '@/utils/ranch'
 
-type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity'
+type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity' | 'ranch'
 
 const props = defineProps<{
   currentAccountName: string | null
@@ -62,6 +64,41 @@ const showPetDiaryActivity = computed(() => isWithinActivityWindowMs(PET_DIARY_A
 const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
 const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
 
+const ranchStore = useRanchStore()
+const ranchKeys = RANCH_AUTOMATION_SWITCHES.map(item => item.key)
+const ranchSwitchGroups = computed(() => RANCH_AUTOMATION_GROUPS.map((group) => {
+  const items = RANCH_AUTOMATION_SWITCHES.filter(item => item.group === group.key)
+  return {
+    ...group,
+    items,
+    // 整组一键开关：组内全部开着才算开；打开时补齐该组全部动作。
+    allOn: items.length > 0 && items.every(item => automation.value.automation[item.key] === true),
+  }
+}))
+function setRanchGroup(group: { items: ReadonlyArray<{ key: string }> }, enabled: boolean) {
+  group.items.forEach((item) => {
+    automation.value.automation[item.key] = enabled
+  })
+  emit('save', 'ranch', true)
+}
+const ranchEnabledCount = computed(() => ranchKeys.filter(key => automation.value.automation[key] === true).length)
+const ranchStrategyLabel = computed(() => RANCH_STRATEGY_OPTIONS.find(item => item.value === automation.value.automation.ranch_strategy)?.label || '未设置')
+const ranchCheckMinutes = computed(() => {
+  const minutes = Number(automation.value.automation.ranch_check_minutes)
+  return Number.isInteger(minutes) ? minutes : RANCH_AUTOMATION_DEFAULTS.ranch_check_minutes
+})
+const ranchNeedsPreferred = computed(() => ranchUsesPreferredAnimal(automation.value.automation.ranch_strategy, automation.value.automation.ranch_bag_fallback))
+const ranchCoopOptions = computed(() => ranchAnimalOptions('窝'))
+const ranchShedOptions = computed(() => ranchAnimalOptions('棚'))
+
+function ranchAnimalOptions(kind: string) {
+  // 后端会拒绝窝/棚类型不匹配的动物，这里只列对应类型的可选项，避免必然失败的保存。
+  return [
+    { label: '不指定', value: 0 },
+    ...ranchStore.animalOptions.filter(item => item.kind === kind).map(item => ({ label: item.label, value: item.value })),
+  ]
+}
+
 const moduleInfo: Record<ModuleKey, { title: string, description: string, icon: string, image: string, tone: string }> = {
   planting: { title: '种植与收获', description: '选种、收获、出售和巡田节奏', icon: 'i-carbon-sprout', image: '/game-config/module_icons/planting.png', tone: 'emerald' },
   fertilizer: { title: '土地与施肥', description: '土地升级、施肥和化肥补充', icon: 'i-carbon-soil-moisture', image: '/game-config/module_icons/fertilizer.png', tone: 'amber' },
@@ -69,6 +106,7 @@ const moduleInfo: Record<ModuleKey, { title: string, description: string, icon: 
   steal: { title: '偷菜', description: '巡查频率和操作延迟', icon: 'i-carbon-crop-health', image: '/game-config/module_icons/steal.png', tone: 'lime' },
   merchant: { title: '神秘商人', description: '商品购买和货币范围', icon: 'i-carbon-store', image: '/game-config/module_icons/merchant.png', tone: 'orange' },
   activity: { title: '日常与活动', description: '日常任务、活动奖励和活动道具', icon: 'i-carbon-events', image: '/game-config/module_icons/activity-task.png', tone: 'violet' },
+  ranch: { title: '牧场', description: '栏舍养殖、牧草罐头、好友牧场与每日奖励', icon: 'i-carbon-wheat', image: '', tone: 'lime' },
 }
 
 const activeInfo = computed(() => activeModule.value ? moduleInfo[activeModule.value] : null)
@@ -107,7 +145,7 @@ function intervalTag(min: number, max: number) {
 }
 
 function moduleStateLabel(key: ModuleKey) {
-  if (key === 'activity')
+  if (key === 'activity' || key === 'ranch')
     return moduleEnabled(key) ? '已配置' : '未开启'
   return moduleEnabled(key) ? '已开启' : '已关闭'
 }
@@ -158,6 +196,14 @@ function summaryTags(key: ModuleKey) {
       currencies.join('、') || '未选货币',
     ]
   }
+  if (key === 'ranch') {
+    return [
+      ranchEnabledCount.value > 0 ? `${ranchEnabledCount.value}/${ranchKeys.length} 项自动动作` : '未开启牧场自动化',
+      `巡查间隔 ${ranchCheckMinutes.value} 分钟`,
+      `补栏策略：${ranchStrategyLabel.value}`,
+      automation.value.automation.ranch_friend_steal === true ? '含好友牧场' : '仅自家牧场',
+    ]
+  }
   return [
     automation.value.automation.task ? '自动完成日常任务' : '不做日常',
     automation.value.automation.star_solar_claim && '节令小札',
@@ -184,6 +230,8 @@ function moduleEnabled(key: ModuleKey) {
     return automation.value.automation.friend && automation.value.automation.friend_steal
   if (key === 'merchant')
     return automation.value.automation.mystery_shop_auto_buy
+  if (key === 'ranch')
+    return ranchEnabledCount.value > 0
   return activityEnabledCount.value > 0 || automation.value.automation.task
 }
 
@@ -204,6 +252,12 @@ function setModuleEnabled(key: ModuleKey, enabled: boolean) {
   }
   else if (key === 'merchant') {
     automation.value.automation.mystery_shop_auto_buy = enabled
+  }
+  else if (key === 'ranch') {
+    // 后端没有牧场总开关：关闭即清掉全部牧场动作，开启只恢复服务端默认动作。
+    ranchKeys.forEach((ranchKey) => {
+      automation.value.automation[ranchKey] = enabled && isRanchSwitchDefaultOn(ranchKey)
+    })
   }
   else {
     automation.value.automation.task = enabled
@@ -253,11 +307,18 @@ function friendName(gid: number) {
   return qixiFriends.value.find(item => item.gid === gid)?.name || `好友 ${gid}`
 }
 async function loadQixiFriends() {
-  if (!props.currentAccountId)
+  // 活动已结束、模块被常量关闭时不发请求，避免设置页弹无关的失败提示。
+  if (!SHOW_QIXI_ACTIVITY || !props.currentAccountId)
     return
   try {
-    const { data } = await api.get('/api/activity/qixi', { headers: { 'x-account-id': props.currentAccountId } })
-    qixiFriends.value = data?.friends || []
+    // 旧 /api/activity/qixi 会顺带下发好友；新后端把好友列表独立到 /api/friends。
+    const { data } = await api.get('/api/friends', {
+      headers: { 'x-account-id': props.currentAccountId },
+      skipErrorToast: true,
+    } as any)
+    qixiFriends.value = (Array.isArray(data?.data) ? data.data : [])
+      .map((friend: any) => ({ gid: Number(friend?.gid), name: String(friend?.name || friend?.nickname || '') }))
+      .filter((friend: any) => Number.isFinite(friend.gid) && friend.gid > 0)
   }
   catch { qixiFriends.value = [] }
 }
@@ -274,6 +335,9 @@ function openModule(key: ModuleKey) {
     automation: JSON.parse(JSON.stringify(automation.value)),
   }
   activeModule.value = key
+  // 动物清单是静态配置，只在第一次打开牧场卡片时拉一次。
+  if (key === 'ranch' && ranchStore.animalOptions.length === 0)
+    void ranchStore.fetchAutomationOptions()
 }
 function cancel() {
   if (editSnapshot.value) {
@@ -558,6 +622,96 @@ watch(() => props.currentAccountId, loadQixiFriends)
               </section>
             </div>
 
+            <div v-else-if="activeModule === 'ranch'" class="space-y-4">
+              <section class="border border-gray-100 rounded-lg bg-gray-50/70 p-4 space-y-3 dark:border-gray-700 dark:bg-gray-900/25">
+                <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
+                  巡查节奏
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <BaseInput
+                    v-model.number="automation.automation.ranch_check_minutes"
+                    label="牧场巡查间隔（分钟）"
+                    type="number"
+                    :min="RANCH_AUTOMATION_LIMITS.checkMinutes.min"
+                    :max="RANCH_AUTOMATION_LIMITS.checkMinutes.max"
+                  />
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  只接受 1–60 的整数分钟。动物成熟或设施升级更早完成时，后台会提前唤醒，不受该间隔限制。
+                </p>
+              </section>
+
+              <section
+                v-for="group in ranchSwitchGroups"
+                :key="group.key"
+                class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
+                      {{ group.title }}
+                    </div>
+                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ group.detail }}
+                    </div>
+                  </div>
+                  <BaseSwitch
+                    :aria-label="`一键${group.allOn ? '关闭' : '开启'}${group.title}`"
+                    :model-value="group.allOn"
+                    :disabled="saving"
+                    @update:model-value="setRanchGroup(group, !!$event)"
+                  />
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <div
+                    v-for="setting in group.items"
+                    :key="setting.key"
+                    class="min-w-0 flex items-center justify-between gap-4 border border-gray-100 rounded-lg bg-gray-50/70 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-900/40"
+                  >
+                    <div class="min-w-0">
+                      <div :id="`ranch-setting-${setting.key}`" class="text-sm text-gray-800 font-medium leading-5 dark:text-gray-200">
+                        {{ setting.label }}
+                      </div>
+                      <p class="mt-1 text-xs text-gray-500 leading-5 dark:text-gray-400">
+                        {{ setting.desc }}
+                      </p>
+                    </div>
+                    <BaseSwitch v-model="automation.automation[setting.key]" class="shrink-0" :aria-labelledby="`ranch-setting-${setting.key}`" />
+                  </div>
+                </div>
+
+                <p v-if="group.key === 'friend'" class="text-xs text-amber-600 dark:text-amber-400">
+                  这些动作会真实进入好友牧场并在对方牧场内操作，抚摸与放蚊子受每日次数限制；后端每轮巡查最多拜访三位好友。
+                </p>
+              </section>
+
+              <section v-if="automation.automation.ranch_buy === true" class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
+                <div>
+                  <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
+                    补栏策略
+                  </div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    仅在「自动购买幼崽」开启时参与选品；背包已有的幼崽先放养，缺额才按策略在商店购买。
+                  </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <BaseSelect v-model="automation.automation.ranch_strategy" label="养殖策略" :options="RANCH_STRATEGY_OPTIONS" />
+                  <BaseSelect v-if="automation.automation.ranch_strategy === 'bag_priority'" v-model="automation.automation.ranch_bag_fallback" label="背包缺货时回退" :options="RANCH_BAG_FALLBACK_OPTIONS" />
+                </div>
+                <div v-if="ranchNeedsPreferred" class="grid gap-3 sm:grid-cols-2">
+                  <BaseSelect v-model="automation.automation.ranch_coop_animal" label="窝指定动物" :options="ranchCoopOptions" />
+                  <BaseSelect v-model="automation.automation.ranch_shed_animal" label="棚指定动物" :options="ranchShedOptions" />
+                </div>
+                <p v-if="ranchNeedsPreferred && ranchStore.animalOptions.length === 0" class="text-xs text-amber-600 dark:text-amber-400">
+                  动物清单未加载成功，当前只能保留「不指定」；保存时后端仍会按官方配置校验窝与棚的适用范围。
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  补栏、升级与购买牧草只花费金券；报价里出现其他消耗品时后端会跳过本次操作，不会产生钻石消费。
+                </p>
+              </section>
+            </div>
+
             <div v-else class="space-y-4">
               <section class="border border-gray-100 rounded-lg bg-gray-50/70 p-4 space-y-3 dark:border-gray-700 dark:bg-gray-900/25">
                 <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
@@ -569,7 +723,9 @@ watch(() => props.currentAccountId, loadQixiFriends)
               </section>
 
               <section class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
-                <h3 class="text-sm font-medium">节令小札</h3>
+                <h3 class="text-sm font-medium">
+                  节令小札
+                </h3>
                 <BaseSwitch v-model="automation.automation.star_solar_claim" label="自动领取节令奖励" />
               </section>
 
@@ -726,20 +882,21 @@ watch(() => props.currentAccountId, loadQixiFriends)
                     <BaseSwitch v-model="automation.automation[setting.key]" class="shrink-0" :aria-labelledby="`milk-tea-setting-${setting.key}`" />
                   </div>
                 </div>
-                <div v-if="showMilkTeaBusiness" class="mt-3 grid gap-3 sm:grid-cols-2">
+                <div v-if="showMilkTeaBusiness" class="grid mt-3 gap-3 sm:grid-cols-2">
                   <label class="text-sm">雇佣时长
-                    <select v-model.number="automation.automation.milk_tea_hire_duration" class="mt-1 w-full rounded border p-2 dark:bg-gray-900">
+                    <select v-model.number="automation.automation.milk_tea_hire_duration" class="mt-1 w-full border rounded p-2 dark:bg-gray-900">
                       <option :value="1">4 小时</option><option :value="2">12 小时</option><option :value="3">24 小时</option>
                     </select>
                   </label>
                   <label class="text-sm">雇佣类型
-                    <select v-model.number="automation.automation.milk_tea_hire_talent" class="mt-1 w-full rounded border p-2 dark:bg-gray-900">
+                    <select v-model.number="automation.automation.milk_tea_hire_talent" class="mt-1 w-full border rounded p-2 dark:bg-gray-900">
                       <option :value="0">任意好友</option><option :value="9001">金牌销售</option><option :value="9002">金牌宣传</option><option :value="9003">金牌服务</option><option :value="9004">实习员工（默默搬砖）</option>
                     </select>
                   </label>
-
                 </div>
-                <p v-if="showMilkTeaBusiness" class="mt-2 text-xs text-gray-500">指定类型无空闲好友时，依次选择其他空闲好友、实习员工；均不可用则等待下次检查。时长或奶茶券不足时跳过。</p>
+                <p v-if="showMilkTeaBusiness" class="mt-2 text-xs text-gray-500">
+                  指定类型无空闲好友时，依次选择其他空闲好友、实习员工；均不可用则等待下次检查。时长或奶茶券不足时跳过。
+                </p>
               </section>
               <section v-if="showPetDiaryActivity" class="border border-violet-100 rounded-lg p-4 space-y-3 dark:border-violet-900/40">
                 <div>

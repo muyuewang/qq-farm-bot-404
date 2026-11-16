@@ -2,19 +2,15 @@
 import type { QixiActivityData, QixiFriend } from '@/stores/activity'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
 const props = defineProps<{
   activity?: QixiActivityData | null
   friends: QixiFriend[]
-  buildLoading?: boolean
   giftLoading?: boolean
-  dewLoading?: boolean
 }>()
-const emit = defineEmits<{ build: [], dew: [], gift: [friendGid: number, count: number] }>()
+const emit = defineEmits<{ gift: [friendGid: number] }>()
 const friendGid = ref<string | number>('')
-const giftCount = ref(1)
 const friendOptions = computed(() => props.friends.map(friend => ({
   label: `${friend.name}${friend.level ? ` · Lv.${friend.level}` : ''}`,
   value: friend.gid,
@@ -33,7 +29,7 @@ function formatTime(value?: number) {
           <div class="text-xs text-gray-500">
             {{ item?.itemName || '活动道具' }}
           </div><div class="text-xl text-gray-900 font-bold dark:text-white">
-            {{ Number(item?.itemCount || 0).toLocaleString() }}
+            {{ item?.countKnown === false ? '-' : Number(item?.itemCount || 0).toLocaleString() }}
           </div>
         </div>
       </div>
@@ -44,11 +40,11 @@ function formatTime(value?: number) {
         <h3 class="text-gray-900 font-semibold dark:text-white">
           使用鹊羽灵露
         </h3><p class="mt-1 text-xs text-gray-500">
-          {{ activity?.dewUsage.limitReached ? `今日已达使用上限（${activity.dewUsage.dailyLimit}/${activity.dewUsage.dailyLimit}）` : `自动选择尚有作物的自有土地，每日最多使用 ${activity?.dewUsage.dailyLimit || 15} 次` }}
+          当前后端版本未提供灵露使用接口，本页仅展示灵露库存。
         </p>
       </div>
-      <BaseButton :loading="dewLoading" :disabled="!activity?.items.dew.itemCount || activity?.dewUsage.limitReached" @click="emit('dew')">
-        自动使用
+      <BaseButton disabled title="当前后端版本未提供鹊羽灵露自动使用">
+        自动使用<span class="ml-1 text-[10px]">未提供</span>
       </BaseButton>
     </div>
 
@@ -62,8 +58,8 @@ function formatTime(value?: number) {
             已完成 {{ activity?.bridge.completedCount || 0 }}/{{ activity?.bridge.stages.length || 0 }} 阶段
           </p>
         </div>
-        <BaseButton :loading="buildLoading" :disabled="!activity?.bridge.canBuild" @click="emit('build')">
-          驻建下一阶段
+        <BaseButton disabled title="当前后端版本未提供驻建鹊桥接口">
+          驻建下一阶段<span class="ml-1 text-[10px]">未提供</span>
         </BaseButton>
       </div>
       <div v-if="activity?.bridge.nextStage" class="mt-4 rounded-lg bg-violet-50 p-4 text-sm dark:bg-violet-900/20">
@@ -86,10 +82,9 @@ function formatTime(value?: number) {
           今日已赠 {{ activity?.gift.sentCount || 0 }}/{{ activity?.gift.maxCount || 0 }}，名单外好友不会被自动选择
         </p>
       </div>
-      <div class="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+      <div class="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
         <BaseSelect v-model="friendGid" label="赠送好友" :options="friendOptions" placeholder="请选择好友" />
-        <BaseInput v-model.number="giftCount" label="赠送数量" type="number" min="1" :max="activity?.gift.remainingCount || 1" />
-        <BaseButton :loading="giftLoading" :disabled="!friendGid || !activity?.gift.remainingCount || !activity?.items.sachet.itemCount" @click="emit('gift', Number(friendGid), Number(giftCount) || 1)">
+        <BaseButton :loading="giftLoading" :disabled="!friendGid || !activity?.gift.enabled || !activity?.gift.remainingCount || !activity?.items.sachet.itemCount" @click="emit('gift', Number(friendGid))">
           赠送香囊
         </BaseButton>
       </div>

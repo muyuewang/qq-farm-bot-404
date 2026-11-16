@@ -51,6 +51,18 @@ const salesDate = computed(() => {
     return `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}`
   return props.records?.day ? time(props.records.day, true) : ''
 })
+// 快乐不独享、成长基金、升级页都要等各自己的快照回来才有数据，读取失败时由父层带回原因。
+const fallbackText = computed(() => {
+  if (props.busy)
+    return '加载中…'
+  if (props.kind === 'share')
+    return props.state.shareUnavailable || '快乐不独享暂不可用'
+  if (props.kind === 'fund')
+    return '暂未读取到成长基金数据'
+  if (props.kind === 'upgrade')
+    return '暂未读取到店铺升级数据'
+  return '暂无活动数据'
+})
 const avatar = (value: string) => /^https?:\/\//.test(value || '') ? value : ''
 function nativeOnly() {
   notice.value = '请在 QQ 游戏内使用此功能'
@@ -69,7 +81,7 @@ function nativeOnly() {
       <p v-if="error" class="dialog-error" role="alert">
         {{ error }}
       </p>
-      <template v-if="kind === 'upgrade' && !preview">
+      <template v-if="kind === 'upgrade' && !preview && state.shop">
         <button class="level-preview" @click="preview = true">
           <img :src="img('img_s4TeaUpLv_btnPre')" alt="等级预览">
         </button>
@@ -97,11 +109,11 @@ function nativeOnly() {
             <MilkTeaRewardIcon v-for="item in next?.rewards || []" :key="item.id" :item="item" named />
           </div>
         </div>
-        <button class="paint-button upgrade-submit" :disabled="busy || !state.summary.can_upgrade" @click="emit('action', 'upgrade')">
+        <button class="paint-button upgrade-submit" :disabled="busy || !state.summary?.can_upgrade" @click="emit('action', 'upgrade')">
           立即升级
         </button>
       </template>
-      <div v-else-if="preview" class="preview-scroll scroll-area">
+      <div v-else-if="preview && state.shop" class="preview-scroll scroll-area">
         <article v-for="(level, index) in state.levels" :key="level.level" class="level-card" :class="{ current: level.level === Number(state.shop.level) }">
           <h3><small v-if="level.level === Number(state.shop.level) + 1">下一级</small>{{ level.level }}级</h3><b class="revenue-required">营业额需：{{ level.revenue_required }}</b>
           <div class="level-effects">
@@ -149,11 +161,11 @@ function nativeOnly() {
         <header><span>排名</span><span>玩家</span></header><div class="rank-scroll scroll-area">
           <p v-if="!records?.ranks?.length" class="empty">
             {{ busy ? '加载中…' : error ? '排行榜读取失败' : '暂无排行' }}
-          </p><article v-for="rank in records?.ranks || []" :key="rank.owner.gid" class="rank-row">
+          </p><article v-for="rank in records?.ranks || []" :key="rank.owner?.gid" class="rank-row">
             <b class="rank-number" :class="`place-${rank.rank}`">{{ rank.rank }}</b><div class="rank-avatar">
-              <img v-if="avatar(rank.owner.avatar)" :src="avatar(rank.owner.avatar)" alt=""><span v-else>{{ rank.owner.name?.slice(0, 1) }}</span><b>{{ rank.owner.level }}</b>
+              <img v-if="avatar(rank.owner?.avatar)" :src="avatar(rank.owner.avatar)" alt=""><span v-else>{{ rank.owner?.name?.slice(0, 1) }}</span><b>{{ rank.owner?.level }}</b>
             </div><div class="rank-player">
-              <strong>{{ rank.owner.name }}</strong><p>▰ {{ rank.shop_name }}</p><p>营业额：<em>{{ rank.total_revenue }}</em></p>
+              <strong>{{ rank.owner?.name }}</strong><p>▰ {{ rank.shop_name }}</p><p>营业额：<em>{{ rank.total_revenue }}</em></p>
             </div><button v-if="rank.can_show_off" class="native-button" @click="nativeOnly">
               炫耀
             </button>
@@ -208,7 +220,7 @@ function nativeOnly() {
         </button>
       </template>
       <p v-else class="empty">
-        暂无活动数据
+        {{ fallbackText }}
       </p>
       <p v-if="notice" class="native-notice" role="status">
         {{ notice }}

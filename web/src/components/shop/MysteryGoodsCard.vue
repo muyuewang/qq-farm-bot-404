@@ -1,23 +1,31 @@
 <script setup lang="ts">
 import type { MysteryShopOffer } from '@/stores/shop'
+import { computed } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { formatCurrencyAmountByLabel } from '@/utils/number-format'
 
 const props = defineProps<{
   offer: MysteryShopOffer
-  balance: number
   loading: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'buy', offer: MysteryShopOffer): void
-  (e: 'abandon', offer: MysteryShopOffer): void
 }>()
+
+const L = {
+  balanceUnknown: '余额未确认',
+  buy: '购买后商人将离开',
+  insufficient: '余额不足',
+}
+
+const balanceKnown = computed(() => props.offer.balance !== null && props.offer.balance !== undefined)
+const isInsufficient = computed(() => balanceKnown.value && Number(props.offer.balance) < Number(props.offer.price))
 
 function formatEndTime(timestamp: number) {
   if (!timestamp)
     return ''
-  return new Date(timestamp * 1000).toLocaleString('zh-CN', {
+  return new Date(timestamp).toLocaleString('zh-CN', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -36,7 +44,7 @@ function formatEndTime(timestamp: number) {
 
       <div class="min-w-0 flex-1">
         <div class="text-xs text-purple-600 font-semibold dark:text-purple-300">
-          限时神秘商品 · {{ offer.discount / 10 }} 折
+          限时神秘商品
         </div>
         <h3 class="mt-1 truncate text-base text-gray-900 font-bold dark:text-gray-100">
           {{ offer.itemName }} ×{{ offer.itemCount }}
@@ -49,8 +57,10 @@ function formatEndTime(timestamp: number) {
             {{ formatCurrencyAmountByLabel(offer.originalPrice, offer.currencyName) }}
           </span>
         </div>
-        <div v-if="offer.endTime" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {{ formatEndTime(offer.endTime) }} 离开
+        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ offer.currencyName }}余额
+          {{ balanceKnown ? formatCurrencyAmountByLabel(offer.balance, offer.currencyName) : L.balanceUnknown }}
+          <span v-if="offer.endTime"> · {{ formatEndTime(offer.endTime) }} 离开</span>
         </div>
       </div>
     </div>
@@ -58,20 +68,12 @@ function formatEndTime(timestamp: number) {
     <div class="flex gap-3 border-t border-purple-100 p-4 dark:border-purple-900">
       <BaseButton
         class="flex-1"
-        variant="outline"
-        :disabled="loading"
-        @click="emit('abandon', props.offer)"
-      >
-        请离
-      </BaseButton>
-      <BaseButton
-        class="flex-1"
         variant="primary"
         :loading="loading"
-        :disabled="balance < offer.price"
+        :disabled="isInsufficient"
         @click="emit('buy', props.offer)"
       >
-        {{ balance >= offer.price ? '购买后商人将离开' : `${offer.currencyName}不足` }}
+        {{ isInsufficient ? `${offer.currencyName}${L.insufficient}` : L.buy }}
       </BaseButton>
     </div>
   </article>

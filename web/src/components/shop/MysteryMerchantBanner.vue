@@ -34,7 +34,7 @@ const offerEndMs = computed(() => getTimestampMs(mysteryOffer.value?.endTime))
 
 const hasActiveMysteryOffer = computed(() => {
   const offer = mysteryOffer.value
-  if (!isCurrentAccountOffer.value || !offer?.active || offer.purchased)
+  if (!isCurrentAccountOffer.value || !offer?.active)
     return false
   return !offerEndMs.value || offerEndMs.value > now.value
 })
@@ -130,7 +130,7 @@ watch(
           </div>
           <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-amber-800 dark:text-amber-200">
             <span>剩余 {{ remainingText }}</span>
-            <span v-if="mysteryOffer?.discount">{{ mysteryOffer.discount / 10 }} 折限时商品</span>
+            <span v-if="mysteryOffer && mysteryOffer.originalPrice > mysteryOffer.price">限时特价</span>
           </div>
         </div>
       </div>

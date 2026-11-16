@@ -15,6 +15,7 @@ const props = defineProps<{
   account?: Account | null
   profile?: Record<string, any> | null
   items?: CareerItem[]
+  detailAvailable?: boolean
   loading?: boolean
   error?: string
 }>()
@@ -28,12 +29,20 @@ const harvestedItems = computed(() => (props.items || [])
   .filter(item => Number(item.harvestCount) > 0)
   .sort((a, b) => Number(b.harvestCount) - Number(a.harvestCount)))
 
+const hasHarvestDetail = computed(() => props.detailAvailable === true)
+
 const totalHarvest = computed(() => Number(props.profile?.totalHarvestCount ?? harvestedItems.value.reduce((sum, item) => sum + Number(item.harvestCount || 0), 0)))
 const topItems = computed(() => harvestedItems.value.slice(0, 3))
 const name = computed(() => String(props.profile?.name || props.account?.nick || props.account?.name || '农场主'))
 const avatar = computed(() => String(props.profile?.avatar || props.account?.avatar || ''))
 const level = computed(() => Number(props.profile?.level || 0))
-const exp = computed(() => Number(props.profile?.exp || 0))
+const exp = computed(() => {
+  const raw = props.profile?.exp
+  if (raw === undefined || raw === null || raw === '')
+    return null
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : null
+})
 const gid = computed(() => String(props.profile?.gid || ''))
 const totalStealCount = computed(() => Number(props.profile?.totalStealCount || 0))
 
@@ -78,7 +87,7 @@ useModalFocus(() => props.show, modalSurface, () => emit('close'))
             </h2>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span class="rounded-lg bg-amber-100 px-2 py-1 text-amber-700 font-semibold dark:bg-amber-900/30 dark:text-amber-300">Lv.{{ level }}</span>
-              <span class="rounded-lg bg-blue-50 px-2 py-1 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">经验 {{ formatNumber(exp) }}</span>
+              <span class="rounded-lg bg-blue-50 px-2 py-1 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">经验 {{ exp === null ? '—' : formatNumber(exp) }}</span>
             </div>
             <p v-if="gid" class="mt-2 text-xs text-gray-400">
               角色编号：{{ gid }}
@@ -156,9 +165,12 @@ useModalFocus(() => props.show, modalSurface, () => emit('close'))
               <h3 class="text-lg text-gray-900 font-bold dark:text-white">
                 收获明细
               </h3>
-              <span class="text-sm text-gray-400">({{ harvestedItems.length }})</span>
+              <span v-if="hasHarvestDetail" class="text-sm text-gray-400">({{ harvestedItems.length }})</span>
             </div>
-            <div v-if="harvestedItems.length" class="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            <div v-if="!hasHarvestDetail" class="rounded-2xl bg-white py-12 text-center text-sm text-gray-400 dark:bg-gray-800">
+              当前后端版本仅提供生涯汇总数据，未提供分作物收获明细
+            </div>
+            <div v-else-if="harvestedItems.length" class="grid grid-cols-3 gap-3 sm:grid-cols-4">
               <div v-for="item in harvestedItems" :key="item.seedId" class="rounded-xl bg-white p-3 text-center shadow-sm dark:bg-gray-800">
                 <div class="mx-auto h-12 w-12 flex items-center justify-center">
                   <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">

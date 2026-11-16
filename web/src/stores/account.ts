@@ -20,18 +20,6 @@ export interface Account {
   // Add other fields as discovered
 }
 
-export interface RefreshWxCodesResult {
-  total: number
-  success: number
-  failed: number
-  skipped: number
-  results: Array<{
-    accountId: string
-    name: string
-    ok: boolean
-    error?: string
-  }>
-}
 
 export interface AccountLog {
   time: string
@@ -119,12 +107,6 @@ export const useAccountStore = defineStore('account', () => {
     await fetchAccounts()
   }
 
-  async function refreshWxCodes() {
-    const res = await api.post('/api/accounts/refresh-wx-codes', {}, { timeout: 120000 })
-    await fetchAccounts()
-    return res.data as { ok: boolean, error?: string, data?: RefreshWxCodesResult }
-  }
-
   async function deleteAccount(id: string) {
     await api.delete(`/api/accounts/${id}`)
     if (currentAccountId.value === id) {
@@ -178,7 +160,6 @@ export const useAccountStore = defineStore('account', () => {
     selectAccount,
     startAccount,
     stopAccount,
-    refreshWxCodes,
     deleteAccount,
     fetchLogs,
     addAccount,

@@ -15,13 +15,15 @@ const emit = defineEmits<{
 }>()
 
 const L = {
-  price: '\u4EF7\u683C',
-  gold: '\u91D1\u5E01',
-  requiredLevel: '\u9700\u6C42\u7B49\u7EA7',
-  seasons: '\u5B63\u6570',
-  exp: '\u6BCF\u5B63\u7ECF\u9A8C',
-  buy: '\u7ACB\u5373\u8D2D\u4E70',
-  canBuy: '\u53EF\u8D2D\u4E70',
+  price: '价格',
+  gold: '金币',
+  requiredLevel: '需求等级',
+  seasons: '季数',
+  exp: '每季经验',
+  buy: '立即购买',
+  canBuy: '可购买',
+  priceUnknown: '价格未确认',
+  valueUnknown: '—',
 }
 </script>
 
@@ -45,12 +47,12 @@ const L = {
         {{ item.name }}
       </div>
       <div class="mt-1 text-center text-xs text-amber-600 font-semibold dark:text-amber-400">
-        {{ L.price }} {{ formatGoldAmount(item.price) }} {{ L.gold }}
+        {{ item.price === null ? L.priceUnknown : `${L.price} ${formatGoldAmount(item.price)} ${L.gold}` }}
       </div>
       <div class="mt-2 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
         <div>{{ L.requiredLevel }} {{ item.requiredLevel }}</div>
         <div class="truncate">
-          {{ L.seasons }} {{ item.seasons || 0 }} / {{ L.exp }} {{ item.expPerSeason?.toLocaleString?.() || 0 }}
+          {{ L.seasons }} {{ item.seasons ?? L.valueUnknown }} / {{ L.exp }} {{ item.expPerSeason?.toLocaleString?.() ?? L.valueUnknown }}
         </div>
       </div>
       <p class="line-clamp-2 mt-1 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
@@ -59,7 +61,7 @@ const L = {
       <BaseButton
         class="mt-auto w-full"
         variant="primary"
-        :disabled="!item.unlocked || item.isSoldOut || currentLevel < item.requiredLevel || !canAfford"
+        :disabled="!item.id || !item.unlocked || item.isSoldOut || currentLevel < item.requiredLevel || !canAfford"
         @click="emit('buy', item)"
       >
         {{ statusLabel === L.canBuy ? L.buy : statusLabel }}

@@ -5,10 +5,10 @@ import { formatCurrencyAmount } from '@/utils/number-format'
 const props = defineProps<{
   accountName?: string
   level: number
-  gold: number
-  coupon: number
-  diamond: number
-  goldBean: number
+  gold: number | null
+  coupon: number | null
+  diamond: number | null
+  goldBean: number | null
 }>()
 
 const L = {
@@ -18,6 +18,7 @@ const L = {
   diamond: '\u94BB\u77F3',
   goldBean: '\u91D1\u8C46\u8C46',
   none: '\u672A\u9009\u62E9',
+  unknown: '\u672A\u786E\u8BA4',
 }
 
 const resourcePills = [
@@ -69,7 +70,7 @@ const resourcePills = [
         :class="item.class"
       >
         <img :src="item.icon" :alt="item.label" class="h-5 w-5 shrink-0 object-contain">
-        <span>{{ item.label }} {{ formatCurrencyAmount(item.value(), item.currency) }}</span>
+        <span>{{ item.label }} {{ item.value() === null ? L.unknown : formatCurrencyAmount(item.value(), item.currency) }}</span>
       </div>
       <div class="h-8 flex items-center rounded-lg bg-gray-50 px-3 text-xs text-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
         Lv.{{ level }} {{ accountName || L.none }}

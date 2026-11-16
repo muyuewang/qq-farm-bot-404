@@ -10,7 +10,8 @@ const props = withDefaults(defineProps<{
   itemName: string
   unitPrice: number
   currencyLabel: string
-  balance: number
+  /** null 表示后端未能确认余额，此时不按余额限制数量 */
+  balance: number | null
   loading?: boolean
   maxQuantity?: number
   isFree?: boolean
@@ -38,13 +39,17 @@ const L = {
   cancel: '\u53D6\u6D88',
   confirm: '\u786E\u5B9A\u8D2D\u4E70',
   free: '\u514D\u8D39',
+  balanceUnknown: '\u4F59\u989D\u672A\u786E\u8BA4',
 }
 
 const normalizedUnitPrice = computed(() => Math.max(0, Number(props.unitPrice) || 0))
+const balanceKnown = computed(() => props.balance !== null && props.balance !== undefined)
 const normalizedBalance = computed(() => Math.max(0, Number(props.balance) || 0))
 const configuredMax = computed(() => Math.max(1, Math.min(99, Math.floor(Number(props.maxQuantity) || 99))))
 const affordableMax = computed(() => {
   if (props.isFree)
+    return configuredMax.value
+  if (!balanceKnown.value)
     return configuredMax.value
   if (normalizedUnitPrice.value <= 0)
     return 1
@@ -129,7 +134,7 @@ useModalFocus(() => props.show, modalSurface, closeModal)
                 {{ L.balance }}
               </div>
               <div class="mt-1 font-semibold">
-                {{ formatCurrencyAmountByLabel(balance, currencyLabel) }} {{ currencyLabel }}
+                {{ balanceKnown ? `${formatCurrencyAmountByLabel(balance, currencyLabel)} ${currencyLabel}` : L.balanceUnknown }}
               </div>
             </div>
           </div>

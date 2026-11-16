@@ -1,12 +1,18 @@
 <script setup lang="ts">
-defineProps<{ activity: any | null, loading: boolean }>()
+import type { CharityFlowerActivityData } from '@/stores/activity'
+
+defineProps<{ activity: CharityFlowerActivityData | null, loading: boolean }>()
 defineEmits<{ refresh: [] }>()
 function pct(value: number, target: number) {
   return target > 0 ? Math.min(100, Math.max(0, value / target * 100)) : 0
 }
 
-function time(value: number) {
+function time(value?: number) {
   return value ? new Date(value * 1000).toLocaleString('zh-CN', { hour12: false }) : '—'
+}
+
+function rewardText(items: CharityFlowerActivityData['share']['rewards']) {
+  return items.map(item => `${item.itemName || '活动道具'} ×${item.itemCount}`).join('、')
 }
 </script>
 
@@ -44,9 +50,9 @@ function time(value: number) {
         </div>
         <div class="rounded-lg bg-white/15 p-3">
           <div class="text-xs text-white/70">
-            1 元公益金资格
+            结算奖励资格
           </div><div class="mt-1 text-sm font-medium">
-            {{ activity?.publicFund?.claimed ? '已送出' : activity?.publicFund?.claimable ? '可送出' : '未取得资格' }}
+            {{ activity?.finalReward?.eligible ? '已取得' : '未取得' }}
           </div>
         </div>
       </div>
@@ -58,13 +64,13 @@ function time(value: number) {
     <template v-else-if="activity">
       <section class="rounded-xl bg-white p-5 shadow-sm dark:bg-gray-800">
         <div class="flex justify-between text-sm">
-          <span class="font-medium">全服公益金进度（元）</span><span>{{ Number(activity.global.amountYuan).toLocaleString(undefined, { minimumFractionDigits: 2 }) }} / {{ Number(activity.global.targetYuan).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</span>
+          <span class="font-medium">全服爱心进度（个）</span><span>{{ activity.global.score.toLocaleString() }} / {{ activity.global.target.toLocaleString() }}</span>
         </div>
         <div class="mt-3 h-3 overflow-hidden rounded-full bg-rose-100 dark:bg-rose-950">
           <div class="h-full rounded-full bg-rose-500" :style="{ width: `${pct(activity.global.score, activity.global.target)}%` }" />
         </div>
         <p class="mt-3 text-xs text-gray-500">
-          全服结算时间：{{ time(activity.finalReward.settlementTime) }}
+          活动结束时间：{{ time(activity.endTime) }}
         </p>
       </section>
       <section class="rounded-xl bg-white p-5 shadow-sm dark:bg-gray-800">
@@ -76,9 +82,9 @@ function time(value: number) {
             <div class="text-xs text-gray-500">
               {{ tier.needScore }} 爱心
             </div><div class="mt-2 text-sm font-medium">
-              {{ tier.rewards.map((item: any) => `${item.itemName} ×${item.itemCount}`).join('、') }}
+              {{ rewardText(tier.rewards) || '以服务端结算为准' }}
             </div><div class="mt-2 text-xs">
-              {{ tier.claimed ? '已领取' : tier.reached ? '可领取' : '未达成' }}
+              {{ tier.claimed ? '已领取' : tier.claimable ? '可领取' : tier.reached ? '已达成待领取' : '未达成' }}
             </div>
           </div>
         </div>
@@ -89,20 +95,26 @@ function time(value: number) {
             每日分享礼包
           </div><div class="mt-2 text-sm font-medium">
             {{ activity.share.claimed ? '已领取' : activity.share.claimable ? '可领取' : '未完成分享' }}
+          </div><div class="mt-1 text-xs text-gray-500">
+            {{ rewardText(activity.share.rewards) || '礼包内容以服务端结算为准' }}
           </div>
         </div>
         <div class="rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
           <div class="text-xs text-gray-500">
-            公益协议
+            结算奖励条件
           </div><div class="mt-2 text-sm font-medium">
-            {{ activity.publicFund.complianceAgreed ? '已同意' : '未同意' }}
+            {{ activity.finalReward.eligible ? '已取得结算资格' : `个人需捐满 ${activity.finalReward.threshold} 爱心` }}
+          </div><div class="mt-1 text-xs text-gray-500">
+            {{ rewardText(activity.finalReward.rewards) || '结算奖励以服务端为准' }}
           </div>
         </div>
         <div class="rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
           <div class="text-xs text-gray-500">
-            已送公益金次数
+            公益金发放
           </div><div class="mt-2 text-sm font-medium">
-            {{ activity.publicFund.successCount }}
+            {{ activity.publicFund ? time(activity.publicFund.date) : '暂无发放记录' }}
+          </div><div class="mt-1 text-xs text-gray-500">
+            发放状态码 {{ activity.publicFund?.statusCode || '—' }}（服务端未提供文字释义）
           </div>
         </div>
       </section>

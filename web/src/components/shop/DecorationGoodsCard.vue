@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import BaseButton from '@/components/ui/BaseButton.vue'
-import { formatGoldBeanAmount } from '@/utils/number-format'
+import { formatCurrencyAmountByLabel } from '@/utils/number-format'
 
 defineProps<{
   item: any
@@ -14,10 +14,16 @@ const emit = defineEmits<{
 }>()
 
 const L = {
-  goldBean: '\u91D1\u8C46\u8C46',
-  noDesc: '\u6682\u65E0\u63CF\u8FF0',
+  free: '\u514D\u8D39',
   buy: '\u7ACB\u5373\u8D2D\u4E70',
   canBuy: '\u53EF\u8D2D\u4E70',
+  balanceUnknown: '\u4F59\u989D\u672A\u786E\u8BA4',
+}
+
+function balanceText(item: any) {
+  return item.balance === null || item.balance === undefined
+    ? L.balanceUnknown
+    : formatCurrencyAmountByLabel(item.balance, item.currencyName)
 }
 </script>
 
@@ -41,18 +47,26 @@ const L = {
         {{ item.name }}
       </div>
       <div class="mt-1 text-center text-xs text-amber-600 font-semibold dark:text-amber-400">
-        {{ formatGoldBeanAmount(item.price) }} {{ L.goldBean }}
+        {{ item.isFree ? L.free : `${formatCurrencyAmountByLabel(item.price, item.currencyName)} ${item.currencyName}` }}
       </div>
-      <p class="line-clamp-2 mt-2 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
-        {{ item.effectDesc || item.desc || L.noDesc }}
-      </p>
+      <div v-if="item.originalPrice && item.originalPrice > item.price" class="text-center text-[11px] text-gray-400 line-through">
+        {{ formatCurrencyAmountByLabel(item.originalPrice, item.currencyName) }}
+      </div>
+      <div class="mt-2 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
+        <div class="truncate">
+          {{ item.currencyName }}余额 {{ balanceText(item) }}
+        </div>
+        <div v-if="item.remainingPurchaseCount !== null" class="truncate">
+          限购 {{ item.limitCount }} · 剩余 {{ item.remainingPurchaseCount }}
+        </div>
+      </div>
       <p class="line-clamp-2 mt-1 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
         {{ hint }}
       </p>
       <BaseButton
         class="mt-auto w-full"
         variant="primary"
-        :disabled="!item.canBuy || !canAfford"
+        :disabled="!item.purchasable || !canAfford"
         @click="emit('buy', item)"
       >
         {{ statusLabel === L.canBuy ? L.buy : statusLabel }}

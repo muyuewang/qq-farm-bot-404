@@ -1,0 +1,204 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import { formatQuantity, itemListLine } from '@/utils/ranch'
+import type { RanchRequest, RanchState } from '@/utils/ranch'
+
+const props = defineProps<{ state: RanchState | null }>()
+
+const emit = defineEmits<{ request: [payload: RanchRequest] }>()
+
+const TABS = [
+  { value: 'animals', label: '动物图鉴' },
+  { value: 'reward', label: '图鉴奖励' },
+  { value: 'mutation', label: '变异规则' },
+] as const
+
+const tab = ref<'animals' | 'reward' | 'mutation'>('animals')
+
+const book = computed(() => props.state?.book ?? null)
+const animals = computed(() => book.value?.animals || [])
+const mutations = computed(() => book.value?.mutations || [])
+const giantLevels = computed(() => book.value?.giant.levels || [])
+const normal = computed(() => book.value?.normal ?? null)
+const giant = computed(() => book.value?.giant ?? null)
+const giantClaimable = computed(() => giantLevels.value.filter(level => level.canClaim))
+const unlockedCount = computed(() => animals.value.filter(animal => animal.unlocked).length)
+
+function claimNormal() {
+  emit('request', {
+    action: 'claimIllustrated',
+    input: { kind: 'normal' },
+    title: '领取图鉴等级奖励',
+    note: '服务端按当前图鉴进度结算所有可领等级，重复领取会被判为无需执行。',
+  })
+}
+
+function claimGiant() {
+  emit('request', {
+    action: 'claimIllustrated',
+    input: { kind: 'giant' },
+    title: `领取巨大化重量积分奖励（${giantClaimable.value.length} 档）`,
+    note: '逐档领取巨大变异重量积分奖励，只领取服务端标记为可领取的档位。',
+  })
+}
+
+function giantText(animal: any) {
+  const giant = animal.giant
+  if (!giant)
+    return ''
+  const range = giant.maxWeightKg ? ` · 区间 ${giant.minWeightKg}~${giant.maxWeightKg} kg` : ''
+  return `最佳 ${giant.weightKg} kg${giant.tierName ? ` · ${giant.tierName}` : ''}${range} · 收获 ${formatQuantity(giant.harvestCount)} 次`
+}
+</script>
+
+<template>
+  <div class="space-y-3">
+    <div v-if="!state?.book" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
+      牧场图鉴数据未下发，请点击刷新重新读取。
+    </div>
+
+    <template v-else>
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="h-9 inline-flex overflow-hidden border border-gray-200 rounded-lg bg-white p-0.5 dark:border-gray-700 dark:bg-gray-800">
+          <button
+            v-for="row in TABS"
+            :key="row.value"
+            class="min-w-24 rounded-md px-3 text-sm font-medium transition"
+            :class="tab === row.value ? 'text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'"
+            :style="tab === row.value ? { backgroundColor: 'var(--theme-primary)' } : {}"
+            @click="tab = row.value"
+          >
+            {{ row.label }}
+          </button>
+        </div>
+        <span class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+          已收录 {{ unlockedCount }} / {{ animals.length }} 种
+        </span>
+      </div>
+
+      <template v-if="tab === 'reward'">
+        <div class="grid gap-3 lg:grid-cols-2">
+          <div class="border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-sm font-medium">
+                  普通图鉴 · Lv.{{ normal?.level }}
+                </p>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  收集进度 {{ formatQuantity(normal?.progress ?? "0") }} / 下一级 {{ formatQuantity(normal?.nextProgress ?? "0") }}
+                </p>
+              </div>
+              <BaseButton variant="primary" size="sm" :disabled="!normal?.canClaim" @click="claimNormal">
+                领取
+              </BaseButton>
+            </div>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              <img v-if="normal?.rewards[0]?.image" :src="normal?.rewards[0]?.image" :alt="normal?.rewards[0]?.name" class="h-5 w-5 rounded object-contain">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">
+                本次可领奖励 {{ itemListLine(normal?.rewards) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-sm font-medium">
+                  巨大化重量积分 · {{ formatQuantity(giant?.score ?? "0") }}
+                </p>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  计分模式取值 {{ giant?.calculationMode ?? "未下发" }}（服务端未提供该字段释义，此处原样展示）
+                </p>
+              </div>
+              <BaseButton variant="primary" size="sm" :disabled="!giantClaimable.length" @click="claimGiant">
+                领取 {{ giantClaimable.length }} 档
+              </BaseButton>
+            </div>
+
+            <div class="mt-3 space-y-1.5">
+              <div
+                v-for="level in giantLevels"
+                :key="level.id"
+                class="flex items-center gap-2 rounded-lg bg-gray-50 px-2 py-1.5 text-xs dark:bg-gray-900/40"
+              >
+                <span class="shrink-0 font-medium">需 {{ formatQuantity(level.score) }} 分</span>
+                <span class="min-w-0 flex-1 truncate text-gray-500 dark:text-gray-400">{{ itemListLine(level.rewards) }}</span>
+                <span
+                  class="shrink-0 rounded px-1.5 py-0.5 text-[11px]"
+                  :class="level.claimed ? 'bg-gray-100 text-gray-500 dark:bg-gray-700' : (level.canClaim ? 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300')"
+                >
+                  {{ level.claimed ? '已领取' : (level.canClaim ? '可领取' : '未达标') }}
+                </span>
+              </div>
+              <p v-if="!giantLevels.length" class="text-xs text-gray-500">
+                服务端未下发巨大化档位。
+              </p>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="tab === 'mutation'">
+        <div v-if="!mutations.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-8 text-center text-sm text-gray-500 dark:border-gray-700">
+          暂无变异规则配置。
+        </div>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+          <div
+            v-for="row in mutations"
+            :key="row.type"
+            class="border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <p class="truncate text-sm font-medium">
+                {{ row.name }}
+              </p>
+              <span class="shrink-0 rounded bg-gray-50 px-1.5 py-0.5 text-[11px] text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                基础概率 {{ row.baseProbabilityPercent }}%
+              </span>
+            </div>
+            <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+              {{ row.description || '服务端未提供该变异的说明文案' }}
+            </p>
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <div v-if="!animals.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-8 text-center text-sm text-gray-500 dark:border-gray-700">
+          图鉴列表为空。
+        </div>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+          <div
+            v-for="animal in animals"
+            :key="animal.id"
+            class="border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+            :class="animal.unlocked ? '' : 'opacity-60'"
+          >
+            <div class="flex items-start gap-2">
+              <img v-if="animal.image" :src="animal.image" :alt="animal.name" class="h-10 w-10 shrink-0 rounded object-contain">
+              <div v-else class="i-fa-solid-paw h-10 w-10 shrink-0 text-xl text-gray-300" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium">
+                  {{ animal.name }}
+                </p>
+                <p class="mt-0.5 truncate text-[11px] text-gray-500">
+                  稀有度 {{ animal.rarity }} · 层级 {{ animal.layer }} · 进度 {{ formatQuantity(animal.progress) }}
+                </p>
+              </div>
+              <span v-if="animal.giant?.isNew" class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">NEW</span>
+            </div>
+            <p class="mt-2 truncate text-[11px] text-gray-500 dark:text-gray-400">
+              {{ animal.unlocked ? (animal.giant ? giantText(animal) : '尚未获得巨大化个体') : '未收录' }}
+            </p>
+            <div v-if="animal.giant" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span class="rounded bg-purple-50 px-1.5 py-0.5 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300">
+                {{ animal.giant.unlocked ? `巨大化 ${animal.giant.tierName || `T${animal.giant.tier}`}` : '巨大化未解锁' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </template>
+  </div>
+</template>

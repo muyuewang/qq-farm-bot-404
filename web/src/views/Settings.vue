@@ -9,13 +9,14 @@ import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
 import AutoCodeRefreshCard from '@/components/settings/AutoCodeRefreshCard.vue'
 import DeviceProtocolCard from '@/components/settings/DeviceProtocolCard.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
+import UnsupportedNotice from '@/components/settings/UnsupportedNotice.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAccountSettings } from '@/composables/settings/useAccountSettings'
 import { useAutomationSettings } from '@/composables/settings/useAutomationSettings'
 import { useStrategySettings } from '@/composables/settings/useStrategySettings'
-import { useUserSettings } from '@/composables/settings/useUserSettings'
+import { DEVICE_PROTOCOL_UNSUPPORTED_MESSAGE, useUserSettings } from '@/composables/settings/useUserSettings'
 import { useAdminSystemConfig } from '@/composables/useAdminSystemConfig'
-import { useSettingStore } from '@/stores/setting'
+import { AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE, useSettingStore } from '@/stores/setting'
 
 const settingStore = useSettingStore()
 const route = useRoute()
@@ -69,23 +70,6 @@ const tabs = [
 const modalVisible = ref(false)
 const defaultPlanSettingId = ref('')
 const defaultPlanApplyingId = ref('')
-const defaultPlanConfirmation = ref<{
-  action: 'set' | 'apply'
-  account: any
-} | null>(null)
-const defaultPlanConfirmationVisible = computed(() => !!defaultPlanConfirmation.value)
-const defaultPlanConfirmationTitle = computed(() =>
-  defaultPlanConfirmation.value?.action === 'set' ? '设置默认方案' : '应用默认方案',
-)
-const defaultPlanConfirmationMessage = computed(() => {
-  const pending = defaultPlanConfirmation.value
-  if (!pending)
-    return ''
-  const accountName = pending.account?.name || pending.account?.id
-  return pending.action === 'set'
-    ? `确定将 ${accountName} 的当前配置设置为默认方案吗？这会覆盖此前保存的默认方案。`
-    : `确定将默认方案应用到 ${accountName} 吗？这会覆盖该账号当前的相关配置。`
-})
 const modalConfig = ref({
   title: '',
   message: '',
@@ -107,6 +91,8 @@ const {
   systemConfigSaving,
   captureConfigSaving,
   captureConfigTesting,
+  captureConfigSupported,
+  captureConfigUnsupportedMessage,
   localSystemConfig,
   defaultSystemConfig,
   localCaptureConfig,
@@ -134,7 +120,6 @@ const {
   fillRandomDeviceId,
   fillRandomImei,
   applyDevicePreset,
-  fetchDeviceProtocol,
   syncLocalOfflineSettings,
   handleSaveOffline,
   handleTestOffline,
@@ -153,7 +138,6 @@ const {
   accountToDelete,
   showClearStoppedConfirm,
   clearStoppedLoading,
-  refreshWxCodesLoading,
   stoppedAccountsCount,
   isAddAccountDisabled,
   addAccountDisabledReason,
@@ -165,7 +149,6 @@ const {
   handleDelete,
   confirmDelete,
   toggleAccount,
-  refreshWxCodesNow,
   handleSaved,
   selectAccount,
   openClearStoppedConfirm,
@@ -260,23 +243,11 @@ async function saveSystemSettings() {
     return
   systemSettingsSaving.value = true
   try {
-    const devicePayload = {
-      enabled: !!deviceProtocolForm.value.enabled,
-      userAgent: String(deviceProtocolForm.value.userAgent || '').trim(),
-      deviceBrand: String(deviceProtocolForm.value.deviceBrand || '').trim(),
-      deviceModel: String(deviceProtocolForm.value.deviceModel || '').trim(),
-      deviceMac: String(deviceProtocolForm.value.deviceMac || '').trim(),
-      deviceId: String(deviceProtocolForm.value.deviceId || '').trim(),
-      imei: String(deviceProtocolForm.value.imei || '').trim(),
-    }
-    const [systemResult, captureResult, deviceResult] = await Promise.all([
-      api.post('/api/admin/system-config', { ...localSystemConfig.value, confirmed: true }),
-      api.post('/api/admin/capture-config', { ...localCaptureConfig.value, confirmed: true }),
-      api.post('/api/user/device-protocol', devicePayload),
-    ])
-    if (!systemResult.data?.ok || !captureResult.data?.ok || !deviceResult.data?.ok)
-      throw new Error('部分系统配置保存失败')
-    await Promise.all([loadSystemConfig(), loadCaptureConfig(), fetchDeviceProtocol()])
+    // 设备协议与抓取服务已改由后端其他配置或不再提供，统一保存只写仍存在的系统配置端点。
+    const { data } = await api.post('/api/settings/system-config', { ...localSystemConfig.value, confirmed: true })
+    if (!data?.ok)
+      throw new Error(data?.error || '系统配置保存失败')
+    await loadSystemConfig()
     showAlert('系统配置已统一保存并生效')
   }
   catch (error: any) {
@@ -287,73 +258,13 @@ async function saveSystemSettings() {
   }
 }
 
-async function applyDefaultPlan(account: any) {
-  if (!account?.id || defaultPlanSettingId.value || defaultPlanApplyingId.value)
-    return
-  const accountId = String(account.id)
-  defaultPlanApplyingId.value = accountId
-  try {
-    const { data } = await api.post('/api/settings/default-plan/apply', {}, {
-      headers: { 'x-account-id': accountId },
-    })
-    if (!data?.ok)
-      throw new Error(data?.error || '应用失败')
-    if (String(currentAccountId.value || '') === accountId) {
-      settingStore.clearSettingsState()
-      resetStrategyState()
-      await loadStrategyData()
-      syncLocalAutomationSettings()
-    }
-    showAlert(`已将默认方案应用到 ${account.name || account.id}`)
-  }
-  catch (error: any) {
-    showAlert(error.response?.data?.error || error.message || '应用默认方案失败', 'danger')
-  }
-  finally {
-    defaultPlanApplyingId.value = ''
-  }
-}
+// 上游不再有"默认方案"的导入/应用端点，直接提示不可用，不再进入确认弹窗。
+const DEFAULT_PLAN_UNSUPPORTED_MESSAGE = '当前后端版本未提供默认方案导入与应用'
 
-async function setDefaultPlan(account: any) {
-  if (!account?.id || defaultPlanSettingId.value || defaultPlanApplyingId.value)
+function requestDefaultPlanConfirmation(_action: 'set' | 'apply', account: any) {
+  if (!account?.id)
     return
-  const accountId = String(account.id)
-  defaultPlanSettingId.value = accountId
-  try {
-    const { data } = await api.post('/api/settings/default-plan/import', {}, {
-      headers: { 'x-account-id': accountId },
-    })
-    if (!data?.ok)
-      throw new Error(data?.error || '设置失败')
-    showAlert(`已将 ${account.name || account.id} 的配置设置为默认方案`)
-  }
-  catch (error: any) {
-    showAlert(error.response?.data?.error || error.message || '设置默认方案失败', 'danger')
-  }
-  finally {
-    defaultPlanSettingId.value = ''
-  }
-}
-
-function requestDefaultPlanConfirmation(action: 'set' | 'apply', account: any) {
-  if (!account?.id || defaultPlanSettingId.value || defaultPlanApplyingId.value)
-    return
-  defaultPlanConfirmation.value = { action, account }
-}
-
-function closeDefaultPlanConfirmation() {
-  defaultPlanConfirmation.value = null
-}
-
-function confirmDefaultPlanOperation() {
-  const pending = defaultPlanConfirmation.value
-  if (!pending)
-    return
-  closeDefaultPlanConfirmation()
-  if (pending.action === 'set')
-    void setDefaultPlan(pending.account)
-  else
-    void applyDefaultPlan(pending.account)
+  showAlert(DEFAULT_PLAN_UNSUPPORTED_MESSAGE, 'danger')
 }
 
 watch(currentAccountId, async () => {
@@ -369,7 +280,6 @@ watch(currentAccountId, async () => {
 onMounted(async () => {
   await Promise.all([loadSystemConfig(), loadCaptureConfig()])
   await fetchAccounts()
-  await fetchDeviceProtocol()
   selectFirstAccountIfNeeded()
   if (currentAccountId.value) {
     await loadStrategyData()
@@ -427,12 +337,10 @@ onMounted(async () => {
           :account-to-delete="accountToDelete"
           :show-clear-stopped-confirm="showClearStoppedConfirm"
           :clear-stopped-loading="clearStoppedLoading"
-          :refresh-wx-codes-loading="refreshWxCodesLoading"
           :default-plan-setting-id="defaultPlanSettingId"
           :default-plan-applying-id="defaultPlanApplyingId"
           @add="openAddModal"
           @clear-stopped="openClearStoppedConfirm"
-          @refresh-wx-codes="refreshWxCodesNow"
           @select="selectAccount"
           @toggle="toggleAccount"
           @settings="openAccountSettings"
@@ -521,58 +429,53 @@ onMounted(async () => {
             @test-capture="handleTestCaptureConfig"
           />
 
-          <DeviceProtocolCard
-            v-model:form="deviceProtocolForm"
-            v-model:selected-preset="selectedDevicePreset"
-            :loading="deviceProtocolLoading"
-            :saving="deviceProtocolSaving"
-            :preset-options="deviceProtocolPresetOptions"
-            :show-save="false"
-            @apply-preset="applyDevicePreset"
-            @random-mac="fillRandomDeviceMac"
-            @random-device-id="fillRandomDeviceId"
-            @random-imei="fillRandomImei"
-          />
+          <UnsupportedNotice :message="DEVICE_PROTOCOL_UNSUPPORTED_MESSAGE" :visible="false">
+            <DeviceProtocolCard
+              v-model:form="deviceProtocolForm"
+              v-model:selected-preset="selectedDevicePreset"
+              :loading="deviceProtocolLoading"
+              :saving="deviceProtocolSaving"
+              :preset-options="deviceProtocolPresetOptions"
+              :show-save="false"
+              @apply-preset="applyDevicePreset"
+              @random-mac="fillRandomDeviceMac"
+              @random-device-id="fillRandomDeviceId"
+              @random-imei="fillRandomImei"
+            />
+          </UnsupportedNotice>
 
-          <AutoCodeRefreshCard
-            v-model:config="localAutoCodeRefresh"
-            :current-account-name="currentAccountName"
-            :current-account-id="currentAccountId"
-            :loading="settingsLoading"
-            :saving="autoCodeRefreshSaving"
-            :refreshing="autoCodeRefreshing"
-            @save="saveAutoCodeRefreshSettings"
-            @refresh="runAutoCodeRefreshNow"
-          />
+          <UnsupportedNotice :message="AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE" :visible="false">
+            <AutoCodeRefreshCard
+              v-model:config="localAutoCodeRefresh"
+              :current-account-name="currentAccountName"
+              :current-account-id="currentAccountId"
+              :loading="settingsLoading"
+              :saving="autoCodeRefreshSaving"
+              :refreshing="autoCodeRefreshing"
+              @save="saveAutoCodeRefreshSettings"
+              @refresh="runAutoCodeRefreshNow"
+            />
+          </UnsupportedNotice>
 
-          <AdminSystemPanel
-            v-model:local-system-config="localSystemConfig"
-            v-model:local-capture-config="localCaptureConfig"
-            section="capture"
-            :show-heading="false"
-            :show-save="false"
-            :default-system-config="defaultSystemConfig"
-            :platform-options="platformOptions"
-            :os-options="osOptions"
-            :system-config-saving="systemConfigSaving"
-            :capture-config-saving="captureConfigSaving"
-            :capture-config-testing="captureConfigTesting"
-            @test-capture="handleTestCaptureConfig"
-          />
+          <UnsupportedNotice :message="captureConfigUnsupportedMessage" :visible="!captureConfigSupported">
+            <AdminSystemPanel
+              v-model:local-system-config="localSystemConfig"
+              v-model:local-capture-config="localCaptureConfig"
+              section="capture"
+              :show-heading="false"
+              :show-save="false"
+              :default-system-config="defaultSystemConfig"
+              :platform-options="platformOptions"
+              :os-options="osOptions"
+              :system-config-saving="systemConfigSaving"
+              :capture-config-saving="captureConfigSaving"
+              :capture-config-testing="captureConfigTesting"
+              @test-capture="handleTestCaptureConfig"
+            />
+          </UnsupportedNotice>
         </div>
       </div>
     </div>
-
-    <ConfirmModal
-      :show="defaultPlanConfirmationVisible"
-      :title="defaultPlanConfirmationTitle"
-      :message="defaultPlanConfirmationMessage"
-      type="danger"
-      confirm-text="确认执行"
-      @confirm="confirmDefaultPlanOperation"
-      @close="closeDefaultPlanConfirmation"
-      @cancel="closeDefaultPlanConfirmation"
-    />
 
     <ConfirmModal
       :show="modalVisible"

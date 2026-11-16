@@ -38,6 +38,13 @@ export const menuRoutes: MenuItem[] = [
     component: () => import('@/views/Pet.vue'),
   },
   {
+    path: 'ranch',
+    name: 'ranch',
+    label: '牧场',
+    icon: 'i-carbon-wheat',
+    component: () => import('@/views/Ranch.vue'),
+  },
+  {
     path: 'activity',
     name: 'activity',
     label: '活动',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { onMounted, onUnmounted } from 'vue'
+import { onUnmounted } from 'vue'
 import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
@@ -8,10 +8,6 @@ import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
 const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
-
-onMounted(() => {
-  appStore.fetchLoginPageConfig()
-})
 
 onUnmounted(() => {
   // 清理逻辑

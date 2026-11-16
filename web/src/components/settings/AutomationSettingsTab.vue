@@ -113,11 +113,22 @@ function qixiPriority() {
     : []
 }
 async function loadQixiFriends() {
-  if (!props.currentAccountId)
+  // 活动已结束、卡片被常量关闭时不发请求，避免设置页弹无关的失败提示。
+  if (!SHOW_QIXI_ACTIVITY || !props.currentAccountId)
     return
   try {
-    const { data } = await api.get('/api/activity/qixi', { headers: { 'x-account-id': props.currentAccountId } })
-    qixiFriends.value = data?.friends || []
+    // 旧 /api/activity/qixi 会顺带下发好友；新后端把好友列表独立到 /api/friends。
+    const { data } = await api.get('/api/friends', {
+      headers: { 'x-account-id': props.currentAccountId },
+      skipErrorToast: true,
+    } as any)
+    qixiFriends.value = (Array.isArray(data?.data) ? data.data : [])
+      .map((friend: any) => ({
+        gid: Number(friend?.gid),
+        name: String(friend?.name || friend?.nickname || ''),
+        level: Number(friend?.level) || undefined,
+      }))
+      .filter((friend: any) => Number.isFinite(friend.gid) && friend.gid > 0)
   }
   catch { qixiFriends.value = [] }
 }

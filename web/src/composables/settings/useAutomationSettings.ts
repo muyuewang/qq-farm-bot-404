@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { ref } from 'vue'
 import api from '@/api'
 import { useSettingStore } from '@/stores/setting'
+import { RANCH_AUTOMATION_DEFAULTS } from '@/utils/ranch'
 
 type AlertType = 'primary' | 'danger'
 
@@ -81,6 +82,7 @@ const defaultAutomation = {
   fertilizer_multi_season: false,
   fertilizer_land_types: [...allFertilizerLandTypes],
   fertilizer_smart_seconds: 300,
+  ...RANCH_AUTOMATION_DEFAULTS,
 }
 
 export function useAutomationSettings({

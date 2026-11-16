@@ -4,7 +4,7 @@
  * 从上游 web/src/stores/pet-diary.ts 移植，改用本地惯例：
  * - 用 isCurrentAccount() 防陈旧响应（上游用 generation 计数器）
  * - 错误提取走 err?.response?.data?.error || err?.message || 兜底
- * - 接口前缀 /api/activity/pet-diary/（上游为 /api/activity-center/pet-diary）
+ * - 接口前缀 /api/activity-center/pet-diary
  */
 import { defineStore } from 'pinia'
 import { onScopeDispose, ref } from 'vue'
@@ -280,7 +280,7 @@ export const usePetDiaryStore = defineStore('pet-diary', () => {
     pending.value = 'load'
     error.value = ''
     try {
-      const { data } = await api.get('/api/activity/pet-diary/state', {
+      const { data } = await api.get('/api/activity-center/pet-diary', {
         headers: { 'x-account-id': id },
         timeout: READ_TIMEOUT_MS,
         skipErrorToast: true,
@@ -328,7 +328,7 @@ export const usePetDiaryStore = defineStore('pet-diary', () => {
     clearNotice()
     try {
       const { data } = await api.post(
-        '/api/activity/pet-diary/operate',
+        '/api/activity-center/pet-diary/operate',
         { action, params },
         {
           headers: { 'x-account-id': id },
@@ -390,8 +390,8 @@ export const usePetDiaryStore = defineStore('pet-diary', () => {
     const gen = generation
     try {
       const path = kind === 'friend'
-        ? '/api/activity/pet-diary/friend'
-        : '/api/activity/pet-diary/records'
+        ? '/api/activity-center/pet-diary/friend'
+        : '/api/activity-center/pet-diary/records'
       const params = kind === 'friend' ? { gid } : { kind }
       const { data } = await api.get(path, {
         params,

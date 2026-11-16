@@ -63,7 +63,6 @@ async function refreshStatusFallback() {
 }
 
 onMounted(() => {
-  appStore.fetchLoginPageConfig()
   accountStore.fetchAccounts()
   checkConnection()
   // 获取当前用户信息
@@ -157,7 +156,7 @@ const hasActiveMysteryOffer = computed(() => {
   const offer = mysteryOffer.value
   if (!currentAccountId.value || mysteryOfferAccountId.value !== String(currentAccountId.value))
     return false
-  if (!offer?.active || offer.purchased)
+  if (!offer?.active)
     return false
   const endTime = Number(offer.endTime || 0)
   const endMs = endTime > 10_000_000_000 ? endTime : endTime * 1000

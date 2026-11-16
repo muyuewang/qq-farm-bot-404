@@ -29,7 +29,6 @@ export const useAppStore = defineStore('app', () => {
   const currentTheme = ref<Theme>((localStorage.getItem(THEME_KEY) as Theme) || 'light-blue')
   const showThemePanel = ref(false)
   const loginPageConfig = ref<LoginPageConfig>({ ...defaultLoginPageConfig })
-  let loginPageConfigPromise: Promise<void> | null = null
 
   const themes: Record<Theme, {
     name: string
@@ -147,23 +146,6 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  async function fetchLoginPageConfig() {
-    if (loginPageConfigPromise)
-      return loginPageConfigPromise
-
-    loginPageConfigPromise = api.get('/api/public/login-links').then((res) => {
-      if (res.data?.ok && res.data.data) {
-        loginPageConfig.value = { ...defaultLoginPageConfig, ...res.data.data }
-        document.title = loginPageConfig.value.title || defaultLoginPageConfig.title
-      }
-    }).catch(() => {
-      // 保留默认品牌，页面仍可正常使用。
-    }).finally(() => {
-      loginPageConfigPromise = null
-    })
-    return loginPageConfigPromise
-  }
-
   function applyTheme(theme: Theme) {
     if (!themes[theme]) {
       theme = 'light-pink'
@@ -225,6 +207,5 @@ export const useAppStore = defineStore('app', () => {
     closeSidebar,
     openSidebar,
     fetchTheme,
-    fetchLoginPageConfig,
   }
 })

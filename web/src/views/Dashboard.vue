@@ -9,6 +9,7 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
+import { useIllustratedStore } from '@/stores/illustrated'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
@@ -17,6 +18,7 @@ import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/ut
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
 const bagStore = useBagStore()
+const illustratedStore = useIllustratedStore()
 const toastStore = useToastStore()
 
 const {
@@ -32,7 +34,7 @@ const { dashboardItems } = storeToRefs(bagStore)
 const logContainer = ref<HTMLElement | null>(null)
 const autoScroll = ref(true)
 const lastBagFetchAt = ref(0)
-const illustratedLevels = ref({ crop: 0, mutant: 0 })
+const illustratedLevels = ref<{ crop: number | null, mutant: number | null }>({ crop: null, mutant: null })
 let illustratedLevelRequestId = 0
 const clearingLogs = ref(false)
 const refreshingLogs = ref(false)
@@ -194,7 +196,7 @@ const stealCountdownTotal = ref(1)
 
 function resetDashboardState() {
   illustratedLevelRequestId += 1
-  illustratedLevels.value = { crop: 0, mutant: 0 }
+  illustratedLevels.value = { crop: null, mutant: null }
   lastBagFetchAt.value = 0
   localUptime.value = 0
   localNextFarmRemainSec = 0
@@ -449,22 +451,20 @@ async function refreshIllustratedLevels() {
 
   const accountId = currentAccountId.value
   const requestId = ++illustratedLevelRequestId
-  const headers = { 'x-account-id': accountId }
   try {
-    const [crop, mutant] = await Promise.all([
-      api.get('/api/illustrated', { params: { illustrated_type: 1 }, headers }),
-      api.get('/api/illustrated', { params: { illustrated_type: 2 }, headers }),
-    ])
+    // 新版后端只有一个快照接口：作物与超变两本图鉴在同一次请求里返回。
+    await illustratedStore.fetchSnapshot(accountId)
     if (requestId !== illustratedLevelRequestId || accountId !== currentAccountId.value)
       return
+    const snapshot = illustratedStore.snapshot
     illustratedLevels.value = {
-      crop: Number(crop.data?.data?.level) || 0,
-      mutant: Number(mutant.data?.data?.level) || 0,
+      crop: snapshot.crop ? snapshot.crop.level : null,
+      mutant: snapshot.mutant ? snapshot.mutant.level : null,
     }
   }
   catch {
     if (requestId === illustratedLevelRequestId)
-      illustratedLevels.value = { crop: 0, mutant: 0 }
+      illustratedLevels.value = { crop: null, mutant: null }
   }
 }
 
@@ -733,7 +733,7 @@ useIntervalFn(updateCountdowns, 1000)
               作物图鉴
             </div>
             <div class="font-bold">
-              Lv.{{ illustratedLevels.crop }}
+              Lv.{{ illustratedLevels.crop ?? '—' }}
             </div>
           </div>
           <div>
@@ -742,7 +742,7 @@ useIntervalFn(updateCountdowns, 1000)
               超变图鉴
             </div>
             <div class="font-bold">
-              Lv.{{ illustratedLevels.mutant }}
+              Lv.{{ illustratedLevels.mutant ?? '—' }}
             </div>
           </div>
         </div>
