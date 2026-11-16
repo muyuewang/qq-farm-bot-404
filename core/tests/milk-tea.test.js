@@ -28,7 +28,7 @@ function harness() {
     mock('utils/network', { sendMsgAsync: async (_service, method, body) => {
         if (method === 'GetGroup') {
             if (failRefresh && writes) throw new Error('offline');
-            return { body: encode(types.MilkTeaGetGroupReply, { group: { head: { activity_id: '2026110100' }, children: [milk, { head: { activity_id: '2026110102' }, shop: { goods: [goods] } }, { head: { activity_id: '2026110103' }, growth_fund: fund }] } }) };
+            return { body: encode(types.MilkTeaGetGroupReply, { group: { head: { activity_id: '2026110100' }, children: [milk, { head: { activity_id: '2026110102', begin_time: 1792029600, end_time: 1794844799 }, shop: { goods: [goods] } }, { head: { activity_id: '2026110103' }, growth_fund: fund }] } }) };
         }
         const req = types.MilkTeaOperateRequest.toObject(types.MilkTeaOperateRequest.decode(body), { longs: String });
         const cmd = Number(req.operate_type);
@@ -81,16 +81,20 @@ test('craft consumes complete UID stacks and rejects locked, changed or duplicat
     assert.deepEqual(result.result.crafted_cups, { 2: 20 });
     assert.deepEqual(h.calls[0].milk_tea_craft, { fruit_uids: ['900'] });
 });
-test('shop retains finite limits and enforces level, price and settlement conditions', async () => {
+test('shop retains finite limits and price conditions, and stays buyable while settling', async () => {
     const h = harness();
     assert.equal((await h.service.getMilkTeaActivity('exchange')).goods[0].remaining, 106);
     h.goods.cond_hints = [{ cond_type: 'level', current: 1, target: 3, satisfied: false }];
     await assert.rejects(h.service.operateMilkTeaActivity('exchange', { goodsId: 301, count: 1, expectedCosts: h.goods.cost }), /条件/);
     h.goods.cond_hints = [];
     await assert.rejects(h.service.operateMilkTeaActivity('exchange', { goodsId: 301, count: 1, expectedCosts: [{ id: 1001, count: 1 }] }), /费用已变化/);
-    h.setTime(1794672000);
-    await assert.rejects(h.service.operateMilkTeaActivity('exchange', { goodsId: 301, count: 1, expectedCosts: h.goods.cost }), /条件/);
     assert.equal(h.calls.length, 0);
+    // 兑换商店跟随自己的活动窗口，结算期只停雇佣/加速等经营动作，不再屏蔽种子兑换。
+    h.setTime(1794672000);
+    assert.equal((await h.service.getMilkTeaActivity('exchange')).settling, true);
+    assert.equal((await h.service.getMilkTeaActivity('exchange')).goods[0].available, true);
+    await h.service.operateMilkTeaActivity('exchange', { goodsId: 301, count: 1, expectedCosts: h.goods.cost });
+    assert.equal(h.calls.length, 1);
 });
 test('fund unlock is serialized and claims require paid unlock without duplicate charges', async () => {
     const h = harness();

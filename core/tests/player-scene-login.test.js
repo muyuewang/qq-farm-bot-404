@@ -20,7 +20,7 @@ async function harness(platform) {
         '../services/ace': { startAceRuntime: () => steps.push('ace') },
         '../services/status': { updateStatusFromLogin() {} },
         './crypto-wasm': { bindUser: async () => steps.push('bind'), getEncryptedInitInfo: () => '' },
-        './utils': { toLong: Number, toNum: Number, log() {}, logWarn() {}, syncServerTime() {} },
+        './utils': { toLong: Number, toNum: Number, log() {}, logWarn() {}, syncServerTime() {}, getServerTimeSec: () => 0, formatDateKeyInTimeZone: () => '1970-01-01' },
     };
     const sandbox = { require: name => overrides[name] || realRequire(name), module: { exports: {} }, exports: {}, Buffer, console: { warn() {} }, process, steps };
     vm.runInNewContext(`${fs.readFileSync(file, 'utf8')}

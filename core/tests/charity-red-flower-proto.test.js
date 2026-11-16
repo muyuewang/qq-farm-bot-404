@@ -24,7 +24,7 @@ test('charity red flower requests reproduce the capture-verified selectors', asy
     assert.equal(encode({ operate_type: 36, donate_love: {} }), '0895e38ec6071024ba0800');
     assert.equal(encode({ operate_type: 37, claim_progress_reward: { target: 30 } }), '0895e38ec6071025c20802081e');
     assert.equal(encode({ operate_type: 38, send_public_fund: {} }), '0895e38ec6071026ca0800');
-    assert.equal(encode({ operate_type: 39, query: { accepted: true } }), '0895e38ec6071027d208020801');
+    assert.equal(encode({ operate_type: 39, agreement: { accepted: true } }), '0895e38ec6071027d208020801');
 });
 
 test('charity red flower reward replies decode the verified result selectors', async () => {
