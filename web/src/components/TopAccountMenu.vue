@@ -20,9 +20,7 @@ const showRemarkModal = ref(false)
 const showCareerModal = ref(false)
 const careerLoading = ref(false)
 const careerError = ref('')
-const careerItems = ref<any[]>([])
 const careerProfile = ref<Record<string, any>>({})
-const careerDetailAvailable = ref(false)
 const accountToEdit = ref<any>(null)
 const failedAvatars = ref(new Set<string>())
 
@@ -157,8 +155,6 @@ async function loadCareer() {
       totalHarvestCount: career.harvest,
       totalStealCount: career.steal,
     }
-    careerItems.value = []
-    careerDetailAvailable.value = false
   }
   catch (error: any) {
     careerError.value = error?.response?.data?.error || error?.message || '生涯记录读取失败'
@@ -415,8 +411,6 @@ async function handleAccountSaved() {
         :show="showCareerModal"
         :account="currentAccount"
         :profile="careerProfile"
-        :items="careerItems"
-        :detail-available="careerDetailAvailable"
         :loading="careerLoading"
         :error="careerError"
         @close="showCareerModal = false"

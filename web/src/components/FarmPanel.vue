@@ -24,13 +24,12 @@ const farmViewport = ref<HTMLElement | null>(null)
 const farmStageWidth = ref<number | null>(null)
 const FARM_CANVAS_WIDTH = 1200
 const FARM_CANVAS_HEIGHT = 650
-type PendingLandAction = 'fertilize' | 'remove'
+type PendingLandAction = 'fertilize'
 
 const confirmConfig = ref({
   title: '',
   message: '',
   opType: '',
-  bulkAction: '' as 'removeAll' | '',
   landAction: '' as PendingLandAction | '',
   land: null as any | null,
   type: 'primary' as 'primary' | 'danger',
@@ -41,7 +40,7 @@ async function executeOperate() {
     return
 
   const config = confirmConfig.value
-  if (!config.opType && !config.bulkAction && (!config.landAction || !config.land))
+  if (!config.opType && (!config.landAction || !config.land))
     return
 
   confirmVisible.value = false
@@ -50,14 +49,8 @@ async function executeOperate() {
     if (config.opType) {
       await farmStore.operate(currentAccountId.value, config.opType)
     }
-    else if (config.bulkAction === 'removeAll') {
-      await farmStore.removeAllPlants(currentAccountId.value)
-    }
     else if (config.landAction === 'fertilize') {
       await farmStore.fertilizeLand(currentAccountId.value, Number(config.land.id))
-    }
-    else if (config.landAction === 'remove') {
-      await farmStore.removePlant(currentAccountId.value, Number(config.land.id))
     }
   }
   catch (error: any) {
@@ -84,26 +77,9 @@ function handleOperate(opType: string) {
     title: '确认操作',
     message: confirmMap[opType] || '确定执行此操作吗？',
     opType,
-    bulkAction: '',
     landAction: '',
     land: null,
     type: 'primary',
-  }
-  confirmVisible.value = true
-}
-
-function handleRemoveAllPlants() {
-  if (!currentAccountId.value)
-    return
-
-  confirmConfig.value = {
-    title: '确认一键铲除',
-    message: '确定要铲除全部已种植作物吗？此操作不可恢复。',
-    opType: '',
-    bulkAction: 'removeAll',
-    landAction: '',
-    land: null,
-    type: 'danger',
   }
   confirmVisible.value = true
 }
@@ -120,31 +96,9 @@ function handleLandFertilize(land: any) {
     title: '确认催熟',
     message: `确定要对 ${getLandActionName(land)} 使用有机肥料催熟吗？`,
     opType: '',
-    bulkAction: '',
     landAction: 'fertilize',
     land,
     type: 'primary',
-  }
-  confirmVisible.value = true
-}
-
-function handleLandRemove(land: any) {
-  if (!currentAccountId.value)
-    return
-
-  if (!farmStore.landRemovalSupported) {
-    toast.error('当前后端版本未提供铲除作物功能')
-    return
-  }
-
-  confirmConfig.value = {
-    title: '确认铲除',
-    message: `确定要铲除 ${getLandActionName(land)} 吗？此操作不可恢复。`,
-    opType: '',
-    bulkAction: '',
-    landAction: 'remove',
-    land,
-    type: 'danger',
   }
   confirmVisible.value = true
 }
@@ -268,15 +222,6 @@ onUnmounted(() => {
             <span class="hidden sm:inline">{{ op.label }}</span>
             <span class="sm:hidden">{{ op.type === 'clear' ? '务农' : op.label.replace('一键', '') }}</span>
           </button>
-          <button
-            class="flex items-center justify-center gap-1.5 rounded bg-red-600 px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed hover:bg-red-700 disabled:opacity-50"
-            :disabled="operating || !farmStore.landRemovalSupported"
-            :title="farmStore.landRemovalSupported ? '铲除全部已种植作物' : '当前后端版本未提供一键铲除功能'"
-            @click="handleRemoveAllPlants"
-          >
-            <div class="i-carbon-trash-can" />
-            一键铲除
-          </button>
         </div>
       </div>
 
@@ -361,7 +306,6 @@ onUnmounted(() => {
               :weather="weather"
               :style="farmStageStyle"
               @fertilize="handleLandFertilize"
-              @remove="handleLandRemove"
             />
           </div>
         </div>

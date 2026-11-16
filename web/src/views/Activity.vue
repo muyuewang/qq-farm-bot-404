@@ -12,12 +12,14 @@ import RainPoemActivityPanel from '@/components/activity/RainPoemActivityPanel.v
 import SolarTermsActivityPanel from '@/components/activity/SolarTermsActivityPanel.vue'
 import StarRecordPanel from '@/components/activity/StarRecordPanel.vue'
 import WishShareActivityPanel from '@/components/activity/WishShareActivityPanel.vue'
+import RanchActivitiesPanel from '@/components/ranch/RanchActivitiesPanel.vue'
+import RanchSceneHost from '@/components/ranch/RanchSceneHost.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useAccountStore } from '@/stores/account'
 import { useActivityStore } from '@/stores/activity'
+import { useSceneStore } from '@/stores/scene'
 import { useToastStore } from '@/stores/toast'
-import { useUserStore } from '@/stores/user'
 
 const MilkTeaActivityPanel = defineAsyncComponent(() => import('@/components/activity/MilkTeaActivityPanel.vue'))
 const PetDiaryActivityPanel = defineAsyncComponent(() => import('@/components/activity/PetDiaryActivityPanel.vue'))
@@ -77,9 +79,10 @@ const L: ActivityLabels = {
 
 const accountStore = useAccountStore()
 const activityStore = useActivityStore()
+const sceneStore = useSceneStore()
 const toast = useToastStore()
-const userStore = useUserStore()
 const { currentAccountId, currentAccount } = storeToRefs(accountStore)
+const { scene } = storeToRefs(sceneStore)
 const {
   heluActivity: activity,
   heluLoading,
@@ -312,6 +315,9 @@ function formatActivityDateTime(timestampMs: number) {
 }
 
 async function loadActivityDirectory() {
+  // 牧场场景只读牧场快照，这份农场活动目录没有消费方，切回农场时再拉。
+  if (scene.value === 'ranch')
+    return
   if (!currentAccountId.value) {
     activityDirectoryWindows.value = []
     return
@@ -341,6 +347,8 @@ async function loadActivityDirectory() {
 }
 
 async function refreshAll() {
+  if (scene.value === 'ranch')
+    return
   if (currentAccountId.value && !rainPoemLoading.value && !heluLoading.value && !qixiLoading.value) {
     const requests = []
     if (SHOW_STAR_ACTIVITY)
@@ -420,6 +428,10 @@ watch(currentAccountId, () => {
   loadActivityDirectory()
   refreshAll()
 })
+watch(scene, () => {
+  loadActivityDirectory()
+  refreshAll()
+})
 watch(rainPoemActivityActive, (active) => {
   if (active) {
     refreshAll()
@@ -453,7 +465,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="space-y-4">
+  <RanchSceneHost v-if="scene === 'ranch'" view="activities" title="牧场活动" icon="i-carbon-gift">
+    <template #default="{ state, onRequest }">
+      <RanchActivitiesPanel :state="state" @request="onRequest" />
+    </template>
+  </RanchSceneHost>
+
+  <section v-else class="space-y-4">
     <header v-if="SHOW_STAR_ACTIVITY" class="relative min-h-40 overflow-hidden rounded-lg bg-[#071b43] shadow-sm">
       <img
         src="/activity/star-festival/star-sky.png"
@@ -501,11 +519,6 @@ onUnmounted(() => {
           <BaseButton variant="primary" :loading="heluLoading" :disabled="!currentAccountId" @click="refreshAll">
             {{ L.refresh }}
           </BaseButton>
-          <BaseButton v-if="userStore.isAdmin" variant="secondary" disabled title="当前后端版本未提供活动目录扫描">
-            <span class="i-carbon-renew mr-1.5" />
-            更新活动目录
-            <span class="ml-1 text-[10px]">未提供</span>
-          </BaseButton>
         </div>
       </div>
     </header>
@@ -532,11 +545,6 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
-        <BaseButton v-if="userStore.isAdmin" variant="secondary" disabled title="当前后端版本未提供活动目录扫描">
-          <span class="i-carbon-renew mr-1.5" />
-          更新活动目录
-          <span class="ml-1 text-[10px]">未提供</span>
-        </BaseButton>
       </header>
 
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

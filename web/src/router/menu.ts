@@ -1,3 +1,5 @@
+import type { GameScene } from '@/stores/scene'
+
 export interface MenuItem {
   path: string
   name: string
@@ -6,8 +8,15 @@ export interface MenuItem {
   component: () => Promise<any>
   adminOnly?: boolean
   showInNav?: boolean
+  /** 该页面属于哪些浏览场景；不填表示两个场景都显示（概览、设置这类与场景无关的页面）。 */
+  scenes?: GameScene[]
 }
 
+/**
+ * 农场和牧场是同一个账号下的两个游戏场景，背包、商店、图鉴、好友在两边各有一套协议。
+ * 这里不再单列「牧场」入口：同一个子系统长两份页面会让人分不清当前在看哪一边，
+ * 改由顶部栏的场景开关整体切换，菜单跟着换，页面内部再按场景渲染对应面板。
+ */
 export const menuRoutes: MenuItem[] = [
   {
     path: '',
@@ -36,13 +45,7 @@ export const menuRoutes: MenuItem[] = [
     label: '宠物',
     icon: 'i-fa-solid-paw',
     component: () => import('@/views/Pet.vue'),
-  },
-  {
-    path: 'ranch',
-    name: 'ranch',
-    label: '牧场',
-    icon: 'i-carbon-wheat',
-    component: () => import('@/views/Ranch.vue'),
+    scenes: ['farm'],
   },
   {
     path: 'activity',
@@ -71,6 +74,7 @@ export const menuRoutes: MenuItem[] = [
     label: '分析',
     icon: 'i-carbon-analytics',
     component: () => import('@/views/Analytics.vue'),
+    scenes: ['farm'],
   },
   {
     path: 'settings',

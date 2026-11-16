@@ -4,17 +4,12 @@ import api from '@/api'
 
 export interface PetDog { id: number, name: string, image: string, desc: string, level: number, rarity: number, owned: boolean, activatable: boolean, deployed: boolean }
 export interface PetFood { id: number, name: string, image: string, count: number, days: number, duration: number }
-export interface CapitalMode { enabled: boolean, dogId: number, leadSeconds: number }
 
 const DAY_SECONDS = 86400
 
 export const usePetStore = defineStore('pet', () => {
   const overview = ref({ dogs: [] as PetDog[], foods: [] as PetFood[], deployedId: 0, foodSeconds: 0, protectSeconds: 2592000 })
   const logs = ref<any[]>([])
-  const capitalMode = ref<CapitalMode>({ enabled: false, dogId: 0, leadSeconds: 10 })
-  // 上游后端已移除 DogService 资本模式（自动守护）的服务端实现与路由，
-  // 这里保留标记只为让页面能明确告知用户，而不是用默认值冒充已读取到的配置。
-  const capitalModeSupported = ref(false)
   const loading = ref(false)
   const mutating = ref(false)
 
@@ -54,11 +49,6 @@ export const usePetStore = defineStore('pet', () => {
     const { data } = await api.get('/api/pets/protect-logs', { headers: headers(accountId), timeout: 60000 })
     logs.value = Array.isArray(data?.data?.logs) ? data.data.logs : []
   }
-  async function fetchCapitalMode(accountId: string) {
-    capitalModeSupported.value = false
-    capitalMode.value = { enabled: false, dogId: 0, leadSeconds: 10 }
-    void accountId
-  }
   async function mutate(accountId: string, path: string, body = {}) {
     mutating.value = true
     try {
@@ -76,25 +66,16 @@ export const usePetStore = defineStore('pet', () => {
   // 上游 food/use 的入参名是 itemId，旧页面仍按 foodId 传参。
   const feed = (accountId: string, foodId: number, count: number) =>
     mutate(accountId, '/api/pets/food/use', { itemId: foodId, count })
-  async function saveCapitalMode(accountId: string, config: CapitalMode) {
-    void accountId
-    void config
-    throw new Error('当前后端版本未提供资本模式（自动守护）功能')
-  }
   return {
     overview,
     logs,
-    capitalMode,
-    capitalModeSupported,
     loading,
     mutating,
     fetchOverview,
     fetchLogs,
-    fetchCapitalMode,
     activate,
     deploy,
     withdraw,
     feed,
-    saveCapitalMode,
   }
 })

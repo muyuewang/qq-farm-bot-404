@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import BaseButton from '@/components/ui/BaseButton.vue'
 import { formatGoldAmount } from '@/utils/number-format'
 
 defineProps<{
@@ -7,7 +6,6 @@ defineProps<{
   statusLabel: string
   progressHint: string
   unlockHint: string
-  actionLabel: string
 }>()
 
 const L = {
@@ -76,14 +74,6 @@ const L = {
           {{ unlockHint }}
         </div>
       </div>
-
-      <BaseButton
-        class="mt-auto w-full"
-        variant="secondary"
-        disabled
-      >
-        {{ actionLabel }}
-      </BaseButton>
     </div>
   </article>
 </template>

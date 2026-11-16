@@ -135,7 +135,7 @@ function stageText(animal: RanchAnimal) {
       </div>
 
       <div v-if="!facility.ranch?.animals.length" class="mt-3 rounded-lg bg-gray-50 px-3 py-4 text-center text-xs text-gray-500 dark:bg-gray-900/40">
-        该{{ facility.name }}为空，可在「我的农场 → 我的背包」的牧场场景里选中幼崽后放养。
+        该{{ facility.name }}为空，可在同一页的「我的背包」里选中幼崽后放养。
       </div>
     </div>
   </div>

@@ -11,9 +11,9 @@ import FriendsSyncSettings from '@/components/friends/FriendsSyncSettings.vue'
 import FriendsTabs from '@/components/friends/FriendsTabs.vue'
 import RanchFriendsPanel from '@/components/ranch/RanchFriendsPanel.vue'
 import RanchSceneHost from '@/components/ranch/RanchSceneHost.vue'
-import SceneSwitch from '@/components/ui/SceneSwitch.vue'
 import { useAccountStore } from '@/stores/account'
 import { useFriendStore } from '@/stores/friend'
+import { useSceneStore } from '@/stores/scene'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatGoldAmount } from '@/utils/number-format'
@@ -23,8 +23,10 @@ const GID_BATCH_SEPARATOR_RE = /[,，\s]+/
 const accountStore = useAccountStore()
 const friendStore = useFriendStore()
 const statusStore = useStatusStore()
+const sceneStore = useSceneStore()
 const toast = useToastStore()
 const { currentAccountId, currentAccount } = storeToRefs(accountStore)
+const { scene } = storeToRefs(sceneStore)
 const {
   friends,
   loading,
@@ -55,7 +57,6 @@ const activeTab = ref<FriendTabKey>('friends')
  * game_scene_id=2 的快照上，串门与牧场互动要先进场景再 quote → execute。
  * 黑名单、访客记录这些只有农场才有的概念在牧场场景下不展示。
  */
-const friendsScene = ref<'farm' | 'ranch'>('farm')
 const ranchHostGid = ref('')
 const ranchParams = computed(() => (ranchHostGid.value ? { hostGid: ranchHostGid.value } : {}))
 const showConfirm = ref(false)
@@ -77,12 +78,17 @@ const interactFilters = [
   { key: 'help', label: '帮忙' },
   { key: 'bad', label: '捣乱' },
 ]
-const dogFilter = ref<'all' | 'noGuardDog' | 'guardDog'>('all')
-const dogFilters = [
-  { key: 'all', label: '全部' },
-  { key: 'noGuardDog', label: '无护主犬' },
-  { key: 'guardDog', label: '有护主犬' },
-] as const
+
+/**
+ * 好友狗状态由后端在每日同步和进过对方农场时写入缓存，当天没确认过的是 unknown。
+ * unknown 不能归进「无护主犬」，否则会把没读到当成确认结论。
+ */
+const petFilter = ref<'all' | 'protect' | 'none'>('all')
+const petFilters: Array<{ key: 'all' | 'protect' | 'none', label: string }> = [
+  { key: 'all', label: '全部好友' },
+  { key: 'protect', label: '护主犬' },
+  { key: 'none', label: '无护主犬' },
+]
 const expandedFriends = ref<Set<string>>(new Set())
 const currentPage = ref(1)
 const pageSize = 25
@@ -185,26 +191,21 @@ const sortedFriends = computed(() => {
   })
 })
 
-// 上游不再批量下发好友狗形象，没有 dogId 时不能把“未知”当成“无护主犬”。
-const hasDogInfo = computed(() =>
-  sortedFriends.value.some((friend: any) => friend?.dogId !== undefined && friend?.dogId !== null),
+const protectDogCount = computed(
+  () => friends.value.filter((friend: any) => friend?.petState === 'protect').length,
 )
-const guardDogCount = computed(() =>
-  sortedFriends.value.filter((friend: any) => Number(friend?.dogId) === 90021).length,
+const noGuardDogCount = computed(
+  () => friends.value.filter((friend: any) => friend?.petState === 'none').length,
 )
-const noGuardDogCount = computed(() => sortedFriends.value.length - guardDogCount.value)
-
-const dogFilteredFriends = computed(() => {
-  if (dogFilter.value === 'guardDog')
-    return sortedFriends.value.filter((friend: any) => Number(friend?.dogId) === 90021)
-  if (dogFilter.value === 'noGuardDog')
-    return sortedFriends.value.filter((friend: any) => Number(friend?.dogId) !== 90021)
-  return sortedFriends.value
-})
+const hasPetState = computed(
+  () => friends.value.some((friend: any) => friend?.petState && friend.petState !== 'unknown'),
+)
 
 const filteredFriends = computed(() => {
+  const list = petFilter.value === 'all'
+    ? sortedFriends.value
+    : sortedFriends.value.filter((friend: any) => friend?.petState === petFilter.value)
   const keyword = searchKeyword.value.trim().toLowerCase()
-  const list = dogFilteredFriends.value
   if (!keyword)
     return list
 
@@ -212,8 +213,8 @@ const filteredFriends = computed(() => {
     const name = String(friend?.name || '').toLowerCase()
     const gid = String(friend?.gid || '')
     const uin = String(friend?.uin || '')
-    const dogName = String(friend?.dogName || '').toLowerCase()
-    return name.includes(keyword) || gid.includes(keyword) || uin.includes(keyword) || dogName.includes(keyword)
+    const petName = String(friend?.pet?.name || '').toLowerCase()
+    return name.includes(keyword) || gid.includes(keyword) || uin.includes(keyword) || petName.includes(keyword)
   })
 })
 
@@ -229,7 +230,7 @@ watch(searchKeyword, () => {
   currentPage.value = 1
 })
 
-watch(dogFilter, () => {
+watch(petFilter, () => {
   currentPage.value = 1
 })
 
@@ -250,7 +251,7 @@ const visibleInteractRecords = computed(() => filteredInteractRecords.value.slic
 
 async function loadData() {
   // 牧场场景只读牧场快照，农场好友数据等切回农场时再拉。
-  if (friendsScene.value === 'ranch')
+  if (scene.value === 'ranch')
     return
   if (currentAccountId.value) {
     const acc = currentAccount.value
@@ -303,7 +304,7 @@ watch(() => [currentAccount.value?.id, currentAccount.value?.running] as const, 
     loadData()
 })
 
-watch(friendsScene, () => {
+watch(scene, () => {
   loadData()
 })
 
@@ -636,11 +637,7 @@ async function handleBatchAddKnownFriendGids() {
 
 <template>
   <div class="p-4">
-    <div class="mb-4">
-      <SceneSwitch v-model="friendsScene" farm-label="农场好友" ranch-label="牧场好友" />
-    </div>
-
-    <template v-if="friendsScene === 'farm'">
+    <template v-if="scene === 'farm'">
       <FriendsPageHeader
         v-model:search-keyword="searchKeyword"
         :active-tab="activeTab"
@@ -714,28 +711,22 @@ async function handleBatchAddKnownFriendGids() {
           <template v-else>
             <div class="flex flex-wrap items-center gap-2 rounded-lg bg-white p-3 shadow dark:bg-gray-800">
               <button
-                v-for="filter in dogFilters"
+                v-for="filter in petFilters"
                 :key="filter.key"
                 class="rounded-full px-3 py-1 text-xs transition"
-                :class="dogFilter === filter.key
+                :class="petFilter === filter.key
                   ? 'text-white'
                   : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
-                :style="dogFilter === filter.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
-                @click="dogFilter = filter.key"
+                :style="petFilter === filter.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
+                @click="petFilter = filter.key"
               >
                 {{ filter.label }}
-                <span v-if="hasDogInfo" class="ml-1 opacity-75">
-                  ({{
-                    filter.key === 'guardDog'
-                      ? guardDogCount
-                      : filter.key === 'noGuardDog'
-                        ? noGuardDogCount
-                        : friends.length
-                  }})
+                <span v-if="hasPetState && filter.key !== 'all'" class="ml-1 opacity-75">
+                  {{ filter.key === 'protect' ? protectDogCount : noGuardDogCount }}
                 </span>
               </button>
-              <span v-if="!hasDogInfo" class="text-xs text-gray-400">
-                当前后端版本未提供好友狗信息
+              <span v-if="!hasPetState" class="text-xs text-gray-400">
+                好友狗状态要等每日同步或进过对方农场后才会确认
               </span>
               <div class="flex-1" />
               <button
@@ -745,14 +736,6 @@ async function handleBatchAddKnownFriendGids() {
               >
                 <div v-if="loading" class="i-svg-spinners-90-ring-with-bg mr-1 inline-block align-text-bottom" />
                 刷新列表
-              </button>
-              <button
-                class="cursor-not-allowed rounded bg-gray-100 px-3 py-1.5 text-sm text-gray-400 opacity-60 dark:bg-gray-700 dark:text-gray-500"
-                disabled
-                title="当前后端版本未提供好友狗信息批量获取"
-              >
-                获取狗信息
-                <span class="ml-1 text-[10px]">未提供</span>
               </button>
             </div>
 

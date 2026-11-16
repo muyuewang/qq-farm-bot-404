@@ -8,23 +8,9 @@ export interface SystemConfig {
   os: string
 }
 
-export interface CaptureConfig {
-  enabled: boolean
-  embedded: boolean
-  running?: boolean
-  apiBase: string
-  apiToken: string
-  tokenConfigured: boolean
-  autoImportQqGids: boolean
-}
-
 interface UseAdminSystemConfigOptions {
   showAlert: (message: string, type?: 'primary' | 'danger') => void
 }
-
-// 上游后端不再提供 Code/GID 抓取服务配置，入口保留但置灰，避免用户在页面上做无效操作。
-const CAPTURE_CONFIG_SUPPORTED = false
-const CAPTURE_CONFIG_UNSUPPORTED_MESSAGE = '当前后端版本未提供 Code/GID 抓取服务配置'
 
 const defaultSystemConfigValues: SystemConfig = {
   serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
@@ -33,25 +19,12 @@ const defaultSystemConfigValues: SystemConfig = {
   os: 'iOS',
 }
 
-const defaultCaptureConfig: CaptureConfig = {
-  enabled: true,
-  embedded: true,
-  running: false,
-  apiBase: 'http://127.0.0.1:8450',
-  apiToken: '',
-  tokenConfigured: false,
-  autoImportQqGids: true,
-}
-
 export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   const systemConfigSaving = ref(false)
   const systemConfigLoading = ref(false)
-  const captureConfigSaving = ref(false)
-  const captureConfigTesting = ref(false)
 
   const localSystemConfig = ref<SystemConfig>({ ...defaultSystemConfigValues })
   const defaultSystemConfig = ref<SystemConfig>({ ...defaultSystemConfigValues })
-  const localCaptureConfig = ref<CaptureConfig>({ ...defaultCaptureConfig })
 
   const platformOptions = [
     { label: 'QQ', value: 'qq' },
@@ -62,14 +35,6 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
     { label: 'iOS', value: 'iOS' },
     { label: 'Android', value: 'Android' },
   ]
-
-  function loadCaptureConfig() {
-    localCaptureConfig.value = { ...defaultCaptureConfig }
-  }
-
-  function handleTestCaptureConfig() {
-    options.showAlert(CAPTURE_CONFIG_UNSUPPORTED_MESSAGE, 'danger')
-  }
 
   async function loadSystemConfig() {
     systemConfigLoading.value = true
@@ -113,18 +78,11 @@ export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {
   }
 
   return {
-    captureConfigSupported: CAPTURE_CONFIG_SUPPORTED,
-    captureConfigUnsupportedMessage: CAPTURE_CONFIG_UNSUPPORTED_MESSAGE,
     systemConfigSaving,
-    captureConfigSaving,
-    captureConfigTesting,
     localSystemConfig,
     defaultSystemConfig,
-    localCaptureConfig,
     platformOptions,
     osOptions,
-    loadCaptureConfig,
-    handleTestCaptureConfig,
     loadSystemConfig,
     handleResetSystemConfig,
   }

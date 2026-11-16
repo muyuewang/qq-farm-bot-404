@@ -15,7 +15,6 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (e: 'fertilize', land: any): void
-  (e: 'remove', land: any): void
 }>()
 
 const farmSceneImageCache = new Map<string, HTMLImageElement>()
@@ -207,7 +206,6 @@ onUnmounted(() => {
         :show-actions="false"
         @select="selectLand"
         @fertilize="emit('fertilize', land)"
-        @remove="emit('remove', land)"
       />
     </div>
   </div>

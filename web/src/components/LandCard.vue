@@ -22,7 +22,6 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (e: 'fertilize', land: any): void
-  (e: 'remove', land: any): void
   (e: 'select', land: any): void
 }>()
 
@@ -63,11 +62,8 @@ async function updateFloatingBubblePosition() {
   }
 }
 
-function handleBubbleAction(type: 'fertilize' | 'remove') {
-  if (type === 'fertilize')
-    emit('fertilize', land.value)
-  else
-    emit('remove', land.value)
+function handleBubbleAction() {
+  emit('fertilize', land.value)
 }
 
 onMounted(() => {
@@ -91,19 +87,7 @@ const isFertilizable = computed(() =>
   && land.value?.status !== 'empty',
 )
 
-const isRemovable = computed(() =>
-  land.value?.status !== 'locked'
-  && land.value?.status !== 'empty'
-  && Boolean(
-    land.value?.plantName
-    || land.value?.seedImage
-    || Number(land.value?.matureInSec) > 0
-    || ['dead', 'growing', 'harvestable', 'stealable'].includes(String(land.value?.status || '')),
-  ),
-)
-
 const canFertilize = computed(() => props.showActions && isFertilizable.value)
-const canRemove = computed(() => props.showActions && isRemovable.value)
 
 const landTextureName = computed(() => {
   const targetLand = land.value || {}
@@ -486,11 +470,10 @@ function getIsometricBubbleClass(targetLand: any) {
     </div>
 
     <div
-      v-if="canFertilize || canRemove"
+      v-if="canFertilize"
       class="land-actions absolute bottom-2 left-2 right-2 grid grid-cols-2 h-7 gap-1"
     >
       <button
-        v-if="canFertilize"
         type="button"
         class="land-action-button text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
         title="催熟"
@@ -498,18 +481,6 @@ function getIsometricBubbleClass(targetLand: any) {
       >
         <span class="i-carbon-growth text-sm" />
         <span>催熟</span>
-      </button>
-      <div v-else />
-
-      <button
-        v-if="canRemove"
-        type="button"
-        class="land-action-button text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/30"
-        title="铲除作物"
-        @click.stop="$emit('remove', land)"
-      >
-        <span class="i-carbon-trash-can text-sm" />
-        <span>铲除</span>
       </button>
     </div>
 
@@ -607,12 +578,9 @@ function getIsometricBubbleClass(targetLand: any) {
           <span v-if="land.needBug" class="rounded-full bg-red-100 px-2 py-0.5 text-red-700">需要除虫</span>
         </div>
 
-        <div v-if="isFertilizable || isRemovable" class="grid grid-cols-2 mt-2 gap-2">
-          <button type="button" class="bubble-action border-emerald-600 text-emerald-700 dark:text-emerald-300" :disabled="!isFertilizable" @click="handleBubbleAction('fertilize')">
+        <div v-if="isFertilizable" class="grid mt-2 gap-2">
+          <button type="button" class="bubble-action border-emerald-600 text-emerald-700 dark:text-emerald-300" @click="handleBubbleAction()">
             <span class="i-carbon-growth" />催熟
-          </button>
-          <button type="button" class="bubble-action border-red-500 text-red-600 dark:text-red-300" :disabled="!isRemovable" @click="handleBubbleAction('remove')">
-            <span class="i-carbon-trash-can" />铲除
           </button>
         </div>
       </div>

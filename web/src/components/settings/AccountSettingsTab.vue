@@ -20,8 +20,6 @@ defineProps<{
   accountToDelete: any
   showClearStoppedConfirm: boolean
   clearStoppedLoading: boolean
-  defaultPlanSettingId: string
-  defaultPlanApplyingId: string
 }>()
 
 const emit = defineEmits<{
@@ -30,8 +28,6 @@ const emit = defineEmits<{
   select: [account: any]
   toggle: [account: any]
   settings: [account: any]
-  setDefaultPlan: [account: any]
-  applyDefaultPlan: [account: any]
   edit: [account: any]
   delete: [account: any]
   saved: []
@@ -60,16 +56,6 @@ function accountAvatar(acc: any) {
         账号管理
       </h3>
       <div class="flex flex-wrap gap-2">
-        <button
-          class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-400 opacity-60 dark:border-gray-600 dark:text-gray-500"
-          disabled
-          title="当前后端版本未提供微信 Code 批量刷新"
-        >
-          <div class="i-carbon-renew mr-2" />
-          <span class="hidden sm:inline">{{ userIsAdmin ? '刷新全部微信Code' : '刷新我的微信Code' }}</span>
-          <span class="sm:hidden">刷新Code</span>
-          <span class="ml-1 text-[10px]">未提供</span>
-        </button>
         <BaseButton
           v-if="userIsAdmin"
           variant="secondary"
@@ -179,36 +165,6 @@ function accountAvatar(acc: any) {
           </div>
 
           <div class="flex flex-1 justify-end gap-1 sm:flex-initial sm:gap-2">
-            <BaseButton
-              :data-testid="`set-default-plan-${acc.id}`"
-              variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] !p-2"
-              :loading="defaultPlanSettingId === String(acc.id)"
-              :disabled="!!defaultPlanSettingId || !!defaultPlanApplyingId"
-              aria-label="设置默认方案"
-              title="设置默认方案"
-              @click="emit('setDefaultPlan', acc)"
-            >
-              <div v-if="defaultPlanSettingId !== String(acc.id)" i-carbon-document-export />
-              <span class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 -translate-x-1/2 dark:bg-gray-100 dark:text-gray-900 group-focus-visible:opacity-100 group-hover:opacity-100">
-                设置默认方案
-              </span>
-            </BaseButton>
-            <BaseButton
-              :data-testid="`apply-default-plan-${acc.id}`"
-              variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] !p-2"
-              :loading="defaultPlanApplyingId === String(acc.id)"
-              :disabled="!!defaultPlanSettingId || !!defaultPlanApplyingId"
-              aria-label="应用默认方案"
-              title="应用默认方案"
-              @click="emit('applyDefaultPlan', acc)"
-            >
-              <div v-if="defaultPlanApplyingId !== String(acc.id)" i-carbon-document-import />
-              <span class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 -translate-x-1/2 dark:bg-gray-100 dark:text-gray-900 group-focus-visible:opacity-100 group-hover:opacity-100">
-                应用默认方案
-              </span>
-            </BaseButton>
             <BaseButton
               variant="ghost"
               class="group relative min-h-[36px] min-w-[36px] !p-2"

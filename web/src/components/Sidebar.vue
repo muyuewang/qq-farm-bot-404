@@ -8,6 +8,7 @@ import api from '@/api'
 import { menuRoutes } from '@/router/menu'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
+import { SCENE_BRAND, useSceneStore } from '@/stores/scene'
 import { useShopStore } from '@/stores/shop'
 import { useStatusStore } from '@/stores/status'
 import { useUserStore } from '@/stores/user'
@@ -17,12 +18,14 @@ const statusStore = useStatusStore()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const shopStore = useShopStore()
+const sceneStore = useSceneStore()
 const route = useRoute()
 const router = useRouter()
 const { currentAccount, currentAccountId } = storeToRefs(accountStore)
 const { status, realtimeConnected } = storeToRefs(statusStore)
 const { mysteryOffer, mysteryOfferAccountId } = storeToRefs(shopStore)
 const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
+const { scene } = storeToRefs(sceneStore)
 
 const wsErrorNotifiedAt = ref<Record<string, number>>({})
 
@@ -140,17 +143,23 @@ const connectionStatus = computed(() => {
   }
 })
 
-// 根据用户角色过滤导航菜单
+// 根据用户角色和当前浏览场景过滤导航菜单
 const navItems = computed(() => {
   const isAdmin = userStore.isAdmin
   return menuRoutes
     .filter(item => item.showInNav !== false && (!item.adminOnly || isAdmin))
+    .filter(item => !item.scenes || item.scenes.includes(scene.value))
     .map(item => ({
       path: item.path ? `/${item.path}` : '/',
       label: item.label,
       icon: item.icon,
     }))
 })
+
+// 牧场场景没有可配置的品牌名，整站按场景换皮时固定用牧场标题。
+const brand = computed(() => (scene.value === 'ranch'
+  ? SCENE_BRAND.ranch
+  : { title: loginPageConfig.value.title || SCENE_BRAND.farm.title, subtitle: SCENE_BRAND.farm.subtitle }))
 
 const hasActiveMysteryOffer = computed(() => {
   const offer = mysteryOffer.value
@@ -189,16 +198,16 @@ const showThemeDropdown = ref(false)
         <div class="h-11 w-11 flex flex-none items-center justify-center overflow-hidden rounded-full shadow-sm ring-1 ring-gray-200 dark:ring-gray-700">
           <img
             src="/icon.png"
-            :alt="`${loginPageConfig.title || 'QQ农场智能助手'}图标`"
+            :alt="`${brand.title}图标`"
             class="h-full w-full scale-150 object-cover"
           >
         </div>
         <div class="min-w-0">
           <div class="truncate text-[15px] font-bold tracking-tight" style="color: var(--theme-text);">
-            {{ loginPageConfig.title || 'QQ农场智能助手' }}
+            {{ brand.title }}
           </div>
           <div class="truncate text-xs font-mono opacity-70" style="color: var(--theme-text);">
-            QQ FARM ASSISTANT
+            {{ brand.subtitle }}
           </div>
         </div>
       </div>

@@ -121,13 +121,6 @@ export interface UIConfig {
   theme?: string
 }
 
-export const AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE = '当前后端版本未提供微信定时刷新重登设置'
-
-export interface AutoCodeRefreshConfig {
-  enabled: boolean
-  intervalMinutes: number
-}
-
 export interface SettingsState {
   plantingStrategy: string
   prioritize2x2Crops: boolean
@@ -139,7 +132,6 @@ export interface SettingsState {
   intervals: IntervalsConfig
   friendQuietHours: FriendQuietHoursConfig
   automation: AutomationConfig
-  autoCodeRefresh: AutoCodeRefreshConfig
   ui: UIConfig
   offlineReminder: OfflineConfig
   fertilizerBuyOrganicCount: number
@@ -170,13 +162,6 @@ function createDefaultOfflineReminder(): OfflineConfig {
   }
 }
 
-function createDefaultAutoCodeRefresh(): AutoCodeRefreshConfig {
-  return {
-    enabled: false,
-    intervalMinutes: 60,
-  }
-}
-
 function normalizeOfflineReminder(input: Partial<OfflineConfig> | null | undefined): OfflineConfig {
   return {
     ...createDefaultOfflineReminder(),
@@ -196,7 +181,6 @@ export const useSettingStore = defineStore('setting', () => {
     intervals: {},
     friendQuietHours: { enabled: false, start: '23:00', end: '07:00' },
     automation: {},
-    autoCodeRefresh: createDefaultAutoCodeRefresh(),
     ui: {},
     offlineReminder: createDefaultOfflineReminder(),
     fertilizerBuyOrganicCount: 10,
@@ -228,7 +212,6 @@ export const useSettingStore = defineStore('setting', () => {
       intervals: {},
       friendQuietHours: { enabled: false, start: '23:00', end: '07:00' },
       automation: {},
-      autoCodeRefresh: createDefaultAutoCodeRefresh(),
       ui: {},
       offlineReminder: createDefaultOfflineReminder(),
       fertilizerBuyOrganicCount: 10,
@@ -262,10 +245,6 @@ export const useSettingStore = defineStore('setting', () => {
         settings.value.intervals = d.intervals || {}
         settings.value.friendQuietHours = d.friendQuietHours || { enabled: false, start: '23:00', end: '07:00' }
         settings.value.automation = d.automation || {}
-        settings.value.autoCodeRefresh = {
-          ...createDefaultAutoCodeRefresh(),
-          ...(d.autoCodeRefresh || {}),
-        }
         settings.value.ui = d.ui || {}
         settings.value.autoAcceptFriendMinLevel = d.autoAcceptFriendMinLevel ?? 0
         settings.value.offlineReminder = normalizeOfflineReminder(d.offlineReminder)
@@ -300,7 +279,6 @@ export const useSettingStore = defineStore('setting', () => {
         bagSeedKnownIds: newSettings.bagSeedKnownIds ?? [],
         bagSeedFallbackStrategy: newSettings.bagSeedFallbackStrategy ?? 'level',
         autoAcceptFriendMinLevel: newSettings.autoAcceptFriendMinLevel ?? 0,
-        autoCodeRefresh: newSettings.autoCodeRefresh,
         intervals: newSettings.intervals,
         friendQuietHours: newSettings.friendQuietHours,
         fertilizerBuyOrganicCount: newSettings.fertilizerBuyOrganicCount ?? 10,
@@ -345,15 +323,6 @@ export const useSettingStore = defineStore('setting', () => {
     }
   }
 
-  // 上游后端不再有微信定时刷新重登设置，入口保留但置灰，避免保存看似成功实际无效。
-  async function saveAutoCodeRefresh(_accountId: string, _config: AutoCodeRefreshConfig) {
-    return { ok: false, error: AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE }
-  }
-
-  async function runAutoCodeRefresh(_accountId: string) {
-    return { ok: false, error: AUTO_CODE_REFRESH_UNSUPPORTED_MESSAGE }
-  }
-
   return {
     settings,
     loading,
@@ -361,7 +330,5 @@ export const useSettingStore = defineStore('setting', () => {
     fetchSettings,
     saveSettings,
     saveOfflineConfig,
-    saveAutoCodeRefresh,
-    runAutoCodeRefresh,
   }
 })

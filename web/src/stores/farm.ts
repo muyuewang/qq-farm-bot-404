@@ -147,23 +147,6 @@ export const useFarmStore = defineStore('farm', () => {
     return data
   }
 
-  // 上游后端只保留了 services/farm/api.ts 的 removePlant，未再接出 HTTP/IPC 路由，
-  // 这里不猜测替代操作，直接把不可用状态抛给调用方展示。
-  const landRemovalSupported = false
-
-  async function removePlant(accountId: string, landId: number) {
-    void landId
-    if (!accountId)
-      return
-    throw new Error('当前后端版本未提供铲除单个作物的接口')
-  }
-
-  async function removeAllPlants(accountId: string) {
-    if (!accountId)
-      return
-    throw new Error('当前后端版本未提供一键铲除作物的接口')
-  }
-
   return {
     lands,
     summary,
@@ -180,8 +163,5 @@ export const useFarmStore = defineStore('farm', () => {
     claimDogSkillGifts,
     operate,
     fertilizeLand,
-    removePlant,
-    removeAllPlants,
-    landRemovalSupported,
   }
 })

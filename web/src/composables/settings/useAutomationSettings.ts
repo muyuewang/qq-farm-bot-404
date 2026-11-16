@@ -110,13 +110,7 @@ export function useAutomationSettings({
     goldenBugRoundLimit: 24,
   })
 
-  const localAutoCodeRefresh = ref({
-    enabled: false,
-    intervalMinutes: 60,
-  })
-
   const automationSaving = ref(false)
-  const autoCodeRefreshing = ref(false)
 
   const fertilizerLandTypeOptions = [
     { label: '紫土地', value: 'purple' },
@@ -174,10 +168,6 @@ export function useAutomationSettings({
       localAutomationSettings.value.fertilizerBuyCheckIntervalMinutes = settings.value.fertilizerBuyCheckIntervalMinutes ?? 30
       localAutomationSettings.value.goldenBugKeepCount = settings.value.goldenBugKeepCount ?? 0
       localAutomationSettings.value.goldenBugRoundLimit = settings.value.goldenBugRoundLimit ?? 24
-      localAutoCodeRefresh.value = {
-        enabled: settings.value.autoCodeRefresh?.enabled === true,
-        intervalMinutes: normalizeAutoCodeRefreshInterval(settings.value.autoCodeRefresh?.intervalMinutes),
-      }
     }
   }
 
@@ -187,25 +177,16 @@ export function useAutomationSettings({
     return [...new Set(value.map(Number).filter(gid => Number.isSafeInteger(gid) && gid > 0))]
   }
 
-  function normalizeAutoCodeRefreshInterval(value: unknown) {
-    const minutes = Number(value)
-    if (!Number.isFinite(minutes))
-      return 60
-    return Math.max(1, Math.min(1440, Math.round(minutes)))
-  }
-
   async function saveAutomationSettings() {
     if (!currentAccountId.value)
       return
     const accountId = String(currentAccountId.value)
     automationSaving.value = true
     try {
-      localAutoCodeRefresh.value.intervalMinutes = normalizeAutoCodeRefreshInterval(localAutoCodeRefresh.value.intervalMinutes)
       localAutomationSettings.value.automation.qixi_friend_priority = normalizeQixiFriendPriority(localAutomationSettings.value.automation.qixi_friend_priority)
       const fullSettings = {
         ...settings.value,
         automation: localAutomationSettings.value.automation,
-        autoCodeRefresh: localAutoCodeRefresh.value,
         autoAcceptFriendMinLevel: localAutomationSettings.value.autoAcceptFriendMinLevel,
         fertilizerBuyOrganicCount: localAutomationSettings.value.fertilizerBuyOrganicCount,
         fertilizerBuyOrganicThresholdHours: localAutomationSettings.value.fertilizerBuyOrganicThresholdHours,
@@ -253,32 +234,12 @@ export function useAutomationSettings({
     }
   }
 
-  async function runAutoCodeRefreshNow() {
-    if (!currentAccountId.value)
-      return
-    const accountId = String(currentAccountId.value)
-    autoCodeRefreshing.value = true
-    try {
-      const res = await settingStore.runAutoCodeRefresh(accountId)
-      if (res.ok)
-        showAlert('已触发刷新 Code，完成后会自动重启账号', 'primary')
-      else
-        showAlert(`刷新失败: ${res.error}`, 'danger')
-    }
-    finally {
-      autoCodeRefreshing.value = false
-    }
-  }
-
   return {
     localAutomationSettings,
-    localAutoCodeRefresh,
     automationSaving,
-    autoCodeRefreshing,
     fertilizerLandTypeOptions,
     fertilizerOptions,
     syncLocalAutomationSettings,
     saveAutomationSettings,
-    runAutoCodeRefreshNow,
   }
 }

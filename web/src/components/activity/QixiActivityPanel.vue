@@ -35,32 +35,14 @@ function formatTime(value?: number) {
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-5 shadow-sm dark:bg-gray-800">
+    <div class="rounded-xl bg-white p-5 shadow-sm dark:bg-gray-800">
       <div>
         <h3 class="text-gray-900 font-semibold dark:text-white">
-          使用鹊羽灵露
-        </h3><p class="mt-1 text-xs text-gray-500">
-          当前后端版本未提供灵露使用接口，本页仅展示灵露库存。
+          驻建鹊桥
+        </h3>
+        <p class="mt-1 text-xs text-gray-500">
+          已完成 {{ activity?.bridge.completedCount || 0 }}/{{ activity?.bridge.stages.length || 0 }} 阶段
         </p>
-      </div>
-      <BaseButton disabled title="当前后端版本未提供鹊羽灵露自动使用">
-        自动使用<span class="ml-1 text-[10px]">未提供</span>
-      </BaseButton>
-    </div>
-
-    <div class="rounded-xl bg-white p-5 shadow-sm dark:bg-gray-800">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 class="text-gray-900 font-semibold dark:text-white">
-            驻建鹊桥
-          </h3>
-          <p class="mt-1 text-xs text-gray-500">
-            已完成 {{ activity?.bridge.completedCount || 0 }}/{{ activity?.bridge.stages.length || 0 }} 阶段
-          </p>
-        </div>
-        <BaseButton disabled title="当前后端版本未提供驻建鹊桥接口">
-          驻建下一阶段<span class="ml-1 text-[10px]">未提供</span>
-        </BaseButton>
       </div>
       <div v-if="activity?.bridge.nextStage" class="mt-4 rounded-lg bg-violet-50 p-4 text-sm dark:bg-violet-900/20">
         当前阶段：{{ activity.items.feather.itemCount }}/{{ activity.bridge.nextStage.cost.itemCount }} {{ activity.bridge.nextStage.cost.itemName }}

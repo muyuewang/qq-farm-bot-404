@@ -6,16 +6,18 @@ import IllustratedItemCard from '@/components/illustrated/IllustratedItemCard.vu
 import RanchIllustratedPanel from '@/components/ranch/RanchIllustratedPanel.vue'
 import RanchSceneHost from '@/components/ranch/RanchSceneHost.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import SceneSwitch from '@/components/ui/SceneSwitch.vue'
 import { useAccountStore } from '@/stores/account'
 import { CROP_ILLUSTRATED_TYPE, MUTANT_ILLUSTRATED_TYPE, useIllustratedStore } from '@/stores/illustrated'
+import { useSceneStore } from '@/stores/scene'
 import { useToastStore } from '@/stores/toast'
 
 const accountStore = useAccountStore()
 const illustratedStore = useIllustratedStore()
+const sceneStore = useSceneStore()
 const toast = useToastStore()
 
 const { currentAccountId } = storeToRefs(accountStore)
+const { scene } = storeToRefs(sceneStore)
 const { loaded, loading, claiming, error, refreshRequired } = storeToRefs(illustratedStore)
 
 /** 藏品册走 /api/collections，与 /api/illustrated 是两套后端快照，用独立的页签值区分。 */
@@ -23,9 +25,8 @@ const COLLECTIONS_TAB = 'collections'
 
 /**
  * 牧场图鉴挂在 game_scene_id=2 的牧场快照上，和农场图鉴不是同一份数据，
- * 因此在同一页里用场景切换，而不是在牧场入口再复制一个图鉴页签。
+ * 因此这一页跟随顶部栏的全局场景切换，而不是在牧场入口再复制一个图鉴页。
  */
-const illustratedScene = ref<'farm' | 'ranch'>('farm')
 
 const filter = ref<'all' | 'unlocked' | 'locked'>('all')
 /** 后端一次请求同时返回两本图鉴，这里的切换只是本地展示维度 */
@@ -83,13 +84,9 @@ function getItemStatusLabel(item: any) {
   return item.unlocked ? '已收录' : '未收录'
 }
 
-function getItemActionLabel(item: any) {
-  return item.unlocked ? '已收录' : '图鉴内购买未开放'
-}
-
 async function refresh() {
   // 牧场场景只读牧场快照，这份农场图鉴数据没有消费方，切回农场时再拉取。
-  if (!currentAccountId.value || illustratedScene.value === 'ranch')
+  if (!currentAccountId.value || scene.value === 'ranch')
     return
   await illustratedStore.fetchSnapshot(currentAccountId.value)
 }
@@ -115,7 +112,7 @@ watch(currentAccountId, () => {
   refresh()
 })
 
-watch(illustratedScene, () => {
+watch(scene, () => {
   refresh()
 })
 
@@ -126,7 +123,7 @@ onMounted(() => {
 
 <template>
   <section class="space-y-4">
-    <div v-if="illustratedScene === 'farm'" class="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800">
+    <div v-if="scene === 'farm'" class="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800">
       <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div class="min-w-0 flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-2">
@@ -152,7 +149,6 @@ onMounted(() => {
         </div>
 
         <div class="flex shrink-0 flex-wrap items-center gap-2">
-          <SceneSwitch v-model="illustratedScene" farm-label="农场图鉴" ranch-label="牧场图鉴" />
           <div class="h-9 inline-flex overflow-hidden border border-gray-200 rounded-lg bg-white p-0.5 dark:border-gray-700 dark:bg-gray-800">
             <button
               v-for="item in typeTabs"
@@ -218,10 +214,6 @@ onMounted(() => {
         <div v-if="refreshRequired" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
           奖励已领取，但后端未能返回最新图鉴快照，请点击刷新确认进度。
         </div>
-        <div class="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500 leading-5 dark:bg-gray-900/30 dark:text-gray-400">
-          当前后端未提供图鉴内补录购买与一键购买接口，卡片上的购买入口不可用；作物种子请在商城的种子商店购买。
-        </div>
-
         <div v-if="filteredItems.length === 0" class="border border-gray-200 rounded-lg border-dashed bg-white px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400">
           暂无图鉴项目
         </div>
@@ -234,17 +226,12 @@ onMounted(() => {
             :status-label="getItemStatusLabel(item)"
             :progress-hint="getProgressHint(item)"
             :unlock-hint="getUnlockHint(item)"
-            :action-label="getItemActionLabel(item)"
           />
         </div>
       </div>
     </div>
 
     <RanchSceneHost v-else view="illustrated" title="牧场图鉴" icon="i-carbon-book">
-      <template #actions>
-        <SceneSwitch v-model="illustratedScene" farm-label="农场图鉴" ranch-label="牧场图鉴" />
-      </template>
-
       <template #default="{ state, onRequest }">
         <RanchIllustratedPanel :state="state" @request="onRequest" />
       </template>

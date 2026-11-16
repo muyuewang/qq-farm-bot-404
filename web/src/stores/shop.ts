@@ -8,7 +8,6 @@ import { useAccountStore } from '@/stores/account'
  * - 种子：GET /api/seeds（商店实时） + GET /api/config/seeds（本地配置补充）
  * - 道具：GET /api/props-shop（ShopService shop_id 4）
  * - 神秘商人：GET /api/mystery-shop
- * 后端不再提供的分区（宠物商店、轮盘道具商城、神秘商人购买历史/请离）不在此处占位。
  */
 export interface ShopSeedItem {
   /** 商店商品 ID；本地备选列表为 0，不可购买 */

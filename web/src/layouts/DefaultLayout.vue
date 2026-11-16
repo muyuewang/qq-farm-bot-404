@@ -1,13 +1,37 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { onUnmounted } from 'vue'
+import { computed, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
+import SceneSwitch from '@/components/ui/SceneSwitch.vue'
+import { menuRoutes } from '@/router/menu'
 import { useAppStore } from '@/stores/app'
+import { SCENE_BRAND, useSceneStore } from '@/stores/scene'
 
 const appStore = useAppStore()
+const sceneStore = useSceneStore()
+const router = useRouter()
 const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
+const { scene } = storeToRefs(sceneStore)
+
+const brandTitle = computed(() => (scene.value === 'ranch'
+  ? SCENE_BRAND.ranch.title
+  : loginPageConfig.value.title || SCENE_BRAND.farm.title))
+
+// 宠物和分析只有农场有，切到牧场场景后停在原路由会看到与场景对不上的页面，
+// 所以跟着菜单一起回到两个场景都有的个人页。
+const availablePaths = computed(() => new Set(
+  menuRoutes
+    .filter(item => !item.scenes || item.scenes.includes(scene.value))
+    .map(item => item.path ? `/${item.path}` : '/'),
+))
+
+watch([() => router.currentRoute.value.path, scene] as const, ([path]) => {
+  if (!availablePaths.value.has(path))
+    router.replace('/personal')
+}, { immediate: true })
 
 onUnmounted(() => {
   // 清理逻辑
@@ -44,11 +68,14 @@ onUnmounted(() => {
             >
           </div>
           <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
-            {{ loginPageConfig.title || 'QQ农场智能助手' }}
+            {{ brandTitle }}
           </div>
         </div>
 
-        <TopAccountMenu />
+        <div class="flex shrink-0 items-center gap-1">
+          <SceneSwitch />
+          <TopAccountMenu />
+        </div>
       </header>
 
       <!-- Main Content Area -->

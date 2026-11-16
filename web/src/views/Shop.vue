@@ -15,9 +15,9 @@ import SeedGoodsCard from '@/components/shop/SeedGoodsCard.vue'
 import ShopAccountHeader from '@/components/shop/ShopAccountHeader.vue'
 import ShopEmptyState from '@/components/shop/ShopEmptyState.vue'
 import ShopTabToolbar from '@/components/shop/ShopTabToolbar.vue'
-import SceneSwitch from '@/components/ui/SceneSwitch.vue'
 import { createShopAvailability } from '@/composables/shop/useShopAvailability'
 import { useAccountStore } from '@/stores/account'
+import { useSceneStore } from '@/stores/scene'
 import { COUPON_ITEM_ID, DIAMOND_ITEM_ID, GOLD_BEAN_ITEM_ID, GOLD_ITEM_ID, useShopStore } from '@/stores/shop'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
@@ -28,11 +28,13 @@ import type { RanchView } from '@/utils/ranch'
 const accountStore = useAccountStore()
 const shopStore = useShopStore()
 const statusStore = useStatusStore()
+const sceneStore = useSceneStore()
 const toast = useToastStore()
 const route = useRoute()
 const router = useRouter()
 
 const { currentAccountId, currentAccount } = storeToRefs(accountStore)
+const { scene } = storeToRefs(sceneStore)
 const { status } = storeToRefs(statusStore)
 const {
   seeds,
@@ -54,10 +56,9 @@ const mysteryAutoBuyEnabled = ref(false)
 
 /**
  * 商城同样分属两个场景：农场商城走 /api/shop/*，牧场的商店、罐头商城和交易市场挂在
- * game_scene_id=2 的牧场快照上，购买还要经过 quote → execute。这里只做场景切换，
+ * game_scene_id=2 的牧场快照上，购买还要经过 quote → execute。场景由顶部栏全局切换，
  * 两套请求与限购校验都由各自的 store 负责，不互相兜底。
  */
-const shopScene = ref<'farm' | 'ranch'>('farm')
 const RANCH_SHOP_VIEWS = (['shop', 'cans', 'market'] as const).map(value => ({ value, label: RANCH_VIEW_LABELS[value] }))
 const ranchView = ref<RanchView>('shop')
 const ranchShopId = ref<number | null>(null)
@@ -184,7 +185,7 @@ function closeQuantityModal() {
 
 async function refreshAll() {
   // 牧场场景读的是牧场快照，农场商城的价格与限购等切回农场再拉。
-  if (!currentAccountId.value || shopScene.value === 'ranch')
+  if (!currentAccountId.value || scene.value === 'ranch')
     return
   await shopStore.refreshAll(currentAccountId.value)
 }
@@ -194,7 +195,7 @@ async function refreshMysteryAutoBuyStatus() {
     mysteryAutoBuyEnabled.value = false
     return
   }
-  if (shopScene.value === 'ranch')
+  if (scene.value === 'ranch')
     return
   const requestedAccountId = String(currentAccountId.value)
   try {
@@ -341,7 +342,7 @@ watch(
   () => syncTabFromRouteQuery(),
 )
 
-watch(shopScene, () => {
+watch(scene, () => {
   refreshAll()
   refreshMysteryAutoBuyStatus()
 })
@@ -355,7 +356,7 @@ onMounted(() => {
 
 <template>
   <section class="space-y-4">
-    <div v-if="shopScene === 'farm'" class="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800">
+    <div v-if="scene === 'farm'" class="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800">
       <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <ShopAccountHeader
           :account-name="currentAccount?.name"
@@ -367,7 +368,6 @@ onMounted(() => {
         />
 
         <div class="flex flex-wrap items-center justify-end gap-2">
-          <SceneSwitch v-model="shopScene" farm-label="农场商城" ranch-label="牧场商店" />
           <ShopTabToolbar
             v-model:tab="tab"
             :ascending="ascending"
@@ -453,9 +453,6 @@ onMounted(() => {
           :loading="confirmLoading"
           @buy="confirmBuyMysteryGoods"
         />
-        <div class="border border-gray-200 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500 leading-5 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400">
-          当前后端未提供神秘商人的购买历史与请离商人接口，因此页面不展示历史记录，也不提供请离操作；商品购买结果以刷新后的商人状态为准。
-        </div>
       </div>
     </div>
 
@@ -466,10 +463,6 @@ onMounted(() => {
       title="牧场商店"
       icon="i-carbon-store"
     >
-      <template #actions>
-        <SceneSwitch v-model="shopScene" farm-label="农场商城" ranch-label="牧场商店" />
-      </template>
-
       <template #tabs>
         <div class="h-9 inline-flex flex-wrap overflow-hidden border border-gray-200 rounded-lg bg-white p-0.5 dark:border-gray-700 dark:bg-gray-800">
           <button

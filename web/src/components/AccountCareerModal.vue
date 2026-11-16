@@ -3,19 +3,10 @@ import type { Account } from '@/stores/account'
 import { computed, ref, useId } from 'vue'
 import { useModalFocus } from '@/composables/useModalFocus'
 
-interface CareerItem {
-  seedId: number
-  name: string
-  image?: string
-  harvestCount?: number
-}
-
 const props = defineProps<{
   show: boolean
   account?: Account | null
   profile?: Record<string, any> | null
-  items?: CareerItem[]
-  detailAvailable?: boolean
   loading?: boolean
   error?: string
 }>()
@@ -25,14 +16,7 @@ const emit = defineEmits<{
   (e: 'refresh'): void
 }>()
 
-const harvestedItems = computed(() => (props.items || [])
-  .filter(item => Number(item.harvestCount) > 0)
-  .sort((a, b) => Number(b.harvestCount) - Number(a.harvestCount)))
-
-const hasHarvestDetail = computed(() => props.detailAvailable === true)
-
-const totalHarvest = computed(() => Number(props.profile?.totalHarvestCount ?? harvestedItems.value.reduce((sum, item) => sum + Number(item.harvestCount || 0), 0)))
-const topItems = computed(() => harvestedItems.value.slice(0, 3))
+const totalHarvest = computed(() => Number(props.profile?.totalHarvestCount ?? 0))
 const name = computed(() => String(props.profile?.name || props.account?.nick || props.account?.name || '农场主'))
 const avatar = computed(() => String(props.profile?.avatar || props.account?.avatar || ''))
 const level = computed(() => Number(props.profile?.level || 0))
@@ -141,51 +125,6 @@ useModalFocus(() => props.show, modalSurface, () => emit('close'))
                   官方生涯统计
                 </div>
               </div>
-            </div>
-
-            <div v-if="topItems.length" class="grid grid-cols-3 mt-5 gap-3 border-t border-amber-100 pt-5 dark:border-gray-700">
-              <div v-for="(item, index) in topItems" :key="item.seedId" class="text-center">
-                <div class="mx-auto mb-2 h-7 w-7 flex items-center justify-center rounded-full text-sm text-white font-bold" :class="index === 0 ? 'bg-amber-400' : index === 1 ? 'bg-slate-400' : 'bg-orange-400'">
-                  {{ index + 1 }}
-                </div>
-                <div class="mx-auto h-16 w-16 flex items-center justify-center">
-                  <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
-                  <div v-else class="i-carbon-sprout text-4xl text-green-400" />
-                </div>
-                <div class="mt-2 truncate text-sm text-gray-600 dark:text-gray-300">
-                  {{ item.name }}
-                </div>
-                <div class="text-lg text-amber-800 font-bold dark:text-amber-300">
-                  {{ formatNumber(Number(item.harvestCount)) }}
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-3 mt-7 flex items-baseline gap-2">
-              <h3 class="text-lg text-gray-900 font-bold dark:text-white">
-                收获明细
-              </h3>
-              <span v-if="hasHarvestDetail" class="text-sm text-gray-400">({{ harvestedItems.length }})</span>
-            </div>
-            <div v-if="!hasHarvestDetail" class="rounded-2xl bg-white py-12 text-center text-sm text-gray-400 dark:bg-gray-800">
-              当前后端版本仅提供生涯汇总数据，未提供分作物收获明细
-            </div>
-            <div v-else-if="harvestedItems.length" class="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              <div v-for="item in harvestedItems" :key="item.seedId" class="rounded-xl bg-white p-3 text-center shadow-sm dark:bg-gray-800">
-                <div class="mx-auto h-12 w-12 flex items-center justify-center">
-                  <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
-                  <div v-else class="i-carbon-sprout text-3xl text-green-400" />
-                </div>
-                <div class="mt-2 truncate text-xs text-gray-600 dark:text-gray-300">
-                  {{ item.name }}
-                </div>
-                <div class="mt-0.5 text-sm text-gray-900 font-bold dark:text-white">
-                  {{ formatNumber(Number(item.harvestCount)) }}
-                </div>
-              </div>
-            </div>
-            <div v-else class="rounded-2xl bg-white py-12 text-center text-sm text-gray-400 dark:bg-gray-800">
-              暂无收获记录
             </div>
           </template>
         </div>
