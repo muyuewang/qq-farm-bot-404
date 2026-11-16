@@ -49,25 +49,6 @@ export default defineConfig(({ mode }) => {
             if (['vue', 'vue-router', 'pinia', '@vueuse/core'].some(matchesPackage))
               return 'vendor-vue'
 
-            if ([
-              'naive-ui',
-              'vueuc',
-              'vdirs',
-              'vooks',
-              'css-render',
-              '@css-render/vue3-ssr',
-              '@css-render/plugin-bem',
-              'seemly',
-              'treemate',
-              'evtd',
-              'date-fns',
-              'date-fns-tz',
-              'lodash-es',
-              'async-validator',
-            ].some(matchesPackage)) {
-              return 'vendor-ui'
-            }
-
             if (matchesPackage('axios'))
               return 'vendor-axios'
 

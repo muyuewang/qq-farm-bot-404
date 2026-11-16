@@ -1,198 +1,91 @@
 <script setup lang="ts">
-import { useResizeObserver } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, nextTick, provide, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import MobileBottomNav from '@/components/MobileBottomNav.vue'
-import PageHeader from '@/components/PageHeader.vue'
+import { onMounted, onUnmounted } from 'vue'
+import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
-import { SPACE_TRANSITION_STYLE, spaceTransition } from '@/components/space-transition'
-import SpaceTransition from '@/components/SpaceTransition.vue'
+import TopAccountMenu from '@/components/TopAccountMenu.vue'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
-const route = useRoute()
-const { sidebarOpen, activityDetailOpen } = storeToRefs(appStore)
-// 页头固定在滚动区之外；活动详情自带标题栏，打开时隐藏通用页头。
-const activityDetail = computed(() => route.name === 'activity-center' && activityDetailOpen.value)
-const showPageHeader = computed(() => !route.meta.fullBleed && !activityDetail.value)
-const scrolled = ref(false)
-const scrollEl = ref<HTMLElement | null>(null)
-const pageTabsTarget = ref<HTMLElement | null>(null)
-provide('page-tabs-target', pageTabsTarget)
+const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
 
-function measureScrollbar() {
-  const el = scrollEl.value
-  if (!el)
-    return
-  // 页头右边缘与滚动区对齐：经典滚动条占位时让出它的宽度，悬浮滚动条（手机）为 0。
-  el.parentElement?.style.setProperty('--scrollbar-w', `${Math.max(0, el.offsetWidth - el.clientWidth)}px`)
-}
+onMounted(() => {
+  appStore.fetchLoginPageConfig()
+})
 
-function onPageScroll(event: Event) {
-  scrolled.value = (event.target as HTMLElement).scrollTop > 2
-}
-
-watch(() => route.fullPath, async () => {
-  scrolled.value = false
-  await nextTick()
-  scrollEl.value?.scrollTo({ top: 0 })
-  measureScrollbar()
-}, { immediate: true })
-useResizeObserver(scrollEl, measureScrollbar)
+onUnmounted(() => {
+  // 清理逻辑
+})
 </script>
 
 <template>
-  <div
-    class="liquid-layout w-screen flex overflow-hidden"
-    :data-space-phase="spaceTransition?.phase"
-    :style="SPACE_TRANSITION_STYLE"
-    :inert="!!spaceTransition"
-  >
+  <div class="w-screen flex overflow-hidden bg-gray-50 dark:bg-gray-900" style="height: 100dvh;">
+    <!-- Mobile Sidebar Overlay -->
     <div
       v-if="sidebarOpen"
-      class="navigation-overlay fixed inset-0 z-40 lg:hidden"
+      class="fixed inset-0 z-40 bg-gray-950/55 backdrop-blur-md transition-opacity lg:hidden"
       @click="appStore.closeSidebar"
     />
 
     <Sidebar />
 
-    <main class="app-main relative h-full min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden">
-      <div class="app-content min-h-0 flex flex-1 flex-col overflow-hidden" :class="{ 'is-scrolled': scrolled }">
-        <div v-if="showPageHeader" class="page-header-bar">
-          <div class="page-header-content">
-            <PageHeader />
-            <div ref="pageTabsTarget" class="page-tabs-host" />
+    <main class="relative h-full min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden">
+      <header class="glass-panel relative z-30 mx-2 mt-2 h-16 flex shrink-0 items-center justify-between rounded-lg px-4 md:mx-4 md:mt-4 md:px-5">
+        <div class="min-w-0 flex items-center gap-3">
+          <button
+            aria-label="打开导航"
+            :aria-expanded="sidebarOpen"
+            class="h-11 w-11 flex items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            @click="appStore.toggleSidebar"
+          >
+            <div class="i-carbon-menu text-xl" />
+          </button>
+          <div class="h-8 w-8 flex flex-none items-center justify-center overflow-hidden rounded-full ring-1 ring-gray-200 dark:ring-gray-700">
+            <img
+              src="/icon.png"
+              :alt="`${loginPageConfig.title || 'QQ农场智能助手'}图标`"
+              class="h-full w-full object-cover"
+            >
+          </div>
+          <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
+            {{ loginPageConfig.title || 'QQ农场智能助手' }}
           </div>
         </div>
-        <div
-          ref="scrollEl"
-          class="page-scroll custom-scrollbar flex flex-1 flex-col"
-          :class="[
-            route.meta.fullBleed ? 'overflow-hidden p-0' : 'overflow-y-auto',
-            { 'page-scroll--fill': activityDetail },
-          ]"
-          @scroll.passive="onPageScroll"
-        >
-          <RouterView v-slot="{ Component, route: currentRoute }">
-            <div :key="currentRoute.path" class="page-view min-h-0 min-w-0 w-full flex flex-1 flex-col">
-              <component :is="Component" />
-            </div>
+
+        <TopAccountMenu />
+      </header>
+
+      <!-- Main Content Area -->
+      <div class="min-h-0 flex flex-1 flex-col overflow-hidden">
+        <MysteryMerchantBanner />
+        <div class="custom-scrollbar min-h-0 flex flex-1 flex-col overflow-y-auto p-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-6 sm:p-4 md:pb-6 sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <RouterView v-slot="{ Component, route }">
+            <component :is="Component" :key="route.path" />
           </RouterView>
         </div>
       </div>
     </main>
-
-    <MobileBottomNav v-if="!route.meta.fullBleed" />
-    <SpaceTransition />
   </div>
 </template>
 
 <style scoped>
-.liquid-layout {
-  height: 100dvh;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  .page-view {
-    animation: page-arrive 160ms ease-out;
-  }
-}
-@keyframes page-arrive {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.navigation-overlay {
-  background: rgba(30, 39, 32, 0.32);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-}
-
-/* 页头和内容共用左右留白，顶栏透出页面原有的渐变背景。 */
-.app-content {
-  --page-pad: clamp(16px, 2.4vw, 34px);
-  --sticky-top: 0px;
-}
-
-.page-header-bar {
-  position: relative;
-  z-index: 20;
-  flex-shrink: 0;
-  margin-right: var(--scrollbar-w, 0px);
-  padding: 16px var(--page-pad) 12px;
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-
-.page-header-content {
-  width: 100%;
-  max-width: 1580px;
-  margin-inline: auto;
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 3px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
 }
 
-.page-header-bar:has(.page-tabs) {
-  padding-bottom: 0;
-}
-
-.page-tabs-host:empty {
-  display: none;
-}
-
-.page-scroll {
-  position: relative;
-  z-index: 0;
-  min-height: 0;
-  padding: 0 var(--page-pad) 28px;
-  isolation: isolate;
-}
-
-.page-scroll > :deep(*) {
-  flex: 0 0 auto;
-  width: 100%;
-  max-width: 1580px;
-  margin-block-start: 16px;
-  margin-inline: auto;
-}
-
-/* 活动详情隐藏通用页头；普通详情沿用页面滚动，游戏外壳保留内部滚动。 */
-.page-scroll--fill > :deep(*) {
-  margin-block-start: 0;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.page-scroll--fill :deep(.activity-shell) {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-@media (max-width: 1023px) {
-  .app-content {
-    --page-pad: 12px;
-  }
-
-  .page-header-bar {
-    padding-top: 12px;
-  }
-
-  .page-scroll {
-    /* 底部导航是悬浮的，留出它的高度，最后一张卡片和按钮不会被挡住。 */
-    padding: 0 var(--page-pad) calc(104px + env(safe-area-inset-bottom));
-    scroll-padding-bottom: calc(104px + env(safe-area-inset-bottom));
-  }
-
-  .page-scroll:not(.page-scroll--fill) > :deep(*) {
-    margin-block-start: 14px;
-  }
-}
-
-@media (max-width: 480px) {
-  .app-content {
-    --page-pad: 8px;
-  }
+.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 </style>

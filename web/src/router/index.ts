@@ -2,39 +2,41 @@ import { useStorage } from '@vueuse/core'
 import axios from 'axios'
 import NProgress from 'nprogress'
 import { createRouter, createWebHistory } from 'vue-router'
-import { allMenuRoutes } from './menu'
+import { menuRoutes } from './menu'
 import 'nprogress/nprogress.css'
 
 NProgress.configure({ showSpinner: false })
 
 const adminToken = useStorage('admin_token', '')
-let validatedToken = ''
-let validatingPromise: Promise<boolean> | null = null
+const userInfo = useStorage('user_info', '')
+let sessionPromise: Promise<boolean> | null = null
+let sessionBootstrapAttempted = false
 
-async function ensureTokenValid() {
-  const token = String(adminToken.value || '').trim()
-  if (!token)
-    return false
-
-  if (validatedToken && validatedToken === token)
+async function ensureAdminSession() {
+  // 管理页面采用宽松鉴权：已有 token 时直接放行，不在导航时重复校验。
+  if (adminToken.value || sessionBootstrapAttempted)
     return true
 
-  if (validatingPromise)
-    return validatingPromise
-
-  validatingPromise = axios.get('/api/auth/validate', {
-    headers: { 'x-admin-token': token },
-    timeout: 6000,
-  }).then((res) => {
-    const ok = !!(res.data && res.data.ok)
-    if (ok)
-      validatedToken = token
-    return ok
-  }).catch(() => false).finally(() => {
-    validatingPromise = null
-  })
-
-  return validatingPromise
+  if (!sessionPromise) {
+    sessionBootstrapAttempted = true
+    sessionPromise = axios.post('/api/auto-login', {}, { timeout: 6000 })
+      .then(({ data }) => {
+        if (!data?.ok)
+          return false
+        adminToken.value = data.data.token
+        userInfo.value = JSON.stringify({
+          username: 'admin',
+          role: 'admin',
+          card: null,
+          accountLimit: data.data.accountLimit,
+          mustChangePassword: false,
+        })
+        return true
+      })
+      .catch(() => false)
+      .finally(() => { sessionPromise = null })
+  }
+  return sessionPromise
 }
 
 const router = createRouter({
@@ -43,59 +45,25 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('@/layouts/DefaultLayout.vue'),
-      children: allMenuRoutes.map(route => ({
+      children: menuRoutes.map(route => ({
         path: route.path,
         name: route.name,
         component: route.component,
-        meta: route.meta,
       })),
     },
-    {
-      path: '/mystery-shop',
-      name: 'mystery-shop',
-      redirect: to => ({ name: 'game-mall', query: { ...to.query, tab: 'mystery' }, hash: to.hash }),
-    },
-    {
-      path: '/login',
-      name: 'login',
-      component: () => import('@/views/Login.vue'),
-    },
+    { path: '/admin', redirect: '/settings?tab=system' },
+    { path: '/login', redirect: '/' },
+    { path: '/renewal', redirect: '/' },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
-router.beforeEach(async (to, _from) => {
+router.beforeEach(async () => {
   NProgress.start()
-
-  if (to.name === 'login') {
-    if (!adminToken.value) {
-      validatedToken = ''
-      return true
-    }
-    const valid = await ensureTokenValid()
-    if (valid)
-      return { name: 'dashboard' }
-    adminToken.value = ''
-    validatedToken = ''
-    return true
-  }
-
-  if (!adminToken.value) {
-    validatedToken = ''
-    return { name: 'login' }
-  }
-
-  const valid = await ensureTokenValid()
-  if (!valid) {
-    adminToken.value = ''
-    validatedToken = ''
-    return { name: 'login' }
-  }
-
+  await ensureAdminSession()
   return true
 })
 
-router.afterEach(() => {
-  NProgress.done()
-})
+router.afterEach(() => NProgress.done())
 
 export default router

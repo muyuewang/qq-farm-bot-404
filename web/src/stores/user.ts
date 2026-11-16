@@ -1,92 +1,56 @@
 import { useStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed } from 'vue'
-import api, { getApiErrorMessage } from '@/api'
+import api from '@/api'
 
-export interface AdminInfo {
-  username: string
+interface AdminUser {
+  username: 'admin'
   role: 'admin'
+  card: null
+  accountLimit: number
   avatar?: string
-  mustChangePassword?: boolean
-}
-
-export interface LoginResult {
-  ok: boolean
-  error?: string
-  errorType?: 'rate_limit' | 'locked' | 'invalid_credentials'
-  remainingMs?: number
-  data?: {
-    token: string
-    role: 'admin'
-    user: { username: string }
-    mustChangePassword?: boolean
-  }
 }
 
 export const useUserStore = defineStore('user', () => {
   const token = useStorage('admin_token', '')
-  const userInfo = useStorage<AdminInfo | null>('user_info', null)
+  const userInfo = useStorage<AdminUser | null>('user_info', null)
   const isLoggedIn = computed(() => !!token.value)
-  const username = computed(() => userInfo.value?.username || '')
+  const isAdmin = computed(() => true)
+  const isSuperAdmin = computed(() => false)
+  const username = computed(() => 'admin')
   const avatar = computed(() => userInfo.value?.avatar || '')
-
-  async function login(username: string, password: string): Promise<LoginResult> {
-    try {
-      const res = await api.post('/api/login', { username, password })
-      if (res.data.ok) {
-        token.value = res.data.data.token
-        userInfo.value = {
-          username: res.data.data.user.username,
-          role: 'admin',
-          mustChangePassword: res.data.data.mustChangePassword,
-        }
-      }
-      return res.data
-    }
-    catch (error: any) {
-      const data = error.response?.data
-      return data
-        ? { ok: false, error: getApiErrorMessage(data, '网络错误'), errorType: data.errorType, remainingMs: data.remainingMs }
-        : { ok: false, error: getApiErrorMessage(error, '网络错误') }
-    }
-  }
-
-  async function logout() {
-    try {
-      await api.post('/api/logout')
-    }
-    finally {
-      token.value = ''
-      userInfo.value = null
-    }
-  }
+  const accountLimit = computed(() => Number.MAX_SAFE_INTEGER)
+  const isExpired = computed(() => false)
 
   async function fetchUserInfo() {
     try {
-      const res = await api.get('/api/user/me')
-      if (res.data.ok)
-        userInfo.value = res.data.data
-      return res.data
+      const { data } = await api.get('/api/user/me')
+      if (data?.ok) {
+        userInfo.value = {
+          username: 'admin',
+          role: 'admin',
+          card: null,
+          accountLimit: Number.MAX_SAFE_INTEGER,
+          avatar: data.data.avatar,
+        }
+      }
+      return data
     }
     catch {
       return { ok: false }
     }
   }
 
-  async function changePassword(oldPassword: string, newPassword: string) {
-    const res = await api.post('/api/user/change-password', { oldPassword, newPassword })
-    return res.data
-  }
-
   return {
     token,
     userInfo,
     isLoggedIn,
+    isAdmin,
+    isSuperAdmin,
     username,
     avatar,
-    login,
-    logout,
+    accountLimit,
+    isExpired,
     fetchUserInfo,
-    changePassword,
   }
 })
