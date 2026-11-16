@@ -4,21 +4,22 @@ const assert = require('node:assert/strict');
 const { RANCH_AUTOMATION_DEFAULTS, RANCH_SWITCH_KEYS, RANCH_ANIMAL_OPTIONS, normalizeRanchSetting } = require('../dist/config/ranch-automation');
 
 // 桩件只覆盖 automation 模块在 require 期绑定的依赖，全部使用固定数据，不连服务端。
-function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {} } = {}) {
+function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), logs = [] } = {}) {
     const mock = (name, exports) => {
         const id = require.resolve(`../dist/${name}`);
         require.cache[id] = { id, filename: id, loaded: true, exports };
     };
     mock('config/gameConfig', { getShopGoodsById: id => goods[id] });
     mock('models/store', { getAutomation: () => automation });
-    mock('services/ranch/transport', { isUnlocked: () => unlocked, inScene: async () => {} });
-    mock('services/ranch/state', { loadRaw: async () => ({}), snapshot: () => ({ facilities: [] }), inventory: () => [], catalog: async () => ({ goods: [] }), balance: () => ({ total: '0', locked: '0' }) });
+    // 与真实 transport 一致地把巡查体跑一遍，让路时序才可以被断言。
+    mock('services/ranch/transport', { isUnlocked: () => unlocked, inScene: async (work) => work({}) });
+    mock('services/ranch/state', { loadRaw: async () => raw, snapshot: () => ({ facilities: [], serverTime: 1_800_000_000_000 }), inventory: () => [], catalog: async () => ({ goods: [] }), balance: () => ({ total: '0', locked: '0' }) });
     mock('services/ranch/model', { cubMap: new Map(), quantity: v => Number(v) });
-    mock('services/ranch/actions', { prepareAction: async () => ({ skipped: true }), operate: async () => ({ status: 'skipped' }) });
+    mock('services/ranch/actions', { prepareAction, operate: async () => ({ status: 'skipped' }) });
     mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, claimTasks: async () => {}, claimShare: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
     mock('services/ranch/context', { getAmbientSendContext: () => null, runWithSendContext: (_ctx, run) => run() });
-    mock('utils/utils', { getServerTimeSec: () => 1_800_000_000, log: () => {} });
+    mock('utils/utils', { getServerTimeSec: () => 1_800_000_000, log: (tag, message) => logs.push({ tag, message }) });
     const id = require.resolve('../dist/services/ranch/automation');
     delete require.cache[id];
     return require(id);
@@ -77,4 +78,32 @@ test('未解锁或全部开关关闭时不排入牧场巡查', () => {
     assert.equal(loadAutomation({ automation: { ranch_task: true }, taskState: { doneToday: false, nextCheckAt: 0 } }).getRoutineState().doneToday, false, '到点的任务领取需要排入巡查');
     assert.equal(loadAutomation({ automation: { ranch_task: true }, taskState: { doneToday: true, nextCheckAt: 0 } }).getRoutineState().doneToday, true, '当日已领完则不再排入');
     assert.equal(loadAutomation({ automation: { ranch_share: true }, shareState: { doneToday: false, nextCheckAt: Date.now() + 60_000 } }).getRoutineState().doneToday, true, '分享未到点则不再排入');
+});
+
+test('农场到期时牧场巡查让路，按重进场间隔而不是巡查周期排队', async () => {
+    const logs = [];
+    const level = loadAutomation({
+        automation: { ranch_harvest: true, ranch_clean: true, ranch_check_minutes: 30 },
+        logs,
+        // 每个动作都返回「本轮跳过」，让巡查推进到下一个动作，触发第二个动作前的让路检查。
+        prepareAction: async () => ({ skipped: true }),
+    });
+    const before = Date.now();
+    await level.run({ farmDeadline: () => Date.now() - 1 });
+    const { doneToday, nextCheckAt } = level.getRoutineState();
+    assert.equal(doneToday, false, '让路不是做完，不能标记当日已完成');
+    assert.ok(nextCheckAt >= before + 19_000 && nextCheckAt <= before + 21_000,
+        `让路后应在 20 秒重进场窗口内，实际 ${nextCheckAt - before}ms`);
+    assert.deepEqual(logs.filter(row => row.tag === '牧场'), [], '让路不是失败，不该记成巡查失败日志');
+});
+
+test('核对完待核对账本会重置让路退避，立刻允许重新进牧场', async () => {
+    const level = loadAutomation({
+        automation: { ranch_harvest: true, ranch_clean: true, ranch_check_minutes: 30 },
+        prepareAction: async () => ({ skipped: true }),
+    });
+    await level.run({ farmDeadline: () => Date.now() - 1 });
+    assert.ok(level.getRoutineState().nextCheckAt > Date.now(), '让路后应短暂退避');
+    level.resetSchedule();
+    assert.equal(level.getRoutineState().nextCheckAt, 0, '核对结果后必须立刻恢复巡查');
 });

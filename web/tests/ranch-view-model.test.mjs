@@ -130,7 +130,7 @@ function baseState(overrides = {}) {
       },
     ],
     pendingOperations: [
-      { id: 'op-1', target: 'ranch:buy:88001', label: '购买幼崽', message: '结果待核对', createdAt: SERVER_TIME, costs: [{ resourceKey: 'item:1007', amount: '45000' }] },
+      { id: 'op-1', target: 'ranch:buy:88001', label: '购买幼崽', message: '结果待核对', createdAt: SERVER_TIME, costs: [{ resourceKey: 'item:1007', amount: '45000', name: '牧场金币' }] },
     ],
     ...overrides,
   }
@@ -177,8 +177,18 @@ test('基础快照：int64 原样分组，桶与牧草进入资源条，未下�
   assert.equal(state.friends, null)
   assert.equal(state.friendRanch, null)
   assert.equal(state.dailyShare, null)
-  assert.deepEqual(state.pending[0].costs, [{ resourceKey: 'item:1007', amount: '45000' }])
+  assert.deepEqual(state.pending[0].costs, [{ resourceKey: 'item:1007', amount: '45000', name: '牧场金币' }])
   assert.equal(state.pending[0].target, 'ranch:buy:88001')
+})
+
+test('待核对消耗名以后端下发为准，后端没给名字时留空交给页面兜底', () => {
+  const state = mapRanchState(baseState({
+    pendingOperations: [
+      { id: 'op-2', target: 'ranch:clean', label: '清理牧场', message: '结果待核对', costs: [{ resourceKey: 'item:1002', amount: '10' }] },
+    ],
+  }))
+  // 缺 name 不能写成猜测出来的物品名，页面会退回本页资源条或原始 resourceKey。
+  assert.deepEqual(state.pending[0].costs, [{ resourceKey: 'item:1002', amount: '10', name: '' }])
 })
 
 test('显式空数组与未下发不同：后端确认「没有」时才渲染空态', () => {

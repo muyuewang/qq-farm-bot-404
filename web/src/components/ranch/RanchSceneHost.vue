@@ -84,8 +84,10 @@ async function acknowledge(id: string) {
   }
 }
 
-/** 消耗记录只带 item:<id>，能对上资源条就显示名字，对不上时保留原始 id，不猜名字。 */
-function costText(cost: { resourceKey: string, amount: string }) {
+/** 后端在待核对账本里直接下发物品名；缺失时退回本页资源条，再对不上就保留原始 key，不猜名字。 */
+function costText(cost: { resourceKey: string, amount: string, name: string }) {
+  if (cost.name)
+    return `${cost.name} ×${formatQuantity(cost.amount)}`
   const itemId = Number(cost.resourceKey.replace('item:', ''))
   const label = Number.isFinite(itemId)
     ? resources.value.find(resource => resource.itemId === itemId)?.label || `物品${itemId}`

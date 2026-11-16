@@ -351,7 +351,7 @@ export interface RanchPendingOperation {
   label: string
   message: string
   createdAt: number
-  costs: Array<{ resourceKey: string, amount: string }>
+  costs: Array<{ resourceKey: string, amount: string, name: string }>
 }
 
 /** 待核对操作：同 target 未确认前后端会拒绝再次花同一笔资源（PENDING_CONFIRMATION），页面必须先让用户核对。 */
@@ -362,7 +362,11 @@ export function mapPendingOperations(state?: Record<string, any> | null): RanchP
     label: text(item.label) || '牧场操作',
     message: text(item.message),
     createdAt: number(item.createdAt, 0) || 0,
-    costs: list(item.costs).map((cost: any) => ({ resourceKey: text(cost.resourceKey), amount: text(cost.amount) })),
+    costs: list(item.costs).map((cost: any) => ({
+      resourceKey: text(cost.resourceKey),
+      amount: text(cost.amount),
+      name: text(cost.name),
+    })),
   }))
 }
 
