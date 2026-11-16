@@ -44,6 +44,18 @@ async function claimDailyReward(type: number, pointIds: number[]): Promise<any> 
     return types.ClaimDailyRewardReply.decode(replyBody);
 }
 
+async function reportClientProgress(taskId: number, progress: number): Promise<any> {
+    if (!types.ClientReportProgressRequest || !types.ClientReportProgressReply) {
+        return null;
+    }
+    const body: Uint8Array = types.ClientReportProgressRequest.encode(types.ClientReportProgressRequest.create({
+        task_id: toLong(taskId),
+        progress: toLong(progress),
+    })).finish();
+    const { body: replyBody } = await sendMsgAsync('gamepb.taskpb.TaskService', 'ClientReportProgress', body);
+    return types.ClientReportProgressReply.decode(replyBody);
+}
+
 async function claimAllIllustratedRewards(): Promise<any> {
     if (!types.ClaimAllRewardsV2Request || !types.ClaimAllRewardsV2Reply) {
         return { items: [], bonus_items: [] };
@@ -132,6 +144,7 @@ function normalizeTaskInfo(taskInfo: any): NormalizedTaskInfo {
 
     const append = (task: any, target: any[]): void => {
         if (!task || typeof task !== 'object') return;
+        if ([4, 5].includes(toNum(task.task_type))) return;
         const id: number = toNum(task.id);
         if (id > 0) {
             if (seenIds.has(id)) return;
@@ -142,6 +155,7 @@ function normalizeTaskInfo(taskInfo: any): NormalizedTaskInfo {
 
     for (const task of (Array.isArray(source.tasks) ? source.tasks : [])) {
         const taskType: number = toNum(task && task.task_type);
+        if (taskType === 4 || taskType === 5) continue;
         if (taskType === 1) append(task, growthTasks);
         else if (taskType === 2) append(task, dailyTasks);
         else append(task, otherTasks);
@@ -225,6 +239,52 @@ async function checkAndClaimIllustratedRewards(): Promise<boolean> {
     }
 }
 
+// ============ 客户端上报类成长任务 ============
+
+const CLIENT_REPORT_COND_TYPES: Set<number> = new Set([15]);
+
+function pickClientReportedTasks(tasks: any[]): any[] {
+    const picked: any[] = [];
+    for (const task of (Array.isArray(tasks) ? tasks : [])) {
+        const taskId: number = toNum(task && task.id);
+        const totalProgress: number = toNum(task && task.total_progress);
+        if (taskId <= 0 || !CLIENT_REPORT_COND_TYPES.has(toNum(task && task.cond_type))) continue;
+        if (!task.is_unlocked || task.is_claimed || totalProgress <= 0) continue;
+        if (toNum(task.progress) >= totalProgress) continue;
+        picked.push(task);
+    }
+    return picked;
+}
+
+async function completeClientReportedTasks(growthTasks: any[]): Promise<boolean> {
+    let advanced: boolean = false;
+    for (const task of pickClientReportedTasks(growthTasks)) {
+        const taskId: number = toNum(task.id);
+        const totalProgress: number = Math.max(1, toNum(task.total_progress));
+        const desc: string = task.desc || `成长任务#${taskId}`;
+        try {
+            const reply: any = await reportClientProgress(taskId, totalProgress);
+            const updated: any = normalizeTaskInfo(reply && reply.task_info)
+                .growthTasks.find((t: any) => toNum(t.id) === taskId);
+            if (toNum(updated && updated.progress) >= totalProgress) {
+                advanced = true;
+                log('任务', `成长任务进度已补齐: ${desc} (${totalProgress}/${totalProgress})`, {
+                    module: 'task', event: '上报成长任务', result: 'ok', taskId, totalProgress
+                });
+            } else {
+                logWarn('任务', `成长任务进度上报未生效: ${desc}`, {
+                    module: 'task', event: '上报成长任务', result: 'ignored', taskId
+                });
+            }
+        } catch (e: any) {
+            logWarn('任务', `成长任务进度上报失败: ${desc} - ${e.message}`, {
+                module: 'task', event: '上报成长任务', result: 'error', taskId
+            });
+        }
+    }
+    return advanced;
+}
+
 // ============ 自动领取 ============
 
 async function checkAndClaimTasks(): Promise<void> {
@@ -235,8 +295,12 @@ async function checkAndClaimTasks(): Promise<void> {
         const reply: any = await getTaskInfo();
         if (!reply.task_info) { checking = false; return; }
 
-        const taskInfo: any = reply.task_info;
-        const normalized: NormalizedTaskInfo = normalizeTaskInfo(taskInfo);
+        let normalized: NormalizedTaskInfo = normalizeTaskInfo(reply.task_info);
+
+        if (await completeClientReportedTasks(normalized.growthTasks)) {
+            const refreshed: any = await getTaskInfo();
+            if (refreshed && refreshed.task_info) normalized = normalizeTaskInfo(refreshed.task_info);
+        }
 
         const dailyClaimable: any[] = analyzeTaskList(normalized.dailyTasks, 'daily');
         const growthClaimable: any[] = analyzeTaskList(normalized.growthTasks, 'growth');
@@ -301,8 +365,15 @@ async function doClaim(task: any): Promise<boolean> {
     }
 }
 
-function onTaskInfoNotify(taskInfo: any): void {
+function onTaskInfoNotify(taskInfo: any, context?: { globalSceneId?: number }): void {
     if (!taskInfo) return;
+    if (context?.globalSceneId === 2) {
+        if (isAutomationOn('ranch_task') && require('./ranch/state').taskList({ task_info: taskInfo }).some((task: any) => task.canClaim)) {
+            require('./ranch/daily').markTasksChanged();
+            require('./ranch/automation').resetSchedule();
+        }
+        return;
+    }
     if (!isAutomationOn('task')) return;
 
     const normalized: NormalizedTaskInfo = normalizeTaskInfo(taskInfo);
@@ -317,10 +388,10 @@ function onTaskInfoNotify(taskInfo: any): void {
     if (hasClaimable) log('任务', `有 ${claimable.length} 个任务可领取，准备自动领取...`, {
         module: 'task', event: '领取任务', result: 'plan', count: claimable.length
     });
-    taskScheduler.setTimeoutTask('task_claim_debounce', 1000, async () => {
+    taskScheduler.setTimeoutTask('task_claim_debounce', 1000, () => require('./automation-lock').runExclusiveAutomationTask('task_claim_notify', async () => {
         if (hasClaimable) await claimTasksFromList(claimable);
         await checkAndClaimActives(actives);
-    });
+    }, { detached: true }));
 }
 
 async function claimTasksFromList(claimable: any[]): Promise<void> {
@@ -335,10 +406,10 @@ async function claimTasksFromList(claimable: any[]): Promise<void> {
 function initTaskSystem(): void {
     cleanupTaskSystem();
     networkEvents.on('taskInfoNotify', onTaskInfoNotify);
-    taskScheduler.setTimeoutTask('task_init_bootstrap', 4000, async () => {
+    taskScheduler.setTimeoutTask('task_init_bootstrap', 4000, () => require('./automation-lock').runExclusiveAutomationTask('task_init', async () => {
         await checkAndClaimTasks();
         if (isAutomationOn('task')) await checkAndClaimIllustratedRewards();
-    });
+    }, { detached: true }));
 }
 
 function cleanupTaskSystem(): void {
