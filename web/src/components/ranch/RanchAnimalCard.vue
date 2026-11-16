@@ -154,7 +154,7 @@ const feedOptions = computed(() => [
   margin-left: auto;
   overflow: hidden;
   color: #fff;
-  background: #c08a12;
+  background: var(--ui-warning-fill);
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }

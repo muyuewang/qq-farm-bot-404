@@ -312,6 +312,11 @@ watch(category, () => failed.value = {})
   font-weight: var(--fw-650);
 }
 
+/* 干草金只在浅色卡片上够清楚，深色底改用自适应的 warning 金。 */
+.dark .bag-item__meta .is-giant {
+  color: var(--ui-warning);
+}
+
 .bag-item__meta .is-locked {
   color: var(--ui-warning);
   font-weight: var(--fw-600);
