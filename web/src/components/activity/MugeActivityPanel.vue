@@ -148,9 +148,18 @@ async function settle() {
     syncAnswersFromServer()
 }
 
-function retake() {
+async function retake() {
+  if (busy.value || !active.value)
+    return
+  // 后端要求 clear 与 answers 分开提交：清空进度只发空答案 + clear，
+  // 绝不能把本地勾选一起带上，否则会被判为「清空与保存同时提交」而拒绝。
+  const previous = { ...answers.value }
   answers.value = {}
-  void mugeStore.operate('saveAnswers', { answers: {}, clear: true })
+  const ok = await mugeStore.operate('saveAnswers', { answers: {}, clear: true })
+  // 清空失败或回包读不出最新状态时回滚草稿：此时服务端的答案并未清空，
+  // 本地若保持空白，用户重新作答后会因 needsRefresh 被拒绝，白丢一次编辑。
+  if (!ok || needsRefresh.value)
+    answers.value = previous
 }
 
 /* ---------------- 生命周期 ---------------- */
