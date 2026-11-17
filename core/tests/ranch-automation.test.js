@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { RANCH_AUTOMATION_DEFAULTS, RANCH_SWITCH_KEYS, RANCH_ANIMAL_OPTIONS, normalizeRanchSetting } = require('../dist/config/ranch-automation');
 
 // 桩件只覆盖 automation 模块在 require 期绑定的依赖，全部使用固定数据，不连服务端。
-function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), logs = [] } = {}) {
+function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), operate = async () => ({ status: 'skipped' }), stateDeps = {}, logs = [] } = {}) {
     const mock = (name, exports) => {
         const id = require.resolve(`../dist/${name}`);
         require.cache[id] = { id, filename: id, loaded: true, exports };
@@ -13,9 +13,15 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
     mock('models/store', { getAutomation: () => automation });
     // 与真实 transport 一致地把巡查体跑一遍，让路时序才可以被断言。
     mock('services/ranch/transport', { isUnlocked: () => unlocked, inScene: async (work) => work({}) });
-    mock('services/ranch/state', { loadRaw: async () => raw, snapshot: () => ({ facilities: [], serverTime: 1_800_000_000_000 }), inventory: () => [], catalog: async () => ({ goods: [] }), balance: () => ({ total: '0', locked: '0' }) });
+    mock('services/ranch/state', {
+        loadRaw: async () => raw,
+        snapshot: () => ({ facilities: [], serverTime: 1_800_000_000_000 }),
+        inventory: () => stateDeps.inventory?.() ?? [],
+        catalog: async () => ({ goods: stateDeps.catalog?.() ?? [] }),
+        balance: (bag, id) => stateDeps.balance?.(bag, id) ?? { total: '0', locked: '0' },
+    });
     mock('services/ranch/model', { cubMap: new Map(), quantity: v => Number(v) });
-    mock('services/ranch/actions', { prepareAction, operate: async () => ({ status: 'skipped' }) });
+    mock('services/ranch/actions', { prepareAction, operate });
     mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, claimTasks: async () => {}, claimShare: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
     mock('services/ranch/context', { getAmbientSendContext: () => null, runWithSendContext: (_ctx, run) => run() });
@@ -31,6 +37,8 @@ test('牧场自动化默认只开任务与分享，其余会改状态的动作�
     assert.deepEqual(actions.filter(key => !RANCH_SWITCH_KEYS.includes(key)), [], '每个自动动作都必须有对应开关');
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_task, true);
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_share, true);
+    // 上游把动作默认值全改成 true，本项目坚持保守默认，不受其影响。
+    assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent, 20, '牧草补满阈值默认 20%');
 });
 
 test('牧场设置只接受已登记开关与范围内的取值', () => {
@@ -38,6 +46,10 @@ test('牧场设置只接受已登记开关与范围内的取值', () => {
     assert.equal(normalizeRanchSetting('ranch_bag_fallback', 'preferred'), 'preferred');
     for (const value of [0, 1.5, 61, 'x']) assert.throws(() => normalizeRanchSetting('ranch_check_minutes', value), /巡查间隔/);
     assert.equal(normalizeRanchSetting('ranch_check_minutes', 7), 7);
+    // 牧草补满阈值：1–100 的整数百分比，越界或非整数都要拒绝。
+    for (const value of [0, 1.5, 101, 'x']) assert.throws(() => normalizeRanchSetting('ranch_grass_threshold_percent', value), /阈值/);
+    assert.equal(normalizeRanchSetting('ranch_grass_threshold_percent', 20), 20);
+    assert.equal(normalizeRanchSetting('ranch_grass_threshold_percent', 100), 100);
     assert.throws(() => normalizeRanchSetting('ranch_harvest', 'yes'), /布尔值/);
     // 窝/棚 由 husbandry_type 决定，指定错栏位的动物必须拒绝。
     const coop = RANCH_ANIMAL_OPTIONS.find(a => a.kind === '窝');
@@ -95,6 +107,41 @@ test('农场到期时牧场巡查让路，按重进场间隔而不是巡查周�
     assert.ok(nextCheckAt >= before + 19_000 && nextCheckAt <= before + 21_000,
         `让路后应在 20 秒重进场窗口内，实际 ${nextCheckAt - before}ms`);
     assert.deepEqual(logs.filter(row => row.tag === '牧场'), [], '让路不是失败，不该记成巡查失败日志');
+});
+
+test('牧草按容量阈值补满：达到阈值不补，低于阈值才补，且一次补足缺额', async () => {
+    const mkFacility = (instanceId, feedCount) => ({
+        instance_id: instanceId, state: 1, capacity: 100,
+        feed_machine: { feed_count: feedCount },
+    });
+    const runCase = async (feedCount, thresholdPercent, grassStock) => {
+        const calls = [];
+        const raw = { bag: {}, cells: { facilities: [mkFacility(5001, feedCount)] } };
+        const level = loadAutomation({
+            automation: { ranch_grass: true, ranch_grass_threshold_percent: thresholdPercent, ranch_check_minutes: 30 },
+            raw,
+            prepareAction: async action => ({ label: action, skipped: false, costItems: [], expected: {} }),
+            operate: async (action, input) => { calls.push({ action, input }); return { status: 'ok' }; },
+            stateDeps: {
+                balance: (_bag, id) => ({ total: String(id === 7001 ? grassStock : 0), locked: '0' }),
+                inventory: () => [],
+            },
+        });
+        await level.run({ farmDeadline: () => Infinity });
+        return calls.filter(call => call.action === 'addGrass');
+    };
+
+    // 存量 30% >= 阈值 20%：不补。
+    assert.deepEqual(await runCase(30, 20, 100), [], '存量达到阈值不应补牧草');
+    // 存量 10% < 阈值 20%：补满缺口 90，库存充裕。
+    const added = await runCase(10, 20, 100);
+    assert.equal(added.length, 1, '低于阈值应补一次');
+    assert.equal(added[0].input.count, 90, '应一次补足到容量上限');
+    // 库存只有 40 时补 40，不超发。
+    const limited = await runCase(10, 20, 40);
+    assert.equal(limited[0].input.count, 40, '库存不足时按实际库存补');
+    // 阈值设为 5%：存量 10% 达到阈值，同样不补。
+    assert.deepEqual(await runCase(10, 5, 100), [], '阈值越低越保守，达到阈值不补');
 });
 
 test('核对完待核对账本会重置让路退避，立刻允许重新进牧场', async () => {
