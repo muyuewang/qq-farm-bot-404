@@ -219,6 +219,11 @@ export interface CharityFlowerActivityData {
 
 export type HeluSubActivityKey = 'giftLotus' | 'shop' | 'journey' | 'notes'
 
+/**
+ * 青梅活动（青酿换万金）。
+ * 该期活动 ID 为 2026081201 / 2026081202，时间窗已结束，
+ * 当前仅保留类型与面板组件作为后续复用的休眠能力，不在活动页挂载入口。
+ */
 export interface QingmeiActivity {
   uid: string
   title: string

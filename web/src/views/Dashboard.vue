@@ -4,12 +4,14 @@ import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
+import RanchOverview from '@/components/ranch/RanchOverview.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
 import { useIllustratedStore } from '@/stores/illustrated'
+import { useSceneStore } from '@/stores/scene'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
@@ -19,7 +21,12 @@ const statusStore = useStatusStore()
 const accountStore = useAccountStore()
 const bagStore = useBagStore()
 const illustratedStore = useIllustratedStore()
+const sceneStore = useSceneStore()
 const toastStore = useToastStore()
+
+const { scene } = storeToRefs(sceneStore)
+/** 牧场总览与农场的状态字段没有交集，整页按场景分流，不共用同一套卡片。 */
+const isRanchScene = computed(() => scene.value === 'ranch')
 
 const {
   status,
@@ -472,6 +479,11 @@ async function refresh(forceReloadLogs = false) {
   if (!currentAccountId.value)
     return
 
+  // 牧场场景走 RanchOverview 自己的快照读取，这里不再拉农场 status / 背包，
+  // 否则切到牧场后仍会按 10 秒节拍请求农场接口。
+  if (isRanchScene.value)
+    return
+
   const account = currentAccount.value
   if (!account)
     return
@@ -511,20 +523,23 @@ watch(currentAccountId, async (newId, oldId) => {
     resetDashboardState()
   }
   syncRealtimeAccount()
+  // 牧场场景由 RanchOverview 监听 currentAccountId 自行重读快照，这里不重复拉农场数据。
+  if (isRanchScene.value)
+    return
   await refresh(true)
   await refreshIllustratedLevels()
   scrollToBottom()
 })
 
 watch(() => status.value?.connection?.connected, (connected) => {
-  if (connected) {
+  if (connected && !isRanchScene.value) {
     refreshBag(true)
     refreshIllustratedLevels()
   }
 })
 
 watch(() => JSON.stringify(status.value?.operations || {}), (next, prev) => {
-  if (!realtimeConnected.value || next === prev)
+  if (!realtimeConnected.value || next === prev || isRanchScene.value)
     return
   refreshBag()
 })
@@ -589,6 +604,19 @@ function scrollToBottom() {
 onMounted(async () => {
   statusStore.setRealtimeLogsEnabled(true)
   syncRealtimeAccount()
+  // 牧场总览自己读快照与牧场日志，这里不拉农场 status / 背包 / 图鉴。
+  if (isRanchScene.value)
+    return
+  await refresh()
+  await refreshIllustratedLevels()
+  scrollToBottom()
+})
+
+// 场景切换时补一次对应侧的数据：牧场侧由 RanchOverview 在挂载时自行读取，
+// 但切回农场时该组件已卸载，需要在这里把农场数据重新拉起来。
+watch(isRanchScene, async (ranch) => {
+  if (ranch)
+    return
   await refresh()
   await refreshIllustratedLevels()
   scrollToBottom()
@@ -601,7 +629,8 @@ useIntervalFn(updateCountdowns, 1000)
 </script>
 
 <template>
-  <div class="flex flex-col gap-5 pt-1 md:h-full md:min-h-0 md:overflow-hidden md:pt-2">
+  <RanchOverview v-if="isRanchScene" />
+  <div v-else class="flex flex-col gap-5 pt-1 md:h-full md:min-h-0 md:overflow-hidden md:pt-2">
     <div class="grid grid-cols-1 shrink-0 gap-4 lg:grid-cols-3 sm:grid-cols-2">
       <div class="ui-card metric-card min-h-[168px] flex flex-col rounded-lg p-5">
         <div class="mb-2 flex items-start justify-between">

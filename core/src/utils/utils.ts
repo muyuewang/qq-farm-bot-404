@@ -125,6 +125,7 @@ function normalizeMeta(meta: any): Record<string, any> {
 function resolveModuleTag(moduleName: string): string {
     const moduleMap: Record<string, string> = {
         farm: '农场',
+        ranch: '牧场',
         friend: '好友',
         warehouse: '仓库',
         task: '任务',

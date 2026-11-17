@@ -184,6 +184,21 @@ watch(
 )
 
 const showThemeDropdown = ref(false)
+const logoutLoading = ref(false)
+
+/** 退出登录：先让后端吊销 token，再清本地凭证并回到登录页。 */
+async function handleLogout() {
+  if (logoutLoading.value)
+    return
+  logoutLoading.value = true
+  try {
+    await userStore.logout()
+    await router.push('/login')
+  }
+  finally {
+    logoutLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -270,13 +285,25 @@ const showThemeDropdown = ref(false)
 
       <div class="mt-1 flex items-center justify-between text-xs font-mono opacity-70" style="color: var(--theme-text);">
         <span>v{{ version }}</span>
-        <a
-          href="https://github.com/xxxscarlxrd404/qq-farm-bot"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="transition-opacity hover:opacity-70"
-          title="打开 GitHub 项目主页"
-        >xxxscarlxrd404</a>
+        <div class="flex items-center gap-2">
+          <a
+            href="https://github.com/xxxscarlxrd404/qq-farm-bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="transition-opacity hover:opacity-70"
+            title="打开 GitHub 项目主页"
+          >xxxscarlxrd404</a>
+          <button
+            class="flex items-center gap-1 rounded px-1.5 py-0.5 transition-opacity disabled:opacity-40 hover:opacity-70"
+            :disabled="logoutLoading"
+            title="退出登录并返回登录页"
+            @click="handleLogout"
+          >
+            <div v-if="logoutLoading" class="i-svg-spinners-90-ring-with-bg text-xs" />
+            <div v-else class="i-carbon-logout text-xs" />
+            退出
+          </button>
+        </div>
       </div>
 
       <!-- 主题选择弹出面板 -->

@@ -41,6 +41,20 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  /** 退出登录：通知后端使当前 token 失效，再清空本地凭证并回到登录页。 */
+  async function logout() {
+    try {
+      await api.post('/api/logout')
+    }
+    catch {
+      // 网络异常也要清掉本地凭证，否则用户会被卡在已失效会话里。
+    }
+    finally {
+      token.value = ''
+      userInfo.value = null
+    }
+  }
+
   return {
     token,
     userInfo,
@@ -52,5 +66,6 @@ export const useUserStore = defineStore('user', () => {
     accountLimit,
     isExpired,
     fetchUserInfo,
+    logout,
   }
 })
