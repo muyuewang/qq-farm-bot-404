@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import FarmScene from '@/components/FarmScene.vue'
+import InteractionItemsPanel from '@/components/InteractionItemsPanel.vue'
 import { useAccountStore } from '@/stores/account'
 import { useFarmStore } from '@/stores/farm'
 import { useStatusStore } from '@/stores/status'
@@ -24,7 +25,7 @@ const farmViewport = ref<HTMLElement | null>(null)
 const farmStageWidth = ref<number | null>(null)
 const FARM_CANVAS_WIDTH = 1200
 const FARM_CANVAS_HEIGHT = 650
-type PendingLandAction = 'fertilize'
+type PendingLandAction = 'fertilize' | 'fertilizeAll'
 
 const confirmConfig = ref({
   title: '',
@@ -40,7 +41,10 @@ async function executeOperate() {
     return
 
   const config = confirmConfig.value
-  if (!config.opType && (!config.landAction || !config.land))
+  // 一键施肥没有具体地块，其余地块动作必须带 land。
+  if (!config.opType && !config.landAction)
+    return
+  if (config.landAction === 'fertilize' && !config.land)
     return
 
   confirmVisible.value = false
@@ -51,6 +55,14 @@ async function executeOperate() {
     }
     else if (config.landAction === 'fertilize') {
       await farmStore.fertilizeLand(currentAccountId.value, Number(config.land.id))
+    }
+    else if (config.landAction === 'fertilizeAll') {
+      const result = await farmStore.fertilizeAllLands(currentAccountId.value, 'organic')
+      const successCount = Number(result?.successCount) || 0
+      if (successCount > 0)
+        toast.success(`已催熟 ${successCount} 块地`)
+      else
+        toast.info('当前没有可施肥的生长中作物')
     }
   }
   catch (error: any) {
@@ -98,6 +110,21 @@ function handleLandFertilize(land: any) {
     opType: '',
     landAction: 'fertilize',
     land,
+    type: 'primary',
+  }
+  confirmVisible.value = true
+}
+
+function handleFertilizeAllClick() {
+  if (!currentAccountId.value)
+    return
+
+  confirmConfig.value = {
+    title: '确认一键施肥',
+    message: '确定对全部生长中的作物使用有机肥料催熟吗？\n只处理生长中且未成熟的地块，已施肥或已成熟的地块会被跳过。',
+    opType: '',
+    landAction: 'fertilizeAll',
+    land: null,
     type: 'primary',
   }
   confirmVisible.value = true
@@ -222,6 +249,16 @@ onUnmounted(() => {
             <span class="hidden sm:inline">{{ op.label }}</span>
             <span class="sm:hidden">{{ op.type === 'clear' ? '务农' : op.label.replace('一键', '') }}</span>
           </button>
+          <button
+            class="flex items-center justify-center gap-1.5 rounded bg-lime-600 px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed hover:bg-lime-700 disabled:opacity-50"
+            :disabled="operating"
+            title="对全部生长中的作物使用有机肥料催熟"
+            @click="handleFertilizeAllClick"
+          >
+            <div class="i-carbon-chemistry" />
+            <span class="hidden sm:inline">一键施肥</span>
+            <span class="sm:hidden">施肥</span>
+          </button>
         </div>
       </div>
 
@@ -311,6 +348,15 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- 特殊互动道具：与自己农场的自动化流程共用同一批后端校验。 -->
+    <InteractionItemsPanel
+      v-if="currentAccountId"
+      :account-id="currentAccountId"
+      mode="self"
+      :lands="lands"
+      @used="refresh"
+    />
 
     <ConfirmModal
       :show="confirmVisible"

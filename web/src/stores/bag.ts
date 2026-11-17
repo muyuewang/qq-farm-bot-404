@@ -86,5 +86,13 @@ export const useBagStore = defineStore('bag', () => {
     return res.data
   }
 
-  return { items, allItems, originalItems, dashboardItems, loading, fetchBag, clearBag, useItem, sellItems }
+  /** 锁定/解锁按背包堆栈的 uid 生效，后端会再校验物品类型与当前状态。 */
+  async function setItemsLocked(accountId: string, itemUids: number[], locked: boolean) {
+    const res = await api.post('/api/bag/lock', { itemUids, locked }, {
+      headers: { 'x-account-id': accountId },
+    })
+    return res.data
+  }
+
+  return { items, allItems, originalItems, dashboardItems, loading, fetchBag, clearBag, useItem, sellItems, setItemsLocked }
 })

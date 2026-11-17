@@ -198,6 +198,26 @@ export const useFriendStore = defineStore('friend', () => {
     }
   }
 
+  /** 游戏内删除好友：后端会同时把该 GID 写入黑名单并清出同步列表。 */
+  async function delFriend(accountId: string, friendId: string) {
+    if (!accountId || !friendId)
+      return { ok: false, message: '参数无效' }
+    try {
+      const res = await api.post(`/api/friend/${friendId}/delete`, {}, {
+        headers: { 'x-account-id': accountId },
+      })
+      if (res.data?.ok) {
+        friends.value = friends.value.filter((f: any) => String(f?.gid ?? '') !== String(friendId))
+        delete friendLands.value[friendId]
+        await fetchBlacklist(accountId)
+      }
+      return { ok: Boolean(res.data?.ok), message: res.data?.error || res.data?.message || '' }
+    }
+    catch (e: any) {
+      return { ok: false, message: e?.response?.data?.error || e?.message || '删除好友失败' }
+    }
+  }
+
   async function operate(accountId: string, friendId: string, opType: string) {
     if (!accountId || !friendId)
       return { ok: false, message: '参数无效' }
@@ -340,6 +360,7 @@ export const useFriendStore = defineStore('friend', () => {
     fetchInteractRecords,
     fetchFriendLands,
     operate,
+    delFriend,
     fetchKnownFriendSettings,
     saveKnownFriendSettings,
     removeKnownFriendGid,

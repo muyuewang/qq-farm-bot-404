@@ -376,6 +376,32 @@ async function handleToggleBlacklist(friend: any, e: Event) {
   await friendStore.toggleBlacklist(currentAccountId.value, Number(friend.gid))
 }
 
+/** 互动道具使用后会改变地块状态与背包库存，重新拉一次好友土地快照。 */
+async function handleInteractionUsed(friendId: string) {
+  if (!currentAccountId.value || !friendId)
+    return
+  await friendStore.fetchFriendLands(currentAccountId.value, friendId)
+}
+
+/** 游戏内删除好友：后端会同步写入黑名单并从同步列表移除，这里只做确认与结果提示。 */
+function handleDeleteFriend(friend: any, e: Event) {
+  e.stopPropagation()
+  if (!currentAccountId.value)
+    return
+  const name = friend?.name || friend?.remark || `GID ${friend?.gid}`
+  confirmAction(`确定要在游戏内删除好友「${name}」吗？\n删除后该好友会被加入黑名单，不再自动访问。`, async () => {
+    const result = await friendStore.delFriend(currentAccountId.value!, String(friend.gid))
+    if (result.ok) {
+      expandedFriends.value.delete(String(friend.gid))
+      toast.success(result.message || '删除好友成功')
+    }
+    else {
+      toast.error(result.message || '删除好友失败')
+    }
+    return result
+  })
+}
+
 function getFriendStatusText(friend: any) {
   const p = friend.plant || {}
   const info = []
@@ -742,6 +768,7 @@ async function handleBatchAddKnownFriendGids() {
             <FriendsFriendList
               v-model:current-page="currentPage"
               :friends="paginatedFriends"
+              :account-id="currentAccountId || ''"
               :total-friends="filteredFriends.length"
               :total-pages="totalPages"
               :page-size="pageSize"
@@ -763,6 +790,8 @@ async function handleBatchAddKnownFriendGids() {
               @toggle-blacklist="handleToggleBlacklist"
               @remove-known-friend-gid="handleRemoveKnownFriendGid"
               @friend-avatar-error="handleFriendAvatarError"
+              @interaction-used="handleInteractionUsed"
+              @delete-friend="handleDeleteFriend"
             />
           </template>
         </div>

@@ -77,18 +77,29 @@ const confirmModal = ref({
   message: '',
   type: 'primary' as 'primary' | 'danger',
   loading: false,
-  action: '' as 'sell' | 'use' | 'batchSell',
+  action: '' as 'sell' | 'use' | 'batchSell' | 'lock',
   item: null as any,
   selectedItems: [] as any[],
+  uids: [] as number[],
+  locked: false,
 })
 
 const batchMode = ref(false)
 const selectedForBatch = ref<Set<number>>(new Set())
 const batchSellResult = ref<{ gold: number, goldBean: number } | null>(null)
 
+/** 锁定管理按背包堆栈 uid 操作，与自动出售共用同一批后端校验。 */
+const lockMode = ref(false)
+const selectedLockUids = ref<Set<number>>(new Set())
+
 const selectedSellableCount = computed(() => {
   return selectedForBatch.value.size
 })
+
+const selectedLockCount = computed(() => selectedLockUids.value.size)
+
+/** 当前分类下可锁定的堆栈数，用于在没有可选对象时禁用全选。 */
+const lockableCount = computed(() => filteredItems.value.filter((item: any) => canLock(item)).length)
 
 function getPriceClass(item: any) {
   const priceId = Number(item?.priceId || 0)
@@ -110,6 +121,14 @@ function canBatchSell(item: any) {
 
 function canUse(item: any) {
   return Boolean(item?.usable) || itemType(item) === 11 || Number(item?.id) === 6001
+}
+
+/** 后端只允许锁定果实、变异果实与种子；这里按同一批类型判断，真正的拒绝仍由后端给出。 */
+function canLock(item: any) {
+  const type = itemType(item)
+  const category = getItemCategory(item)
+  return Number(item?.uid || 0) > 0
+    && (type === 17 || type === 6 || type === 5 || category === 'fruit' || category === 'seed')
 }
 
 function handleSellClick(item: any) {
@@ -159,7 +178,7 @@ function handleUseClick(item: any) {
 }
 
 async function handleConfirm() {
-  const { action, item, selectedItems } = confirmModal.value
+  const { action, item, selectedItems, uids, locked } = confirmModal.value
   if (!currentAccountId.value)
     return
 
@@ -222,6 +241,19 @@ async function handleConfirm() {
         toastStore.error(`批量出售失败: ${res.error || '未知错误'}`)
       }
     }
+    else if (action === 'lock' && uids.length > 0) {
+      const res = await bagStore.setItemsLocked(currentAccountId.value, uids, locked)
+      if (res.ok) {
+        const changed = Number(res.data?.changed ?? uids.length)
+        toastStore.success(`${locked ? '已锁定' : '已解锁'} ${changed} 个物品堆栈`)
+        selectedLockUids.value.clear()
+        lockMode.value = false
+        await loadBag()
+      }
+      else {
+        toastStore.error(`${locked ? '锁定' : '解锁'}失败: ${res.error || '未知错误'}`)
+      }
+    }
     else if (action === 'use' && item) {
       const sourceItem = originalItems.value.find((it: any) => Number(it.id) === Number(item.id))
       const res = await bagStore.useItem(
@@ -269,7 +301,54 @@ function selectAllSellable() {
   }
 }
 
-function handleBatchSellClick() {
+function toggleLockMode() {
+  lockMode.value = !lockMode.value
+  if (lockMode.value) {
+    batchMode.value = false
+    selectedForBatch.value.clear()
+  }
+  selectedLockUids.value.clear()
+}
+
+function toggleLockSelection(item: any) {
+  if (!canLock(item))
+    return
+  const uid = Number(item.uid)
+  if (selectedLockUids.value.has(uid))
+    selectedLockUids.value.delete(uid)
+  else
+    selectedLockUids.value.add(uid)
+}
+
+function selectAllLockable(locked: boolean) {
+  selectedLockUids.value.clear()
+  for (const item of filteredItems.value) {
+    if (canLock(item) && Boolean(item.locked) === locked)
+      selectedLockUids.value.add(Number(item.uid))
+  }
+}
+
+function handleLockClick(locked: boolean) {
+  const uids = Array.from(selectedLockUids.value)
+  if (uids.length === 0) {
+    toastStore.warning(locked ? '请先选择要锁定的物品' : '请先选择要解锁的物品')
+    return
+  }
+  confirmModal.value = {
+    show: true,
+    title: locked ? '确认锁定' : '确认解锁',
+    message: `${locked ? '锁定' : '解锁'}选中的 ${uids.length} 个物品堆栈？\n锁定后自动出售与自动使用都会跳过这些物品。`,
+    type: locked ? 'primary' : 'danger',
+    loading: false,
+    action: 'lock',
+    item: null,
+    selectedItems: [],
+    uids,
+    locked,
+  }
+}
+
+async function handleBatchSellClick() {
   const sellableItems = filteredItems.value.filter((item: any) => canBatchSell(item))
   if (sellableItems.length === 0) {
     toastStore.warning('没有可批量出售的物品')
@@ -458,6 +537,53 @@ useIntervalFn(loadBag, 60000)
             </button>
           </template>
         </template>
+
+        <template v-if="lockableCount > 0">
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+            :class="lockMode
+              ? 'bg-amber-500 text-white dark:bg-amber-600'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+            @click="toggleLockMode"
+          >
+            <div v-if="lockMode" class="i-carbon-close mr-1 inline-block" />
+            {{ lockMode ? '退出锁定' : '锁定管理' }}
+          </button>
+          <template v-if="lockMode">
+            <button
+              class="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white font-medium transition dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700"
+              @click="selectAllLockable(true)"
+            >
+              全选未锁
+            </button>
+            <button
+              class="rounded-lg bg-gray-500 px-3 py-1.5 text-sm text-white font-medium transition dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-500"
+              @click="selectAllLockable(false)"
+            >
+              全选已锁
+            </button>
+            <button
+              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+              :class="selectedLockCount > 0
+                ? 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700'
+                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
+              :disabled="selectedLockCount === 0"
+              @click="handleLockClick(true)"
+            >
+              锁定 ({{ selectedLockCount }})
+            </button>
+            <button
+              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+              :class="selectedLockCount > 0
+                ? 'bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700'
+                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
+              :disabled="selectedLockCount === 0"
+              @click="handleLockClick(false)"
+            >
+              解锁 ({{ selectedLockCount }})
+            </button>
+          </template>
+        </template>
       </div>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-5 md:grid-cols-4 sm:grid-cols-3 xl:grid-cols-6">
@@ -467,19 +593,42 @@ useIntervalFn(loadBag, 60000)
           class="group relative flex flex-col items-center border rounded-lg bg-white p-3 transition dark:border-gray-700 dark:bg-gray-800 hover:shadow-md"
           :class="{
             'ring-2 ring-orange-500 dark:ring-orange-400': batchMode && selectedForBatch.has(Number(item.id)),
-            'opacity-50': batchMode && canBatchSell(item) && !selectedForBatch.has(Number(item.id)),
+            'ring-2 ring-amber-500 dark:ring-amber-400': lockMode && selectedLockUids.has(Number(item.uid)),
+            'cursor-pointer': lockMode && canLock(item),
+            'opacity-50': (batchMode && canBatchSell(item) && !selectedForBatch.has(Number(item.id)))
+              || (lockMode && !canLock(item)),
           }"
-          @click="batchMode && canBatchSell(item) && handleSellClick(item)"
+          @click="lockMode ? toggleLockSelection(item) : (batchMode && canBatchSell(item) && handleSellClick(item))"
         >
           <div class="absolute left-2 top-2 text-xs text-gray-400 font-mono">
             #{{ item.id }}
           </div>
 
-          <div class="mt-5 w-full flex flex-wrap justify-end gap-2 order-last">
-            <template v-if="!batchMode">
+          <div
+            v-if="item.locked"
+            class="absolute right-2 top-2 flex items-center gap-0.5 border border-amber-300 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 font-semibold leading-none dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+            title="已锁定：自动出售与自动使用会跳过该堆栈"
+          >
+            <div class="i-carbon-locked text-[10px]" />
+            已锁
+          </div>
+
+          <div class="order-last mt-5 w-full flex flex-wrap justify-end gap-2">
+            <template v-if="lockMode">
+              <div
+                v-if="canLock(item)"
+                class="h-5 w-5 flex items-center justify-center border-2 rounded transition"
+                :class="selectedLockUids.has(Number(item.uid))
+                  ? 'border-amber-500 bg-amber-500 text-white'
+                  : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700'"
+              >
+                <div v-if="selectedLockUids.has(Number(item.uid))" class="i-carbon-checkmark text-xs" />
+              </div>
+            </template>
+            <template v-else-if="!batchMode">
               <button
                 v-if="canSell(item)"
-                class="rounded bg-red-500 min-h-11 px-2 py-2 text-xs text-white transition-colors dark:bg-red-600 hover:opacity-100"
+                class="min-h-11 rounded bg-red-500 px-2 py-2 text-xs text-white transition-colors dark:bg-red-600 hover:opacity-100"
                 title="出售全部"
                 @click.stop="handleSellClick(item)"
               >
@@ -487,7 +636,7 @@ useIntervalFn(loadBag, 60000)
               </button>
               <button
                 v-if="canUse(item)"
-                class="rounded bg-green-500 min-h-11 px-2 py-2 text-xs text-white transition-colors dark:bg-green-600 hover:opacity-100"
+                class="min-h-11 rounded bg-green-500 px-2 py-2 text-xs text-white transition-colors dark:bg-green-600 hover:opacity-100"
                 :title="Number(item.id) === 6001 ? '使用一枚' : '使用全部'"
                 @click.stop="handleUseClick(item)"
               >
@@ -556,7 +705,13 @@ useIntervalFn(loadBag, 60000)
       :message="confirmModal.message"
       :type="confirmModal.type"
       :loading="confirmModal.loading"
-      :confirm-text="confirmModal.action === 'sell' ? '确认出售' : confirmModal.action === 'batchSell' ? '确认出售' : '确认使用'"
+      :confirm-text="confirmModal.action === 'sell'
+        ? '确认出售'
+        : confirmModal.action === 'batchSell'
+          ? '确认出售'
+          : confirmModal.action === 'lock'
+            ? (confirmModal.locked ? '确认锁定' : '确认解锁')
+            : '确认使用'"
       @confirm="handleConfirm"
       @close="handleCancel"
       @cancel="handleCancel"

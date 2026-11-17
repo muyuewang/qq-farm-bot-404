@@ -147,6 +147,20 @@ export const useFarmStore = defineStore('farm', () => {
     return data
   }
 
+  /**
+   * 一键施肥：后端会重新读取最新土地快照，只对生长中的作物发送一次批量请求，
+   * 超时或部分成功都不会自动重试，避免重复推进阶段或重复消耗化肥。
+   */
+  async function fertilizeAllLands(accountId: string, fertilizerType: 'normal' | 'organic') {
+    if (!accountId)
+      return null
+    const { data } = await api.post('/api/farm/fertilize-all', { fertilizerType }, {
+      headers: { 'x-account-id': accountId },
+    })
+    await fetchLands(accountId)
+    return data?.data ?? null
+  }
+
   return {
     lands,
     summary,
@@ -163,5 +177,6 @@ export const useFarmStore = defineStore('farm', () => {
     claimDogSkillGifts,
     operate,
     fertilizeLand,
+    fertilizeAllLands,
   }
 })

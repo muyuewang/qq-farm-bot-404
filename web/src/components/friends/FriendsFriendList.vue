@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import FarmScene from '@/components/FarmScene.vue'
+import InteractionItemsPanel from '@/components/InteractionItemsPanel.vue'
 
 type FriendActionType = 'steal' | 'water' | 'weed' | 'bug' | 'bad'
 
 const props = defineProps<{
   friends: any[]
+  accountId: string
   totalFriends: number
   totalPages: number
   pageSize: number
@@ -29,6 +31,8 @@ const emit = defineEmits<{
   (e: 'toggleBlacklist', friend: any, event: Event): void
   (e: 'removeKnownFriendGid', friend: any, event: Event): void
   (e: 'friendAvatarError', friend: any): void
+  (e: 'deleteFriend', friend: any, event: Event): void
+  (e: 'interactionUsed', friendId: string): void
 }>()
 
 const currentPage = defineModel<number>('currentPage', { required: true })
@@ -143,10 +147,17 @@ function goToPage(page: number) {
         >
           移出同步列表
         </button>
+        <button
+          class="border border-red-200 rounded px-3 py-2 text-sm text-red-600 transition dark:border-red-800 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+          title="游戏内删除该好友，并自动加入黑名单"
+          @click="emit('deleteFriend', friend, $event)"
+        >
+          删除好友
+        </button>
       </div>
     </div>
 
-    <div v-if="expandedFriends.has(friend.gid)" class="border-t bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+    <div v-if="expandedFriends.has(friend.gid)" class="border-t bg-gray-50 p-4 space-y-3 dark:border-gray-700 dark:bg-gray-900/50">
       <div v-if="friendLandsLoading[friend.gid]" class="flex justify-center py-4">
         <div class="i-svg-spinners-90-ring-with-bg text-2xl text-blue-500" />
       </div>
@@ -154,6 +165,14 @@ function goToPage(page: number) {
         当前没有返回土地数据，可稍后重试或先确认该好友农场是否可访问。
       </div>
       <FarmScene v-else :lands="friendLands[friend.gid] || []" />
+      <InteractionItemsPanel
+        v-if="accountId"
+        :account-id="accountId"
+        mode="friend"
+        :gid="String(friend.gid)"
+        :lands="friendLands[friend.gid] || []"
+        @used="emit('interactionUsed', String(friend.gid))"
+      />
     </div>
   </div>
 
