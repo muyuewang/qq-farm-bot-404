@@ -139,6 +139,7 @@ function inferModuleFromTag(tag: string): string {
     const t = String(tag || '').trim();
     const tagMap: Record<string, string> = {
         农场: 'farm',
+        牧场: 'ranch',
         商店: 'warehouse',
         购买: 'warehouse',
         仓库: 'warehouse',
