@@ -34,6 +34,9 @@ Update.log
 .idea/
 .vscode/
 
+# WorkBuddy local workspace memory
+.workbuddy/
+
 # OS
 .DS_Store
 Thumbs.db
