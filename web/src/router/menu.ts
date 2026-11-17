@@ -55,6 +55,14 @@ export const menuRoutes: MenuItem[] = [
     component: () => import('@/views/Activity.vue'),
   },
   {
+    path: 'ranch-strategy',
+    name: 'ranch-strategy',
+    label: '策略',
+    icon: 'i-carbon-settings-adjust',
+    component: () => import('@/views/RanchStrategy.vue'),
+    scenes: ['ranch'],
+  },
+  {
     path: 'shop',
     name: 'shop',
     label: '商城',

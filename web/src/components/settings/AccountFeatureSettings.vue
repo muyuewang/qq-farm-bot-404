@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import api from '@/api'
 import StrategySettingsTab from '@/components/settings/StrategySettingsTab.vue'
@@ -9,6 +10,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useRanchStore } from '@/stores/ranch'
+import { useSceneStore } from '@/stores/scene'
 import { isRanchSwitchDefaultOn, RANCH_AUTOMATION_DEFAULTS, RANCH_AUTOMATION_GROUPS, RANCH_AUTOMATION_LIMITS, RANCH_AUTOMATION_SWITCHES, RANCH_BAG_FALLBACK_OPTIONS, RANCH_STRATEGY_OPTIONS, ranchUsesPreferredAnimal } from '@/utils/ranch'
 
 type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity' | 'ranch'
@@ -65,6 +67,7 @@ const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_A
 const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
 
 const ranchStore = useRanchStore()
+const { scene } = storeToRefs(useSceneStore())
 const ranchKeys = RANCH_AUTOMATION_SWITCHES.map(item => item.key)
 const ranchSwitchGroups = computed(() => RANCH_AUTOMATION_GROUPS.map((group) => {
   const items = RANCH_AUTOMATION_SWITCHES.filter(item => item.group === group.key)
@@ -110,6 +113,12 @@ const moduleInfo: Record<ModuleKey, { title: string, description: string, icon: 
 }
 
 const activeInfo = computed(() => activeModule.value ? moduleInfo[activeModule.value] : null)
+
+/**
+ * 牧场策略已在「策略」菜单独立成页。牧场场景下不再展示这张卡片，
+ * 否则同一个开关会在设置弹窗和策略页各有一份入口。
+ */
+const visibleModules = computed(() => Object.entries(moduleInfo).filter(([key]) => scene.value !== 'ranch' || key !== 'ranch'))
 const fertilizerName = computed(() => props.fertilizerOptions.find(item => item.value === automation.value.automation.fertilizer)?.label || '未设置')
 const selectedLandNames = computed(() => props.fertilizerLandTypeOptions.filter(item => automation.value.automation.fertilizer_land_types?.includes(item.value)).map(item => item.label))
 const selectedLandTypeCount = computed(() => Array.isArray(automation.value.automation.fertilizer_land_types) ? automation.value.automation.fertilizer_land_types.length : 0)
@@ -347,6 +356,13 @@ function cancel() {
   editSnapshot.value = null
   activeModule.value = null
 }
+
+// 切到牧场场景时关掉还在编辑的牧场弹窗，避免与独立「策略」页同时改同一份配置。
+watch(scene, (next) => {
+  if (next === 'ranch' && activeModule.value === 'ranch')
+    cancel()
+})
+
 onMounted(() => {
   loadQixiFriends()
   nowTimer = window.setInterval(() => {
@@ -377,7 +393,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
 
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="(info, key) in moduleInfo"
+          v-for="(info, key) in visibleModules"
           :key="key"
           class="group min-h-[184px] flex flex-col border border-gray-200 rounded-lg bg-white p-4 transition dark:border-gray-700 hover:border-[var(--theme-primary)] dark:bg-gray-800 hover:shadow-sm"
         >
