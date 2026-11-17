@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
 import { ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { formatQuantity, formatSeconds, grassRoom, itemListLine } from '@/utils/ranch'
-import type { RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 

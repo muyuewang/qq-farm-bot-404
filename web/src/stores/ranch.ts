@@ -1,3 +1,4 @@
+import type { QuoteResult, RanchAction, RanchState, RanchView } from '@/utils/ranch'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import api from '@/api'
@@ -10,7 +11,6 @@ import {
   RANCH_ENDPOINT,
   RANCH_OPTIONS_ENDPOINT,
 } from '@/utils/ranch'
-import type { QuoteResult, RanchAction, RanchState, RanchView } from '@/utils/ranch'
 
 export interface RanchActionResult {
   ok: boolean

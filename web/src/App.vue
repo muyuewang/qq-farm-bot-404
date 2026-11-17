@@ -29,7 +29,12 @@ onMounted(() => {
 /* Global styles */
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    sans-serif;
   line-height: 1.5;
   font-optical-sizing: auto;
   background: var(--app-bg);

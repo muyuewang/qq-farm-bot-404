@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import '../styles/official-crystal-animation.css'
+
 const starImage = '/game-config/effect_images/mutant/jinghui/star.png'
 </script>
 

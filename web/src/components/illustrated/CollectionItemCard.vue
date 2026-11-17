@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { CollectionItemDto } from '@/utils/collections'
 import { computed } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { costLine, starDots } from '@/utils/collections'
-import type { CollectionItemDto } from '@/utils/collections'
 
 const props = defineProps<{
   item: CollectionItemDto
@@ -64,7 +64,7 @@ const upgradeLabel = computed(() => (props.item.activated ? '升星' : '激活')
         <span class="ml-1 text-[11px] text-gray-500 dark:text-gray-400">持有 {{ item.ownCount }}</span>
       </div>
 
-      <div class="mt-2 space-y-1 text-[11px] text-gray-500 leading-5 dark:text-gray-400">
+      <div class="mt-2 text-[11px] text-gray-500 leading-5 space-y-1 dark:text-gray-400">
         <div v-if="!item.unlocked" class="line-clamp-2">
           {{ item.requirements.join('；') || '解锁条件待确认' }}
         </div>
@@ -83,7 +83,7 @@ const upgradeLabel = computed(() => (props.item.activated ? '升星' : '激活')
         </div>
       </div>
 
-      <div class="mt-auto grid grid-cols-2 gap-2 pt-2">
+      <div class="grid grid-cols-2 mt-auto gap-2 pt-2">
         <BaseButton
           size="sm"
           :variant="action.canActivate && item.canUpgrade ? 'primary' : 'secondary'"

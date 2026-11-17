@@ -1,16 +1,17 @@
 <script setup lang="ts">
+import type { RanchView } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import ConfirmModal from '@/components/ConfirmModal.vue'
-import DecorationGoodsCard from '@/components/shop/DecorationGoodsCard.vue'
-import MysteryGoodsCard from '@/components/shop/MysteryGoodsCard.vue'
-import PurchaseQuantityModal from '@/components/shop/PurchaseQuantityModal.vue'
 import RanchCansPanel from '@/components/ranch/RanchCansPanel.vue'
 import RanchMarketPanel from '@/components/ranch/RanchMarketPanel.vue'
 import RanchSceneHost from '@/components/ranch/RanchSceneHost.vue'
 import RanchShopPanel from '@/components/ranch/RanchShopPanel.vue'
+import DecorationGoodsCard from '@/components/shop/DecorationGoodsCard.vue'
+import MysteryGoodsCard from '@/components/shop/MysteryGoodsCard.vue'
+import PurchaseQuantityModal from '@/components/shop/PurchaseQuantityModal.vue'
 import SeedGoodsCard from '@/components/shop/SeedGoodsCard.vue'
 import ShopAccountHeader from '@/components/shop/ShopAccountHeader.vue'
 import ShopEmptyState from '@/components/shop/ShopEmptyState.vue'
@@ -23,7 +24,6 @@ import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatCurrencyAmountByLabel } from '@/utils/number-format'
 import { RANCH_VIEW_LABELS } from '@/utils/ranch'
-import type { RanchView } from '@/utils/ranch'
 
 const accountStore = useAccountStore()
 const shopStore = useShopStore()
@@ -53,6 +53,10 @@ const tab = ref<'seed' | 'decoration' | 'mystery'>('seed')
 const ascending = ref(true)
 const SHOP_TABS = new Set(['seed', 'decoration', 'mystery'])
 const mysteryAutoBuyEnabled = ref(false)
+
+const sortedSeeds = computed(() => {
+  return [...seeds.value].sort((a, b) => ascending.value ? a.seedLevel - b.seedLevel : b.seedLevel - a.seedLevel)
+})
 
 /**
  * 商城同样分属两个场景：农场商城走 /api/shop/*，牧场的商店、罐头商城和交易市场挂在
@@ -142,10 +146,6 @@ const {
 } = createShopAvailability({
   currentLevel: () => currentLevel.value,
   currentGold: () => currentGold.value,
-})
-
-const sortedSeeds = computed(() => {
-  return [...seeds.value].sort((a, b) => ascending.value ? a.seedLevel - b.seedLevel : b.seedLevel - a.seedLevel)
 })
 
 function openConfirm(title: string, message: string, action: () => Promise<void>) {

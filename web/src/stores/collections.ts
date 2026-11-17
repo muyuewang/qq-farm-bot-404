@@ -1,3 +1,4 @@
+import type { CollectionAction, CollectionsSnapshot, MutationCatalog } from '@/utils/collections'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import api from '@/api'
@@ -10,7 +11,6 @@ import {
   mapMutationCatalog,
   MUTATION_CATALOG_ENDPOINT,
 } from '@/utils/collections'
-import type { CollectionAction, CollectionsSnapshot, MutationCatalog } from '@/utils/collections'
 
 export interface CollectionActionResult {
   ok: boolean

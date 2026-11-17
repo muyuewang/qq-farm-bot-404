@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { useEventListener, useIntervalFn } from '@vueuse/core'
-import { computed, reactive, ref, watch, useId } from 'vue'
-import { useModalFocus } from '@/composables/useModalFocus'
+import { computed, reactive, ref, useId, watch } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseTextarea from '@/components/ui/BaseTextarea.vue'
+import { useModalFocus } from '@/composables/useModalFocus'
 import { useWxLoginStore } from '@/stores/wx-login'
 import { parseManualLoginInput } from '@/utils/gateway-url'
 

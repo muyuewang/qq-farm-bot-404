@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import type { RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { formatQuantity, formatSeconds } from '@/utils/ranch'
-import type { RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -28,7 +28,8 @@ const sellable = computed(() => items.value.filter(item => item.canSell))
 const ranches = computed(() => (props.state?.facilities || []).filter(facility => facility.isRanch))
 const ranchOptions = computed(() => ranches.value.map(facility => ({
   value: facility.id,
-  label: `${facility.name} Lv.${facility.level}　${facility.summary.animalText}`,
+  // 全角空格是排版用的宽间隔，写成转义避免触发 no-irregular-whitespace。
+  label: `${facility.name} Lv.${facility.level}\u3000${facility.summary.animalText}`,
 })))
 
 /** 分类只看后端下发的功能位（can / animalId / canSell），不按物品 type 数字猜语义。 */

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, useId } from 'vue'
-import { useModalFocus } from '@/composables/useModalFocus'
+import { ref, useId, watch } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import { useModalFocus } from '@/composables/useModalFocus'
 
 const props = defineProps<{
   show: boolean
@@ -53,7 +53,10 @@ async function save() {
 }
 const modalSurface = ref<HTMLElement | null>(null)
 const modalId = useId()
-useModalFocus(() => props.show, modalSurface, () => { if (!loading.value) emit('close') })
+useModalFocus(() => props.show, modalSurface, () => {
+  if (!loading.value)
+    emit('close')
+})
 </script>
 
 <template>

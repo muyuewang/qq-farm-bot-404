@@ -20,7 +20,6 @@ export interface Account {
   // Add other fields as discovered
 }
 
-
 export interface AccountLog {
   time: string
   action: string

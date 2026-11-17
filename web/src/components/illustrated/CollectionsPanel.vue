@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { CollectionItemDto } from '@/utils/collections'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, watch } from 'vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
@@ -14,7 +15,6 @@ import {
   costLine,
   describeItemAction,
 } from '@/utils/collections'
-import type { CollectionItemDto } from '@/utils/collections'
 
 const accountStore = useAccountStore()
 const collectionsStore = useCollectionsStore()
@@ -85,7 +85,7 @@ const dialogMessage = computed(() => {
   return `确认把「${request.item.name}」${request.displayed ? '放上展台' : '从展台取下'}吗？展台同一时间只展示一件藏品。`
 })
 
-const milestoneState = (milestone: { claimed: boolean, reached: boolean }) => {
+function milestoneState(milestone: { claimed: boolean, reached: boolean }) {
   if (milestone.claimed)
     return 'claimed'
   return milestone.reached ? 'claimable' : 'locked'
@@ -233,7 +233,7 @@ onMounted(() => {
         后端未返回操作后的藏品快照，请点击刷新确认星级与分数，不要重复提交同一条操作。
       </div>
 
-      <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+      <div class="border border-gray-200 rounded-xl p-4 dark:border-gray-700">
         <div class="flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
           <span>收藏分数进度</span>
           <span>{{ snapshot?.nextRewardScore === null ? '全部档位已达成' : `下一档 ${snapshot?.nextRewardScore ?? '—'} 分` }}</span>
@@ -246,7 +246,7 @@ onMounted(() => {
           <div
             v-for="milestone in snapshot?.milestones || []"
             :key="milestone.level"
-            class="min-w-[164px] shrink-0 rounded-lg border px-3 py-2 text-xs"
+            class="min-w-[164px] shrink-0 border rounded-lg px-3 py-2 text-xs"
             :class="{
               'border-emerald-300 bg-emerald-50/60 dark:border-emerald-700 dark:bg-emerald-900/20': milestoneState(milestone) === 'claimed',
               'border-blue-400 bg-blue-50/70 dark:border-blue-600 dark:bg-blue-900/25': milestoneState(milestone) === 'claimable',
@@ -266,7 +266,7 @@ onMounted(() => {
                 {{ milestone.claimed ? '已领取' : milestone.reached ? '可领取' : '未达成' }}
               </span>
             </div>
-            <div v-if="milestone.rewards.length" class="mt-1.5 space-y-1 text-gray-600 dark:text-gray-300">
+            <div v-if="milestone.rewards.length" class="mt-1.5 text-gray-600 space-y-1 dark:text-gray-300">
               <div v-for="reward in milestone.rewards" :key="reward.itemId" class="truncate">
                 {{ costLine(reward) }}
               </div>
@@ -299,7 +299,7 @@ onMounted(() => {
       <section
         v-for="series in visibleSeries"
         :key="series.id"
-        class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+        class="border border-gray-200 rounded-xl bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
       >
         <button class="w-full flex items-start justify-between gap-3 text-left" @click="toggleSeries(series.id)">
           <div class="min-w-0">
@@ -324,7 +324,7 @@ onMounted(() => {
               <span
                 v-for="rule in series.mutationRules"
                 :key="rule.name"
-                class="rounded border border-gray-200 px-1.5 py-0.5 dark:border-gray-700"
+                class="border border-gray-200 rounded px-1.5 py-0.5 dark:border-gray-700"
               >
                 {{ rule.name }} {{ rule.probability }}%<template v-if="rule.guarantee"> · 保底 {{ rule.guarantee }}</template>
               </span>
@@ -333,7 +333,7 @@ onMounted(() => {
           <span class="shrink-0 text-xs text-gray-400">{{ seriesOpen(series.id) ? '收起' : '展开' }}</span>
         </button>
 
-        <div v-if="seriesOpen(series.id)" class="mt-3 grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-3">
+        <div v-if="seriesOpen(series.id)" class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] mt-3 gap-3">
           <CollectionItemCard
             v-for="item in series.items"
             :key="item.id"
@@ -346,7 +346,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="(snapshot?.pedestals || []).length" class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <section v-if="(snapshot?.pedestals || []).length" class="border border-gray-200 rounded-xl bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <h3 class="text-sm text-gray-900 font-semibold dark:text-gray-100">
           展台
         </h3>
@@ -354,13 +354,13 @@ onMounted(() => {
           <div
             v-for="pedestal in snapshot?.pedestals || []"
             :key="pedestal.id"
-            class="min-w-[112px] shrink-0 rounded-lg border px-3 py-2 text-center text-xs"
+            class="min-w-[112px] shrink-0 border rounded-lg px-3 py-2 text-center text-xs"
             :class="pedestal.owned
               ? 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/30'
               : 'border-dashed border-gray-200 opacity-70 dark:border-gray-700'"
           >
             <img v-if="pedestal.image" :src="pedestal.image" :alt="pedestal.name" class="mx-auto h-10 w-10 object-contain">
-            <div v-else class="mx-auto grid h-10 w-10 place-items-center rounded bg-white text-[10px] text-gray-400 dark:bg-gray-800">
+            <div v-else class="grid mx-auto h-10 w-10 place-items-center rounded bg-white text-[10px] text-gray-400 dark:bg-gray-800">
               无图
             </div>
             <div class="mt-1 truncate text-gray-700 dark:text-gray-200">
@@ -373,7 +373,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="(catalog?.collections || []).length" class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <section v-if="(catalog?.collections || []).length" class="border border-gray-200 rounded-xl bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div class="flex items-center justify-between gap-3">
           <h3 class="text-sm text-gray-900 font-semibold dark:text-gray-100">
             官方公示的系列概率
@@ -383,7 +383,7 @@ onMounted(() => {
         <div v-if="catalogError" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
           {{ catalogError }}
         </div>
-        <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="grid mt-3 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <div
             v-for="entry in catalog?.collections || []"
             :key="entry.id"

@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { RanchAnimal, RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { formatQuantity, itemListLine } from '@/utils/ranch'
-import type { RanchAnimal, RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -106,7 +106,7 @@ function shelfText(shelf: any) {
         </BaseButton>
       </div>
 
-      <p class="text-[11px] leading-5 text-gray-500 dark:text-gray-400">
+      <p class="text-[11px] text-gray-500 leading-5 dark:text-gray-400">
         进入好友牧场本身即是一次真实访问：报价阶段服务端已进入并离开过对方牧场，操作结果以再次进入后的回包为准。
       </p>
 
@@ -158,11 +158,11 @@ function shelfText(shelf: any) {
             该栏舍暂无产物货架。
           </p>
 
-          <div v-if="row.animals.length" class="mt-3 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2">
+          <div v-if="row.animals.length" class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] mt-3 gap-2">
             <div
               v-for="animal in row.animals"
               :key="`${row.id}-${animal.id}`"
-              class="rounded-lg border border-gray-200 px-2 py-1.5 dark:border-gray-700"
+              class="border border-gray-200 rounded-lg px-2 py-1.5 dark:border-gray-700"
             >
               <p class="truncate text-xs font-medium">
                 {{ animal.name }}

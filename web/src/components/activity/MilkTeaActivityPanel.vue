@@ -11,8 +11,8 @@ import {
   MILK_TEA_ENDPOINT,
   MILK_TEA_MODAL_PAGES,
   MILK_TEA_MODAL_RECORDS,
-  MILK_TEA_SHARE_ACTIVITY_ID,
   MILK_TEA_SHARE_ACTIONS,
+  MILK_TEA_SHARE_ACTIVITY_ID,
   MILK_TEA_SHARE_ENDPOINT,
   MILK_TEA_TAB_PAGES,
 } from '@/stores/milk-tea'
@@ -100,7 +100,7 @@ let generation = 0
 const img = (name: string) => `/activity/milk-tea/${name}.png`
 const currencyIcon = (item: any) => ({ 1001: '/game-config/resource-icons/gold.png', 1004: '/game-config/resource-icons/diamond.png', 1041: img('icon_s4_ticket') } as Record<string, string>)[String(item.id ?? item.itemId)] || item.image || ''
 // 余额缺失表示后端这一页没有取过该项，显示未确认而不是 0。
-const money = (id: string) => {
+function money(id: string) {
   const entry = state.value?.balances?.find((x: any) => String(x.itemId ?? x.id) === id)
   return entry?.count == null ? '—' : String(entry.count)
 }

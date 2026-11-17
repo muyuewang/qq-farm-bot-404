@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
-import { useModalFocus } from '@/composables/useModalFocus'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import { useModalFocus } from '@/composables/useModalFocus'
 
 type ModalType = 'primary' | 'danger' | 'success' | 'secondary'
 

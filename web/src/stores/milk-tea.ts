@@ -88,10 +88,33 @@ const LIMIT_PERIOD_LABELS: Record<string, string> = { daily: '每日', weekly: '
 const CURRENCY_NAMES: Record<string, string> = { 1001: '金币', 1041: '奶茶券' }
 
 const SNAPSHOT_KEYS = [
-  'id', 'title', 'page', 'serverTime', 'startTime', 'endTime', 'settleStartTime',
-  'exchangeStartTime', 'exchangeEndTime', 'active', 'settling', 'summary', 'rules',
-  'recommendedNames', 'actionAvailability', 'levels', 'shop', 'recipes', 'fruits',
-  'work', 'interactions', 'durations', 'hire', 'goods', 'fund', 'rank', 'logs',
+  'id',
+  'title',
+  'page',
+  'serverTime',
+  'startTime',
+  'endTime',
+  'settleStartTime',
+  'exchangeStartTime',
+  'exchangeEndTime',
+  'active',
+  'settling',
+  'summary',
+  'rules',
+  'recommendedNames',
+  'actionAvailability',
+  'levels',
+  'shop',
+  'recipes',
+  'fruits',
+  'work',
+  'interactions',
+  'durations',
+  'hire',
+  'goods',
+  'fund',
+  'rank',
+  'logs',
 ]
 
 export function toNumber(value: any, fallback = 0): number {

@@ -258,8 +258,8 @@ async function handleAccountSaved() {
       :aria-expanded="showAccountDropdown"
       :aria-controls="dropdownId"
       aria-label="选择和管理账号"
-      @keydown.escape="closeDropdown"
       class="max-w-[min(76vw,280px)] flex items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-gray-100/70 dark:hover:bg-gray-700/50"
+      @keydown.escape="closeDropdown"
       @click="toggleDropdown"
     >
       <div class="h-9 w-9 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200 transition dark:bg-gray-700 hover:ring-2 dark:ring-gray-600 hover:ring-[var(--theme-primary)]">
@@ -308,10 +308,10 @@ async function handleAccountSaved() {
         ref="menuSurface"
         role="region"
         aria-label="账号列表与管理"
-        @keydown.escape.stop.prevent="closeDropdown"
-        @focusout="onMenuFocusout"
         class="account-menu-surface fixed z-[9999] overflow-y-auto border border-gray-200/70 rounded-xl bg-white/95 py-1 shadow-xl backdrop-blur-sm dark:border-gray-700/70 dark:bg-gray-900/95"
         :style="{ top: `${dropdownPos.top}px`, left: `${dropdownPos.left}px`, width: `${dropdownPos.width}px`, maxHeight: `${dropdownPos.maxHeight}px` }"
+        @keydown.escape.stop.prevent="closeDropdown"
+        @focusout="onMenuFocusout"
       >
         <div class="custom-scrollbar max-h-72 overflow-y-auto">
           <template v-if="accounts.length > 0">

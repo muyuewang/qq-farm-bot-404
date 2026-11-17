@@ -62,7 +62,9 @@ function getBorderColor(type: string) {
 <style scoped>
 .toast-enter-active,
 .toast-leave-active {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .toast-enter-from {

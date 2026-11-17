@@ -194,7 +194,7 @@ watch(expanded, cancelDrag)
         <span class="text-xs text-gray-500 font-normal">{{ loading ? '读取中…' : error ? '读取失败' : `共 ${ordered.length} 种` }}</span>
       </button>
       <div v-if="expanded" class="ml-auto flex items-center gap-2">
-        <input v-model="search" type="search" aria-label="搜索背包种子" placeholder="搜索名称 / ID" class="h-8 w-36 border border-gray-200 rounded-md bg-transparent px-2 text-xs outline-none focus:border-[var(--theme-primary)] sm:w-44 dark:border-gray-600">
+        <input v-model="search" type="search" aria-label="搜索背包种子" placeholder="搜索名称 / ID" class="h-8 w-36 border border-gray-200 rounded-md bg-transparent px-2 text-xs outline-none sm:w-44 dark:border-gray-600 focus:border-[var(--theme-primary)]">
         <span v-if="search.trim()" class="text-xs text-gray-500">{{ visibleSeeds.length }} 项</span>
         <button type="button" class="h-8 shrink-0 text-xs text-[var(--theme-primary)] disabled:opacity-50" :disabled="loading || dragging !== null" @click="refresh">
           {{ loading ? '读取中…' : '刷新' }}
@@ -218,15 +218,17 @@ watch(expanded, cancelDrag)
             没有匹配的种子
           </p>
           <div class="seed-priority-grid">
-            <div v-for="{ seed, rank } in visibleSeeds" :key="seed.seedId" :data-seed-id="seed.seedId" tabindex="0" :aria-label="`${seed.name}，第${rank}名，可拖动或使用方向键调整顺序`" class="relative min-w-0 cursor-grab touch-none select-none border rounded-lg bg-gray-50 p-2 active:cursor-grabbing dark:bg-gray-800" @pointerdown="start($event, seed.seedId)" @pointermove="drag" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @keydown="moveByKeyboard($event, seed.seedId, rank)" :class="{
+            <div
+              v-for="{ seed, rank } in visibleSeeds" :key="seed.seedId" :data-seed-id="seed.seedId" tabindex="0" :aria-label="`${seed.name}，第${rank}名，可拖动或使用方向键调整顺序`" class="relative min-w-0 cursor-grab touch-none select-none border rounded-lg bg-gray-50 p-2 active:cursor-grabbing dark:bg-gray-800" :class="{
                 'seed-drag-placeholder': dragging === seed.seedId,
                 'seed-drop-before': dropTarget === seed.seedId && dropSide === 'before',
                 'seed-drop-after': dropTarget === seed.seedId && dropSide === 'after',
                 'border-gray-200 dark:border-gray-700': dragging !== seed.seedId,
-              }">
+              }" @pointerdown="start($event, seed.seedId)" @pointermove="drag" @pointerup="finishDrag" @pointercancel="cancelDrag" @lostpointercapture="cancelDrag" @keydown="moveByKeyboard($event, seed.seedId, rank)"
+            >
               <div class="flex items-center justify-between gap-1">
                 <span class="text-xs text-gray-500 tabular-nums">#{{ rank }}</span>
-                <button type="button" class="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded text-[var(--theme-primary)] hover:bg-gray-200 disabled:cursor-default disabled:text-gray-400 disabled:opacity-40 dark:hover:bg-gray-700" :disabled="rank === 1" :aria-label="`置顶${seed.name}`" :title="rank === 1 ? '已置顶' : '置顶'" @pointerdown.stop @keydown.stop @click.stop="move(seed.seedId, ordered[0]!.seedId)">
+                <button type="button" class="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded text-[var(--theme-primary)] disabled:cursor-default hover:bg-gray-200 disabled:text-gray-400 disabled:opacity-40 dark:hover:bg-gray-700" :disabled="rank === 1" :aria-label="`置顶${seed.name}`" :title="rank === 1 ? '已置顶' : '置顶'" @pointerdown.stop @keydown.stop @click.stop="move(seed.seedId, ordered[0]!.seedId)">
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
                     <path d="M5 4h14M12 20V8m-5 5 5-5 5 5" />
                   </svg>
@@ -237,10 +239,11 @@ watch(expanded, cancelDrag)
                   <img v-if="seed.image" :src="seed.image" alt="" class="h-10 w-10 object-contain" draggable="false">
                   <span v-else class="i-carbon-sprout text-2xl text-gray-400" />
                 </div>
-                <div class="w-full truncate text-center text-sm font-medium" :title="seed.name">{{ seed.name }}</div>
+                <div class="w-full truncate text-center text-sm font-medium" :title="seed.name">
+                  {{ seed.name }}
+                </div>
                 <span class="text-xs text-gray-500">库存 {{ seed.count }}</span>
               </div>
-
             </div>
           </div>
         </div>
@@ -248,13 +251,17 @@ watch(expanded, cancelDrag)
     </div>
     <Teleport to="body">
       <div v-if="draggedSeed" aria-hidden="true" class="seed-drag-preview fixed border rounded-lg bg-gray-50 p-2 text-gray-900 dark:bg-gray-800 dark:text-gray-100" :style="{ left: `${pointer.x - pointer.offsetX}px`, top: `${pointer.y - pointer.offsetY}px`, width: `${pointer.width}px`, height: `${pointer.height}px` }">
-        <div class="h-7 text-xs text-gray-500">#{{ ordered.findIndex(seed => seed.seedId === draggedSeed?.seedId) + 1 }}</div>
+        <div class="h-7 text-xs text-gray-500">
+          #{{ ordered.findIndex(seed => seed.seedId === draggedSeed?.seedId) + 1 }}
+        </div>
         <div class="flex flex-col items-center gap-1 pb-2">
           <div class="grid h-10 w-10 place-items-center">
             <img v-if="draggedSeed.image" :src="draggedSeed.image" alt="" class="h-10 w-10 object-contain">
             <span v-else class="i-carbon-sprout text-2xl text-gray-400" />
           </div>
-          <div class="w-full truncate text-center text-sm font-medium">{{ draggedSeed.name }}</div>
+          <div class="w-full truncate text-center text-sm font-medium">
+            {{ draggedSeed.name }}
+          </div>
           <span class="text-xs text-gray-500">库存 {{ draggedSeed.count }}</span>
         </div>
       </div>

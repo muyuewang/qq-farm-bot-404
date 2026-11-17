@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useAttrs, useId } from 'vue'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{
   type?: string
   placeholder?: string
@@ -17,7 +18,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'clear'): void
 }>()
-defineOptions({ inheritAttrs: false })
 const attrs = useAttrs()
 const generatedId = useId()
 function controlAttrs() {

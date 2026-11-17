@@ -90,12 +90,15 @@ async function onKeydown(event: KeyboardEvent) {
   if (!enabled.length)
     return
   const current = enabled.indexOf(activeIndex.value)
-  if (event.key === 'Home')
+  if (event.key === 'Home') {
     activeIndex.value = enabled[0]!
-  else if (event.key === 'End')
+  }
+  else if (event.key === 'End') {
     activeIndex.value = enabled[enabled.length - 1]!
-  else if (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+  }
+  else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     activeIndex.value = enabled[(current + (event.key === 'ArrowDown' ? 1 : -1) + enabled.length) % enabled.length]!
+  }
   else {
     const option = props.options?.[activeIndex.value]
     if (option && !option.disabled)
@@ -145,7 +148,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" @focusout="onFocusout" class="flex flex-col gap-1.5">
+  <div ref="containerRef" class="flex flex-col gap-1.5" @focusout="onFocusout">
     <label v-if="label" :id="`${selectId}-label`" :for="selectId" class="text-sm text-gray-700 font-medium dark:text-gray-300">
       {{ label }}
     </label>
@@ -163,12 +166,12 @@ onUnmounted(() => {
         :aria-labelledby="label ? `${selectId}-label` : undefined"
         :aria-label="!label ? placeholder || '请选择' : undefined"
         :aria-activedescendant="isOpen && activeIndex >= 0 ? `${selectId}-option-${activeIndex}` : undefined"
-        @keydown="onKeydown"
         class="base-select-trigger w-full flex cursor-pointer items-center justify-between border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none transition-colors duration-150 dark:border-gray-700 dark:text-white"
         :class="{
           'bg-gray-50 text-gray-400 cursor-not-allowed dark:bg-gray-800/50': disabled,
           'is-open': isOpen,
         }"
+        @keydown="onKeydown"
         @click="toggleDropdown"
       >
         <span class="truncate">{{ selectedLabel }}</span>
@@ -189,13 +192,11 @@ onUnmounted(() => {
           <template v-if="options?.length">
             <div
               v-for="(opt, index) in options"
-              :key="opt.value"
               :id="`${selectId}-option-${index}`"
+              :key="opt.value"
               role="option"
               :aria-selected="model === opt.value"
               :aria-disabled="!!opt.disabled"
-              @pointerdown.prevent
-              @mouseenter="!opt.disabled && (activeIndex = index)"
               class="cursor-pointer px-3 py-2 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-700/50"
               :class="{
                 'text-primary': model === opt.value,
@@ -203,6 +204,8 @@ onUnmounted(() => {
                 'text-gray-400 cursor-not-allowed hover:bg-transparent dark:text-gray-500': opt.disabled,
                 'text-gray-700 dark:text-gray-200': model !== opt.value && !opt.disabled,
               }"
+              @pointerdown.prevent
+              @mouseenter="!opt.disabled && (activeIndex = index)"
               @click="!opt.disabled && selectOption(opt.value)"
             >
               <slot name="option" :option="opt" :selected="model === opt.value">
@@ -220,10 +223,14 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.select-popover-enter-active, .select-popover-leave-active {
-  transition: transform 100ms ease-out, opacity 100ms ease-out;
+.select-popover-enter-active,
+.select-popover-leave-active {
+  transition:
+    transform 100ms ease-out,
+    opacity 100ms ease-out;
 }
-.select-popover-enter-from, .select-popover-leave-to {
+.select-popover-enter-from,
+.select-popover-leave-to {
   opacity: 0;
   transform: scale(0.98);
 }

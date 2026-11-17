@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { affordability, formatQuantity, itemLine } from '@/utils/ranch'
-import type { RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -94,7 +94,7 @@ function requestExchange(good: any) {
       </div>
 
       <div v-for="group in groups" :key="group.id" class="space-y-2">
-        <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+        <p class="text-xs text-gray-500 font-medium dark:text-gray-400">
           {{ group.name }}
         </p>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
@@ -155,14 +155,14 @@ function requestExchange(good: any) {
       </div>
 
       <div v-if="orphanGoods.length" class="space-y-2">
-        <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+        <p class="text-xs text-gray-500 font-medium dark:text-gray-400">
           未归架商品
         </p>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
           <div
             v-for="good in orphanGoods"
             :key="good.id"
-            class="border border-dashed border-gray-200 rounded-xl bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+            class="border border-gray-200 rounded-xl border-dashed bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
           >
             <p class="truncate text-sm font-medium">
               {{ itemLine(good.reward) }}

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useIntervalFn } from '@vueuse/core'
-import { computed, ref, watch, useId } from 'vue'
-import { useModalFocus } from '@/composables/useModalFocus'
+import { computed, ref, useId, watch } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import { useModalFocus } from '@/composables/useModalFocus'
 import { useAccountStore } from '@/stores/account'
 import { useWxLoginStore } from '@/stores/wx-login'
 

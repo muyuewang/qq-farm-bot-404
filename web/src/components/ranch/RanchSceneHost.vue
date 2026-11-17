@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RanchRequest, RanchView } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import RanchQuoteDialog from '@/components/ranch/RanchQuoteDialog.vue'
@@ -7,7 +8,6 @@ import { useAccountStore } from '@/stores/account'
 import { useRanchStore } from '@/stores/ranch'
 import { useToastStore } from '@/stores/toast'
 import { formatDateTime, formatQuantity, RANCH_VIEW_LABELS } from '@/utils/ranch'
-import type { RanchRequest, RanchView } from '@/utils/ranch'
 
 /**
  * 牧场场景的页面壳。
@@ -136,7 +136,7 @@ defineExpose({ refresh, switchView })
       <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div class="min-w-0 flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-2">
-            <div :class="[icon, 'text-2xl']" :style="{ color: 'var(--theme-primary)' }" />
+            <div class="text-2xl" :class="[icon]" :style="{ color: 'var(--theme-primary)' }" />
             <h1 class="text-xl font-bold">
               {{ title }}
             </h1>
@@ -188,12 +188,12 @@ defineExpose({ refresh, switchView })
 
         <div
           v-if="pending.length"
-          class="mb-3 space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-900/20"
+          class="mb-3 border border-amber-200 rounded-xl bg-amber-50 px-4 py-3 space-y-2 dark:border-amber-900/60 dark:bg-amber-900/20"
         >
-          <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+          <p class="text-sm text-amber-800 font-medium dark:text-amber-200">
             {{ pending.length }} 笔操作结果待核对
           </p>
-          <p class="text-xs leading-5 text-amber-700 dark:text-amber-300">
+          <p class="text-xs text-amber-700 leading-5 dark:text-amber-300">
             这些操作已发出但未获得可确认的回包，后端会持续预留对应资源并拒绝同类操作。请先在游戏里确认结果，再解除保护。
           </p>
           <div v-for="row in pending" :key="row.id" class="flex flex-wrap items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs dark:bg-gray-800">

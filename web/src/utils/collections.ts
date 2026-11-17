@@ -420,7 +420,8 @@ export function collectionsProgress(snapshot: CollectionsSnapshot | null) {
     return null
   const target = snapshot.nextRewardScore
   if (target === null || target <= 0)
-    return { percent: 100, text: `当前分数 ${snapshot.score}　·　全部档位已达成` }
+    // 全角空格是排版用的宽间隔，写成转义避免触发 no-irregular-whitespace。
+    return { percent: 100, text: `当前分数 ${snapshot.score}\u3000·\u3000全部档位已达成` }
   return {
     percent: Math.min(100, Math.max(0, Math.round((snapshot.score / target) * 100))),
     text: `当前分数 ${snapshot.score} / ${target}`,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch, useId } from 'vue'
-import { useModalFocus } from '@/composables/useModalFocus'
+import { computed, ref, useId, watch } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import { useModalFocus } from '@/composables/useModalFocus'
 import { formatCurrencyAmountByLabel } from '@/utils/number-format'
 
 const props = withDefaults(defineProps<{

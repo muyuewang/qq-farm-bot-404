@@ -85,7 +85,7 @@ onMounted(load)
 </script>
 
 <template>
-  <section class="pet-page flex flex-col gap-3 lg:min-h-0 lg:h-full lg:flex-1 lg:overflow-hidden">
+  <section class="pet-page flex flex-col gap-3 lg:h-full lg:min-h-0 lg:flex-1 lg:overflow-hidden">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-3">
       <div class="min-w-0 flex items-center gap-3">
         <div class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--theme-primary)_12%,transparent)] text-[var(--theme-primary)]">
@@ -138,7 +138,7 @@ onMounted(load)
     </div>
 
     <template v-else-if="tab === 'pets'">
-      <div class="pet-workspace flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.85fr)]">
+      <div class="pet-workspace flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.85fr)] lg:min-h-0 lg:flex-1">
         <section class="ui-card flex flex-col rounded-lg lg:min-h-0 lg:overflow-hidden">
           <div class="guardian-strip flex shrink-0 flex-wrap items-center gap-3 border-b border-gray-200 p-3 sm:flex-nowrap dark:border-gray-700 sm:p-4">
             <div class="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-gray-50 dark:bg-gray-700/60">
@@ -179,7 +179,7 @@ onMounted(load)
           <div v-if="!overview.dogs.length" class="flex flex-1 items-center justify-center p-8 text-sm text-gray-500 dark:text-gray-400">
             暂无宠物数据，请刷新重试
           </div>
-          <div v-else class="dog-grid p-3 pt-2 sm:p-4 sm:pt-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <div v-else class="dog-grid p-3 pt-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto sm:p-4 sm:pt-2">
             <article
               v-for="dog in sortedDogs"
               :key="dog.id"
@@ -258,7 +258,7 @@ onMounted(load)
           <div v-if="!overview.foods.length" class="flex flex-1 items-center justify-center p-8 text-sm text-gray-500 dark:text-gray-400">
             暂无狗粮数据
           </div>
-          <div v-else class="food-list p-3 pt-2 space-y-2 sm:p-4 sm:pt-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <div v-else class="food-list p-3 pt-2 lg:min-h-0 lg:flex-1 space-y-2 lg:overflow-y-auto sm:p-4 sm:pt-2">
             <article v-for="food in overview.foods" :key="food.id" class="food-card border border-gray-200 rounded-lg p-2.5 dark:border-gray-700">
               <div class="min-w-0 flex items-center gap-2.5">
                 <div class="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-gray-50 dark:bg-gray-700/60">
@@ -327,7 +327,7 @@ onMounted(load)
           宠物完成守护后会显示在这里
         </p>
       </div>
-      <div v-else class="divide-y divide-gray-100 dark:divide-gray-700 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div v-else class="lg:min-h-0 lg:flex-1 divide-y divide-gray-100 lg:overflow-y-auto dark:divide-gray-700">
         <article v-for="item in logs" :key="item.id" class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">
           <div class="grid h-9 w-9 place-items-center rounded-lg bg-green-50 text-green-600 dark:bg-green-900/25 dark:text-green-400">
             <span class="i-carbon-security" />

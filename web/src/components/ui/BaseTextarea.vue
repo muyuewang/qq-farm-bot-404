@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, useAttrs, useId } from 'vue'
+
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{
   placeholder?: string
   id?: string
@@ -9,7 +11,6 @@ const props = defineProps<{
   disabled?: boolean
   rows?: number
 }>()
-defineOptions({ inheritAttrs: false })
 const attrs = useAttrs()
 const generatedId = useId()
 function controlAttrs() {
@@ -27,9 +28,9 @@ const model = defineModel<string>()
     <textarea
       v-bind="controlAttrs()"
       :id="fieldId"
+      v-model="model"
       :aria-invalid="error ? true : undefined"
       :aria-describedby="[attrs['aria-describedby'], error || hint ? `${fieldId}-feedback` : undefined].filter(Boolean).join(' ') || undefined"
-      v-model="model"
       :rows="rows || 3"
       :placeholder="placeholder"
       :disabled="disabled"

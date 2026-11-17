@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { affordability, formatQuantity, itemListLine } from '@/utils/ranch'
-import type { RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -57,7 +57,7 @@ function secondsOf(good: any) {
 
 <template>
   <div class="space-y-3">
-    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="grid grid-cols-2 gap-2 lg:grid-cols-6 sm:grid-cols-3">
       <div
         v-for="bucket in buckets"
         :key="bucket.key"
@@ -70,7 +70,7 @@ function secondsOf(good: any) {
           {{ bucket.value }}
         </p>
       </div>
-      <div class="col-span-2 border border-gray-200 rounded-xl bg-gray-50 px-3 py-2 text-[11px] leading-5 text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 sm:col-span-4 lg:col-span-4">
+      <div class="col-span-2 border border-gray-200 rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500 leading-5 lg:col-span-4 sm:col-span-4 dark:border-gray-700 dark:bg-gray-900/40">
         罐头桶记录的是可加速总时长：投喂动物时只扣除它当前阶段的剩余生长时间，精确到秒；限制罐头的动物只能用有机罐头。
       </div>
     </div>

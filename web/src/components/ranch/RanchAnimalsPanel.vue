@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { RanchAnimal, RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
 import { computed } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { batchTargets, formatSeconds } from '@/utils/ranch'
-import type { RanchAnimal, RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -92,7 +92,7 @@ function stageText(animal: RanchAnimal) {
         </div>
       </div>
 
-      <div class="mt-3 grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] mt-3 gap-3">
         <div
           v-for="animal in facility.ranch?.animals || []"
           :key="animal.id"
@@ -120,7 +120,7 @@ function stageText(animal: RanchAnimal) {
             <button
               v-for="entry in animal.actions"
               :key="entry.action"
-              class="rounded border px-2 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-50"
+              class="border rounded px-2 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-50"
               :class="entry.danger
                 ? 'border-red-200 text-red-600 dark:border-red-900 dark:text-red-300'
                 : 'border-gray-200 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700'"

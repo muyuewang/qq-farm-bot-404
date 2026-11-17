@@ -19,7 +19,8 @@ const errorMessage = ref('')
 // 后端在 423/429 时返回 remainingMs；用它把解锁倒计时显示出来，倒计时结束前禁止再次提交。
 const blockedUntil = ref(0)
 const now = ref(Date.now())
-let countdown: ReturnType<typeof setInterval>
+// 倒计时在组件建立时就开始跑，卸载时清掉，避免锁定状态下的剩余时间显示停在旧值。
+const countdown = setInterval(() => now.value = Date.now(), 1000)
 
 const brandTitle = computed(() => appStore.loginPageConfig.title || 'QQ农场智能助手')
 const blockedRemaining = computed(() => Math.max(0, blockedUntil.value - now.value))
@@ -32,8 +33,6 @@ const blockedText = computed(() => {
   return `${seconds} 秒`
 })
 const canSubmit = computed(() => !submitting.value && blockedRemaining.value <= 0 && !!password.value)
-
-countdown = setInterval(() => now.value = Date.now(), 1000)
 
 const showPasswordForm = ref(false)
 const newPassword = ref('')
@@ -114,9 +113,9 @@ onBeforeUnmount(() => clearInterval(countdown))
 
 <template>
   <div class="login-root h-full w-full overflow-auto" :style="{ color: 'var(--theme-text)' }">
-    <div class="mx-auto flex min-h-full max-w-md flex-col justify-center gap-6 px-5 py-10">
+    <div class="mx-auto max-w-md min-h-full flex flex-col justify-center gap-6 px-5 py-10">
       <header class="flex flex-col items-center gap-3 text-center">
-        <div class="h-14 w-14 flex items-center justify-center overflow-hidden rounded-2xl ring-1 ring-white/40 shadow-sm">
+        <div class="h-14 w-14 flex items-center justify-center overflow-hidden rounded-2xl shadow-sm ring-1 ring-white/40">
           <img src="/icon.png" :alt="`${brandTitle}图标`" class="h-full w-full object-cover">
         </div>
         <h1 class="text-xl font-bold sm:text-2xl">
@@ -146,7 +145,7 @@ onBeforeUnmount(() => clearInterval(countdown))
           />
 
           <p v-if="errorMessage" role="alert" class="text-sm text-red-600 dark:text-red-400">
-            {{ errorMessage }}<template v-if="blockedRemaining > 0">（剩余 {{ blockedText }}）</template>
+            {{ errorMessage }}{{ blockedRemaining > 0 ? `（剩余 ${blockedText}）` : '' }}
           </p>
           <p v-else-if="changeMessage" class="text-sm text-green-700 dark:text-green-400">
             {{ changeMessage }}
@@ -170,7 +169,7 @@ onBeforeUnmount(() => clearInterval(countdown))
           <p class="text-sm font-medium">
             修改登录密码
           </p>
-          <p v-if="!changeMessage" class="-mt-2 text-xs" :style="{ color: 'var(--muted-text)' }">
+          <p v-if="!changeMessage" class="text-xs -mt-2" :style="{ color: 'var(--muted-text)' }">
             首次登录默认仍是出厂密码，建议先修改；修改成功后需要用新密码重新登录。
           </p>
           <BaseInput

@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import type { RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
+import RanchDailyShareCard from '@/components/ranch/RanchDailyShareCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import RanchDailyShareCard from '@/components/ranch/RanchDailyShareCard.vue'
 import { itemListLine } from '@/utils/ranch'
-import type { RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -152,7 +152,7 @@ function noteOf(task: any) {
           </div>
 
           <div class="mt-2 flex flex-wrap items-center gap-2">
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <div class="min-w-0 flex flex-1 flex-wrap items-center gap-1.5">
               <img v-if="task.rewards[0]?.image" :src="task.rewards[0].image" :alt="task.rewards[0].name" class="h-5 w-5 rounded object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">
                 奖励 {{ itemListLine(task.rewards) }}

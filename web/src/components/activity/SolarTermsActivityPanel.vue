@@ -20,26 +20,32 @@ let generation = 0
 let disposed = false
 let timer: ReturnType<typeof setInterval> | undefined
 async function refresh() {
-  if (disposed || busy.value || !currentAccountId.value) return
+  if (disposed || busy.value || !currentAccountId.value)
+    return
   const version = generation
   busy.value = true
   try {
     const { data } = await api.get('/api/activity-center/solar-terms')
-    if (version !== generation) return
-    if (!data?.ok) throw new Error(data?.error || '节令读取失败')
+    if (version !== generation)
+      return
+    if (!data?.ok)
+      throw new Error(data?.error || '节令读取失败')
     solar.value = mapSolarTerms(data.data)
     error.value = ''
   }
   catch (e: any) {
-    if (version === generation) error.value = e.response?.data?.error || e?.message || '节令读取失败'
+    if (version === generation)
+      error.value = e.response?.data?.error || e?.message || '节令读取失败'
   }
   finally {
     busy.value = false
-    if (version !== generation && currentAccountId.value) refresh()
+    if (version !== generation && currentAccountId.value)
+      refresh()
   }
 }
 async function claim(term: { id: number }) {
-  if (disposed || busy.value || !currentAccountId.value) return
+  if (disposed || busy.value || !currentAccountId.value)
+    return
   if (!Number.isInteger(term.id) || term.id <= 0) {
     toast.error('节令编号无效，无法领取')
     return
@@ -48,19 +54,29 @@ async function claim(term: { id: number }) {
   busy.value = true
   try {
     const { data } = await api.post(`/api/activity-center/solar-terms/${term.id}/claim`)
-    if (version !== generation) return
-    if (!data?.ok) throw new Error(data?.error || '领取失败')
+    if (version !== generation)
+      return
+    if (!data?.ok)
+      throw new Error(data?.error || '领取失败')
     const mapped = mapSolarTerms(data.data?.snapshot?.solarTerms)
-    if (mapped) solar.value = mapped
+    if (mapped)
+      solar.value = mapped
     toast.success('节令奖励领取完成')
   }
-  catch (e: any) { if (version === generation) toast.error(e.response?.data?.error || e?.message) }
+  catch (e: any) {
+    if (version === generation)
+      toast.error(e.response?.data?.error || e?.message)
+  }
   finally {
     busy.value = false
-    if (version !== generation && currentAccountId.value) refresh()
+    if (version !== generation && currentAccountId.value)
+      refresh()
   }
 }
-function visibility() { if (document.visibilityState === 'visible') refresh() }
+function visibility() {
+  if (document.visibilityState === 'visible')
+    refresh()
+}
 watch(currentAccountId, async () => {
   generation++
   solar.value = null
@@ -70,7 +86,10 @@ watch(currentAccountId, async () => {
 })
 onMounted(() => {
   refresh()
-  timer = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 30_000)
+  timer = setInterval(() => {
+    if (document.visibilityState === 'visible')
+      refresh()
+  }, 30_000)
   document.addEventListener('visibilitychange', visibility)
 })
 onUnmounted(() => {
@@ -84,13 +103,25 @@ onUnmounted(() => {
 <template>
   <section class="space-y-3">
     <div class="flex items-center justify-between gap-3">
-      <button @click="$emit('back')">← 返回活动列表</button>
-      <button :disabled="busy || !currentAccountId" @click="refresh">{{ busy ? '加载中…' : '刷新' }}</button>
+      <button @click="$emit('back')">
+        ← 返回活动列表
+      </button>
+      <button :disabled="busy || !currentAccountId" @click="refresh">
+        {{ busy ? '加载中…' : '刷新' }}
+      </button>
     </div>
-    <h2 class="text-xl font-semibold">节令小札</h2>
-    <p v-if="!currentAccountId">请先选择账号</p>
-    <p v-else-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="!solar">{{ busy ? '正在读取节令…' : '暂无节令数据' }}</p>
+    <h2 class="text-xl font-semibold">
+      节令小札
+    </h2>
+    <p v-if="!currentAccountId">
+      请先选择账号
+    </p>
+    <p v-else-if="error" role="alert">
+      {{ error }}
+    </p>
+    <p v-else-if="!solar">
+      {{ busy ? '正在读取节令…' : '暂无节令数据' }}
+    </p>
     <HeluSolarTermsPanel v-else :solar-terms="solar" :loading="busy" :labels="labels" @claim="claim" />
   </section>
 </template>

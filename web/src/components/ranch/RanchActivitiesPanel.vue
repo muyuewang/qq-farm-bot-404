@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import BaseButton from '@/components/ui/BaseButton.vue'
-import RanchDailyShareCard from '@/components/ranch/RanchDailyShareCard.vue'
-import { activityStatus, formatDateTime } from '@/utils/ranch'
 import type { RanchRequest, RanchState } from '@/utils/ranch'
+import { computed } from 'vue'
+import RanchDailyShareCard from '@/components/ranch/RanchDailyShareCard.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import { activityStatus, formatDateTime } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -74,14 +74,22 @@ function isCurrent(activity: any) {
           <p class="mt-1 truncate text-[11px] text-gray-500 dark:text-gray-400">
             活动 ID {{ activity.id }}
           </p>
-          <dl class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+          <dl class="mt-2 text-xs text-gray-600 space-y-1 dark:text-gray-300">
             <div class="flex items-center gap-2">
-              <dt class="w-8 shrink-0 text-gray-400">开始</dt>
-              <dd class="min-w-0 flex-1 truncate">{{ activity.startTime ? formatDateTime(activity.startTime) : '未下发' }}</dd>
+              <dt class="w-8 shrink-0 text-gray-400">
+                开始
+              </dt>
+              <dd class="min-w-0 flex-1 truncate">
+                {{ activity.startTime ? formatDateTime(activity.startTime) : '未下发' }}
+              </dd>
             </div>
             <div class="flex items-center gap-2">
-              <dt class="w-8 shrink-0 text-gray-400">结束</dt>
-              <dd class="min-w-0 flex-1 truncate">{{ activity.endTime ? formatDateTime(activity.endTime) : '未下发' }}</dd>
+              <dt class="w-8 shrink-0 text-gray-400">
+                结束
+              </dt>
+              <dd class="min-w-0 flex-1 truncate">
+                {{ activity.endTime ? formatDateTime(activity.endTime) : '未下发' }}
+              </dd>
             </div>
           </dl>
           <BaseButton to="/activity" variant="secondary" size="sm" class="mt-2 w-full">

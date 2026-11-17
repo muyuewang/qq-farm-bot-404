@@ -87,7 +87,7 @@ function previewRewards(items?: HeluDrawReward[]) {
       {{ labels.empty }}
     </div>
 
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 p-4">
+    <div v-else class="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
       <article
         v-for="term in solarTerms.terms"
         :key="term.id"

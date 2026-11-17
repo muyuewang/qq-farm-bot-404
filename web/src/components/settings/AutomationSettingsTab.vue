@@ -196,7 +196,9 @@ watch(() => props.currentAccountId, loadQixiFriends)
         <BaseSwitch v-model="settings.automation.land_upgrade" label="自动升级土地" />
         <BaseSwitch v-model="settings.automation.fertilizer_gift" label="自动填充化肥" />
         <section v-if="isWithinActivityWindowMs(MILK_TEA_ACTIVITY_WINDOW, nowMs)" class="space-y-3">
-          <h3 class="text-sm font-medium">奶茶热销中</h3>
+          <h3 class="text-sm font-medium">
+            奶茶热销中
+          </h3>
           <BaseSwitch v-model="settings.automation.mall_coupon_gift_buy" label="自动购买点券礼包（买完剩余限额）" />
         </section>
         <BaseSwitch v-model="settings.automation.fertilizer_buy_organic" label="自动购买有机化肥" />

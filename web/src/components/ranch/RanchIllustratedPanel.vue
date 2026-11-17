@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { formatQuantity, itemListLine } from '@/utils/ranch'
-import type { RanchRequest, RanchState } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -157,7 +157,7 @@ function giantText(animal: any) {
                 基础概率 {{ row.baseProbabilityPercent }}%
               </span>
             </div>
-            <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+            <p class="mt-1 text-xs text-gray-500 leading-5 dark:text-gray-400">
               {{ row.description || '服务端未提供该变异的说明文案' }}
             </p>
           </div>
