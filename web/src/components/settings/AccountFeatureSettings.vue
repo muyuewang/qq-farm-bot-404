@@ -339,6 +339,10 @@ function finish() {
   activeModule.value = null
 }
 function openModule(key: ModuleKey) {
+  // 老账号配置里可能没有牧草阈值字段，补默认值避免输入框空白、保存时被后端校验拒绝。
+  // 模板编辑的是 automation model 本身，editSnapshot 仅用于取消回滚，因此补在 model 上。
+  if (key === 'ranch' && typeof automation.value.automation?.ranch_grass_threshold_percent !== 'number')
+    automation.value.automation.ranch_grass_threshold_percent = RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent
   editSnapshot.value = {
     strategy: JSON.parse(JSON.stringify(strategy.value)),
     automation: JSON.parse(JSON.stringify(automation.value)),
@@ -651,9 +655,17 @@ watch(() => props.currentAccountId, loadQixiFriends)
                     :min="RANCH_AUTOMATION_LIMITS.checkMinutes.min"
                     :max="RANCH_AUTOMATION_LIMITS.checkMinutes.max"
                   />
+                  <BaseInput
+                    v-model.number="automation.automation.ranch_grass_threshold_percent"
+                    label="牧草余量低于（%）时补满"
+                    type="number"
+                    :min="RANCH_AUTOMATION_LIMITS.grassThresholdPercent.min"
+                    :max="RANCH_AUTOMATION_LIMITS.grassThresholdPercent.max"
+                    :disabled="!automation.automation.ranch_grass"
+                  />
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  只接受 1–60 的整数分钟。动物成熟或设施升级更早完成时，后台会提前唤醒，不受该间隔限制。
+                  巡查间隔只接受 1–60 的整数分钟，动物成熟或设施升级更早完成时后台会提前唤醒。牧草阈值只接受 1–100 的整数百分比，需先开启「自动补充牧草」。
                 </p>
               </section>
 

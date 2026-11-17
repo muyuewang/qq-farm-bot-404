@@ -72,7 +72,11 @@ function errorMessage(cause: any, fallback: string) {
 }
 
 function applySettings() {
-  automation.value = { ...((settings.value as any)?.automation || {}) }
+  const next = { ...((settings.value as any)?.automation || {}) }
+  // 服务端尚未下发阈值字段时补默认值，避免输入框空白、保存时提交 undefined 被后端校验拒绝。
+  if (typeof next.ranch_grass_threshold_percent !== 'number')
+    next.ranch_grass_threshold_percent = RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent
+  automation.value = next
 }
 
 async function load() {
@@ -185,9 +189,17 @@ watch(settings, () => {
               :min="RANCH_AUTOMATION_LIMITS.checkMinutes.min"
               :max="RANCH_AUTOMATION_LIMITS.checkMinutes.max"
             />
+            <BaseInput
+              v-model.number="automation.ranch_grass_threshold_percent"
+              label="牧草余量低于（%）时补满"
+              type="number"
+              :min="RANCH_AUTOMATION_LIMITS.grassThresholdPercent.min"
+              :max="RANCH_AUTOMATION_LIMITS.grassThresholdPercent.max"
+              :disabled="!automation.ranch_grass"
+            />
           </div>
           <p class="mt-2 text-xs" :style="{ color: 'var(--muted-text)' }">
-            只接受 1–60 的整数分钟。动物成熟或设施升级更早完成时，后台会提前唤醒，不受该间隔限制。
+            巡查间隔只接受 1–60 的整数分钟，动物成熟或设施升级更早完成时后台会提前唤醒。牧草阈值只接受 1–100 的整数百分比，装满该比例以下才补满，需先开启「自动补充牧草」。
           </p>
         </section>
 

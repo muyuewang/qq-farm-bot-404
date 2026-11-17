@@ -1045,6 +1045,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_sell: false,
   ranch_grass: false,
   ranch_grass_buy: false,
+  // 与后端 ranch_grass_threshold_percent 默认值一致；牧草机余量低于该百分比才自动补满。
+  ranch_grass_threshold_percent: 20,
   ranch_fill_cans: false,
   ranch_feed_normal: false,
   ranch_feed_organic: false,
@@ -1092,4 +1094,7 @@ export const RANCH_BAG_FALLBACK_OPTIONS: Array<{ value: string, label: string, d
   { value: 'preferred', label: '按指定动物', desc: '指定动物缺货时不放养' },
 ]
 
-export const RANCH_AUTOMATION_LIMITS = { checkMinutes: { min: 1, max: 60 } } as const
+export const RANCH_AUTOMATION_LIMITS = {
+  checkMinutes: { min: 1, max: 60 },
+  grassThresholdPercent: { min: 1, max: 100 },
+} as const
