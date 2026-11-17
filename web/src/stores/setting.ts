@@ -71,6 +71,7 @@ export interface AutomationConfig {
   fertilizer_smart_seconds?: number
   // 牧场牧草机余量低于该百分比时才会自动补满（1–100），后端默认 20。
   ranch_grass_threshold_percent?: number
+  ranch_market_organic?: boolean
   friend_steal?: boolean
   friend_help?: boolean
   friend_bad?: boolean

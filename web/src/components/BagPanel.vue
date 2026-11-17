@@ -160,6 +160,8 @@ function handleSellClick(item: any) {
     action: 'sell',
     item,
     selectedItems: [],
+    uids: [],
+    locked: false,
   }
 }
 
@@ -174,6 +176,8 @@ function handleUseClick(item: any) {
     action: 'use',
     item,
     selectedItems: [],
+    uids: [],
+    locked: false,
   }
 }
 
@@ -400,6 +404,8 @@ async function handleBatchSellClick() {
     action: 'batchSell',
     item: null,
     selectedItems: itemsToSell,
+    uids: [],
+    locked: false,
   }
 }
 

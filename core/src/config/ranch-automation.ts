@@ -12,6 +12,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_buy: false,
     ranch_upgrade: false,
     ranch_sell: false,
+    // 仓鼠集市用便便兑换有机化肥（4 小时优先、其次 1 小时）；会消耗背包物品，默认关闭。
+    ranch_market_organic: false,
     ranch_grass: false,
     ranch_grass_buy: false,
     ranch_grass_threshold_percent: 20,

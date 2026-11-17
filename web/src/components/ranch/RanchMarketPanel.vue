@@ -37,9 +37,10 @@ function maxCount(good: any) {
   return good.remaining === null ? 0 : good.remaining
 }
 
-/** remaining 为 null 表示不限购；后端 exchange 只按 remaining 与 available 拒绝。 */
+/** remaining 为 null 表示不限购；后端 exchange 会校验限购与余额，这里提前禁用避免误点。 */
 function canExchange(good: any) {
   return good.available === true && (good.remaining === null || good.remaining > 0)
+    && affordability(good.balance, good.price.count) === true
 }
 
 function countOf(good: any) {
@@ -170,7 +171,7 @@ function requestExchange(good: any) {
             <p class="mt-0.5 truncate text-xs text-gray-500">
               {{ formatQuantity(good.price.count) }} {{ good.price.name }} · 货架位 {{ good.slot }}
             </p>
-            <BaseButton variant="secondary" size="sm" class="mt-2" :disabled="!good.available" @click="requestExchange(good)">
+            <BaseButton variant="secondary" size="sm" class="mt-2" :disabled="!canExchange(good)" @click="requestExchange(good)">
               兑换
             </BaseButton>
           </div>

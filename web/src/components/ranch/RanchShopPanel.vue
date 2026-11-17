@@ -37,6 +37,11 @@ function maxCount(good: any) {
   return limit > 0 ? limit : 0
 }
 
+/** 余额未确认（null）或不足时都不可购买，避免把未知余额当成可支付。 */
+function canBuy(good: any) {
+  return good.available === true && maxCount(good) > 0 && affordability(good.balance, good.price.count) === true
+}
+
 function requestBuy(good: any) {
   const input: Record<string, any> = { goodsId: good.id, count: countOf(good.id, maxCount(good)), shopId: good.shopId }
   if (good.animal && autoPlace.value[good.id])
@@ -129,7 +134,7 @@ function requestBuy(good: any) {
               :min="1"
               :max="maxCount(good)"
             />
-            <BaseButton variant="primary" size="sm" :disabled="!good.available || maxCount(good) <= 0" @click="requestBuy(good)">
+            <BaseButton variant="primary" size="sm" :disabled="!canBuy(good)" @click="requestBuy(good)">
               购买
             </BaseButton>
           </div>

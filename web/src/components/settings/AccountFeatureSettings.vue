@@ -397,7 +397,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
 
       <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="(info, key) in visibleModules"
+          v-for="([key, info]) in visibleModules"
           :key="key"
           class="group min-h-[184px] flex flex-col border border-gray-200 rounded-lg bg-white p-4 transition dark:border-gray-700 hover:border-[var(--theme-primary)] dark:bg-gray-800 hover:shadow-sm"
         >

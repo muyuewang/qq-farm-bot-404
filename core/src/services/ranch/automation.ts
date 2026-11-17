@@ -4,7 +4,7 @@ export {};
 const { RANCH_SWITCH_KEYS } = require('../../config/ranch-automation');
 const { getAutomation } = require('../../models/store');
 const { inScene, isUnlocked } = require('./transport');
-const { loadRaw, snapshot, inventory, catalog, balance } = require('./state');
+const { loadRaw, snapshot, inventory, catalog, market, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
 const { prepareAction, operate } = require('./actions');
 const { getServerTimeSec, log } = require('../../utils/utils');
@@ -23,23 +23,36 @@ const completedPhases = new Set<string>();
 const completedSteps = new Set<string>();
 const PATROL_SLICE_MS = 5000;
 const SCENE_REENTRY_MS = 20_000;
+const MARKET_CHECK_MS = 6 * 60 * 60 * 1000;
+// 仓鼠集市只兑有机化肥：4 小时(80012) 优先于 1 小时(80011)。
+const MARKET_GOODS_PRIORITY = [80012, 80011];
+const MARKET_POOP_ID = 7002;
+let nextMarketCheckAt = 0;
+let marketRunId = 0;
+let lastMarketPoop: bigint | null = null;
 
 function resetCycle(): void {
     completedPhases.clear();
     completedSteps.clear();
     friendVisits = 0;
     pendingFriendGid = null;
+    lastMarketPoop = null;
     cycleStartedAt = 0;
     cycleChanged = false;
 }
 const FRIEND_CONTROLS: Record<string, string> = { stroke: 'ranch_stroke', steal: 'ranch_friend_steal', cleanFriend: 'ranch_friend_clean', putMosquito: 'ranch_friend_mosquito' };
 const enabled = (key: string) => getAutomation()[key] === true;
+const marketDue = () => enabled('ranch_market_organic') && Date.now() >= nextMarketCheckAt;
 const due = (state: any) => !state.doneToday && Date.now() >= (state.nextCheckAt || 0);
 
 function getRoutineState(): any {
     const auto = getAutomation();
-    const work = RANCH_SWITCH_KEYS.some((key: string) => !['ranch_task', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy'].includes(key) && auto[key]);
-    return { doneToday: !isUnlocked() || !(work || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState()) || auto.ranch_daily_benefit && due(daily.getBenefitRoutineState())), nextCheckAt };
+    const work = RANCH_SWITCH_KEYS.some((key: string) => !['ranch_task', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy', 'ranch_market_organic'].includes(key) && auto[key]);
+    const routineDue = work || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState()) || auto.ranch_daily_benefit && due(daily.getBenefitRoutineState());
+    return {
+        doneToday: !isUnlocked() || !(routineDue || auto.ranch_market_organic),
+        nextCheckAt: routineDue ? nextCheckAt : Math.max(nextCheckAt, nextMarketCheckAt),
+    };
 }
 
 function selectAnimal(goods: any[], settings: RanchAutomationConfig, kind: number): any {
@@ -110,7 +123,8 @@ async function run(options: { farmDeadline?: () => number } = {}): Promise<void>
                 try {
                     const quote = await prepareAction(action, input);
                     label = quote.label;
-                    if (quote.skipped || currency && quote.costItems.some((cost: any) => cost.id !== currency)) {
+                    if (quote.skipped || currency && quote.costItems.some((cost: any) => cost.id !== currency)
+                        || key === 'ranch_market_organic' && (quote.rewards.length !== 1 || !MARKET_GOODS_PRIORITY.includes(Number(quote.rewards[0].id)))) {
                         completedSteps.add(step);
                         steps++;
                         return false;
@@ -147,6 +161,35 @@ async function run(options: { farmDeadline?: () => number } = {}): Promise<void>
             await phase('produce', () => act('ranch_produce', 'produce', { all: true }));
             await phase('clean', () => act('ranch_clean', 'clean'));
             await phase('sell', () => act('ranch_sell', 'sell', { all: true }));
+
+            await phase('market-organic', async () => {
+                if (!enabled('ranch_market_organic')) return;
+                const poop = available(MARKET_POOP_ID);
+                const stockReady = poop >= 3n && (lastMarketPoop === null || poop > lastMarketPoop);
+                if (!marketDue() && !stockReady) return;
+                checkpoint();
+                const runId = marketRunId;
+                const current = await market(raw);
+                // 先兑 4 小时，再兑 1 小时；只使用便便，不碰松果或其它货币的同名商品。
+                if (current.opened && current.present) {
+                    for (const rewardId of MARKET_GOODS_PRIORITY) {
+                        for (const good of current.goods.filter((entry: any) => entry.available && Number(entry.reward.id) === rewardId && Number(entry.price.id) === MARKET_POOP_ID && BigInt(entry.price.count) > 0n)) {
+                            while (good.available) {
+                                const stock = available(MARKET_POOP_ID);
+                                const count = affordable(good, Math.min(good.remaining ?? 2147483647, 2147483647));
+                                if (count < 1) break;
+                                const exchanged = await act('ranch_market_organic', 'exchange', { goodsId: good.id, count }, MARKET_POOP_ID, `${runId}:${good.id}:${stock}`);
+                                if (!exchanged) break;
+                                if (good.remaining !== null) good.remaining = Math.max(0, good.remaining - count);
+                                if (good.remaining === 0) good.available = false;
+                            }
+                        }
+                    }
+                }
+                // 完成后才推迟检查；让路时保留到期状态，到账通知也不能被旧一轮覆盖。
+                lastMarketPoop = available(MARKET_POOP_ID);
+                if (runId === marketRunId) nextMarketCheckAt = Date.now() + MARKET_CHECK_MS;
+            });
 
             await phase('upgrade', async () => {
                 if (enabled('ranch_upgrade')) {
@@ -281,4 +324,14 @@ async function run(options: { farmDeadline?: () => number } = {}): Promise<void>
     }
 }
 
-module.exports = { run, getRoutineState, selectAnimal, resetSchedule: () => { nextCheckAt = 0; resetCycle(); } };
+module.exports = {
+    run, getRoutineState, selectAnimal,
+    resetSchedule: () => { marketRunId++; nextCheckAt = 0; nextMarketCheckAt = 0; lastMarketPoop = null; resetCycle(); },
+    resetMarketSchedule: () => {
+        nextMarketCheckAt = 0;
+        lastMarketPoop = null;
+        marketRunId++;
+        completedPhases.delete('market-organic');
+        nextCheckAt = Math.min(nextCheckAt, Date.now() + SCENE_REENTRY_MS);
+    },
+};

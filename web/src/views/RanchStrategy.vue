@@ -154,7 +154,7 @@ watch(settings, () => {
             牧场策略
           </h1>
           <p class="text-xs" :style="{ color: 'var(--muted-text)' }">
-            栏舍养殖、牧草罐头、好友牧场与每日奖励的自动化开关
+            栏舍养殖、牧草罐头、集市兑换、好友牧场与每日奖励的自动化开关
           </p>
         </div>
         <span class="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">

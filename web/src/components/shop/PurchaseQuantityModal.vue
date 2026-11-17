@@ -56,12 +56,14 @@ const affordableMax = computed(() => {
   return Math.floor(normalizedBalance.value / normalizedUnitPrice.value)
 })
 const maxBuyCount = computed(() => Math.max(1, Math.min(99, configuredMax.value, affordableMax.value)))
+// 付费且余额未知时不允许下单：余额未确认不等于可支付。
+const balanceUnconfirmed = computed(() => !props.isFree && !balanceKnown.value)
 const normalizedQuantity = computed(() => {
   const value = Math.floor(Number(quantity.value) || 1)
   return Math.max(1, Math.min(maxBuyCount.value, value))
 })
 const totalCost = computed(() => normalizedUnitPrice.value * normalizedQuantity.value)
-const confirmDisabled = computed(() => props.loading || normalizedQuantity.value < 1 || normalizedQuantity.value > maxBuyCount.value)
+const confirmDisabled = computed(() => props.loading || balanceUnconfirmed.value || normalizedQuantity.value < 1 || normalizedQuantity.value > maxBuyCount.value)
 
 watch(() => props.show, (show) => {
   if (show)
@@ -144,14 +146,14 @@ useModalFocus(() => props.show, modalSurface, closeModal)
               <label :for="`${modalId}-quantity`" class="text-sm text-gray-700 font-medium dark:text-gray-300">
                 {{ L.quantity }}
               </label>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ L.max }} {{ maxBuyCount }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ L.max }} {{ balanceUnconfirmed ? 0 : maxBuyCount }}</span>
             </div>
             <div class="qty-control-row">
               <button
                 type="button"
                 aria-label="减少购买数量"
                 class="qty-icon-button"
-                :disabled="loading || normalizedQuantity <= 1"
+                :disabled="loading || balanceUnconfirmed || normalizedQuantity <= 1"
                 @click="setQuantity(normalizedQuantity - 1)"
               >
                 <div class="i-carbon-subtract" />
@@ -163,14 +165,14 @@ useModalFocus(() => props.show, modalSurface, closeModal)
                 min="1"
                 :max="maxBuyCount"
                 class="qty-input"
-                :disabled="loading"
+                :disabled="loading || balanceUnconfirmed"
                 @input="setQuantity(Number(($event.target as HTMLInputElement).value))"
               >
               <button
                 type="button"
                 aria-label="增加购买数量"
                 class="qty-icon-button"
-                :disabled="loading || normalizedQuantity >= maxBuyCount"
+                :disabled="loading || balanceUnconfirmed || normalizedQuantity >= maxBuyCount"
                 @click="setQuantity(normalizedQuantity + 1)"
               >
                 <div class="i-carbon-add" />
@@ -178,7 +180,7 @@ useModalFocus(() => props.show, modalSurface, closeModal)
               <button
                 type="button"
                 class="qty-max-button"
-                :disabled="loading"
+                :disabled="loading || balanceUnconfirmed"
                 @click="setQuantity(maxBuyCount)"
               >
                 {{ L.max }}

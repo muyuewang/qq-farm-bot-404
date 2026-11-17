@@ -18,11 +18,12 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         snapshot: () => ({ facilities: [], serverTime: 1_800_000_000_000 }),
         inventory: () => stateDeps.inventory?.() ?? [],
         catalog: async () => ({ goods: stateDeps.catalog?.() ?? [] }),
+        market: async () => stateDeps.market?.() ?? { opened: true, present: true, periodDay: '1', roundIndex: '1', goods: [] },
         balance: (bag, id) => stateDeps.balance?.(bag, id) ?? { total: '0', locked: '0' },
     });
     mock('services/ranch/model', { cubMap: new Map(), quantity: v => Number(v) });
     mock('services/ranch/actions', { prepareAction, operate });
-    mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, claimTasks: async () => {}, claimShare: async () => {}, markTasksChanged: () => {} });
+    mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, getBenefitRoutineState: () => ({ doneToday: true, nextCheckAt: 0 }), claimTasks: async () => {}, claimShare: async () => {}, claimBenefit: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
     mock('services/ranch/context', { getAmbientSendContext: () => null, runWithSendContext: (_ctx, run) => run() });
     mock('utils/utils', { getServerTimeSec: () => 1_800_000_000, log: (tag, message) => logs.push({ tag, message }) });
@@ -32,7 +33,7 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
 }
 
 test('牧场自动化默认只开任务与分享，其余会改状态的动作全部关闭', () => {
-    const actions = ['ranch_buy', 'ranch_upgrade', 'ranch_grass_buy', 'ranch_sell', 'ranch_fill_cans', 'ranch_feed_normal', 'ranch_feed_organic', 'ranch_harvest', 'ranch_produce', 'ranch_clean', 'ranch_grass'];
+    const actions = ['ranch_buy', 'ranch_upgrade', 'ranch_grass_buy', 'ranch_sell', 'ranch_fill_cans', 'ranch_feed_normal', 'ranch_feed_organic', 'ranch_harvest', 'ranch_produce', 'ranch_clean', 'ranch_grass', 'ranch_market_organic'];
     assert.deepEqual(actions.filter(key => RANCH_AUTOMATION_DEFAULTS[key] !== false), []);
     assert.deepEqual(actions.filter(key => !RANCH_SWITCH_KEYS.includes(key)), [], '每个自动动作都必须有对应开关');
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_task, true);
@@ -142,6 +143,73 @@ test('牧草按容量阈值补满：达到阈值不补，低于阈值才补，�
     assert.equal(limited[0].input.count, 40, '库存不足时按实际库存补');
     // 阈值设为 5%：存量 10% 达到阈值，同样不补。
     assert.deepEqual(await runCase(10, 5, 100), [], '阈值越低越保守，达到阈值不补');
+});
+
+test('仓鼠集市只用便便兑换有机化肥：4 小时优先、便便不足不超兑、非目标商品跳过', async () => {
+    const good = (id, rewardId, priceId, priceCount, remaining) => ({
+        id, available: true, remaining,
+        reward: { id: rewardId, count: '1' },
+        price: { id: priceId, count: priceCount },
+    });
+    const runCase = async ({ goods, poop }) => {
+        const calls = [];
+        const level = loadAutomation({
+            automation: { ranch_market_organic: true, ranch_check_minutes: 30 },
+            raw: { bag: {}, cells: { facilities: [] } },
+            stateDeps: {
+                market: () => ({ opened: true, present: true, periodDay: '1', roundIndex: '1', goods }),
+                balance: (_bag, id) => ({ total: String(id === 7002 ? poop : 0), locked: '0' }),
+            },
+            // 只有目标商品的报价放行，其余按 prepareAction 的奖励校验在 act 内被跳过。
+            prepareAction: async (action, input) => {
+                const item = goods.find(g => g.id === input.goodsId);
+                return { label: action, skipped: false, costItems: [{ id: item.price.id, count: String(Number(item.price.count) * input.count) }], rewards: [{ id: item.reward.id, count: String(input.count) }], expected: {} };
+            },
+            operate: async (action, input) => { calls.push(input); return { status: 'ok' }; },
+        });
+        await level.run({ farmDeadline: () => Infinity });
+        return calls.map(call => ({ goodsId: call.goodsId, count: call.count }));
+    };
+
+    // 4 小时(80012) 与 1 小时(80011) 都在售、便便充足：先兑 4 小时，且分商品累计提示优先顺序。
+    const both = await runCase({
+        goods: [good(11, 80011, 7002, '2', 10), good(12, 80012, 7002, '2', 10)],
+        poop: 40,
+    });
+    assert.deepEqual(both[0], { goodsId: 12, count: 10 }, '先按 4 小时商品的可兑上限兑换');
+    assert.deepEqual(both[1], { goodsId: 11, count: 10 }, '再兑换 1 小时商品');
+
+    // 便便只够 5 个：不会按限购 10 超兑。
+    const limited = await runCase({
+        goods: [good(12, 80012, 7002, '2', 10)],
+        poop: 5,
+    });
+    assert.deepEqual(limited, [{ goodsId: 12, count: 2 }], '按便便余额向下取整，不得超兑');
+
+    // 非便便计价（松果 1001）的同名奖励不得兑换。
+    const wrongCurrency = await runCase({
+        goods: [good(12, 80012, 1001, '1', 10)],
+        poop: 100,
+    });
+    assert.deepEqual(wrongCurrency, [], '非便便计价商品一律跳过');
+
+    // 非目标奖励（普通化肥）不得兑换。
+    const wrongReward = await runCase({
+        goods: [good(12, 7003, 7002, '1', 10)],
+        poop: 100,
+    });
+    assert.deepEqual(wrongReward, [], '非有机化肥奖励一律跳过');
+});
+
+test('兑换完重置集市排期可立刻重新检查，且开关默认关闭时不排入巡查', async () => {
+    const level = loadAutomation({
+        automation: { ranch_market_organic: true },
+        stateDeps: { market: () => ({ opened: true, present: true, goods: [] }) },
+    });
+    assert.equal(level.getRoutineState().doneToday, false, '集市开关打开即需要排入巡查');
+    level.resetMarketSchedule();
+    assert.ok(level.getRoutineState().nextCheckAt <= Date.now() + 21_000, '重置后应按重进场窗口尽快复查');
+    assert.equal(loadAutomation({ automation: {} }).getRoutineState().doneToday, true, '未开集市且无其它动作时不巡查');
 });
 
 test('核对完待核对账本会重置让路退避，立刻允许重新进牧场', async () => {

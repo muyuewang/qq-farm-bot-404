@@ -1009,7 +1009,7 @@ export type RanchAutomationGroup = 'own' | 'friend' | 'reward'
 
 /** 设置页二级分组；好友牧场三项会真实拜访好友，单独成组便于提示。 */
 export const RANCH_AUTOMATION_GROUPS: ReadonlyArray<{ key: RanchAutomationGroup, title: string, detail: string }> = [
-  { key: 'own', title: '自家牧场', detail: '收获、催产、补栏、升级、出售、牧草、罐头与清理' },
+  { key: 'own', title: '自家牧场', detail: '收获、催产、补栏、升级、出售、牧草、罐头、清理与集市兑换' },
   { key: 'friend', title: '好友牧场', detail: '进入好友牧场偷取、清理、抚摸与放蚊子，每轮巡查最多拜访三位好友' },
   { key: 'reward', title: '每日奖励', detail: '领取牧场任务奖励与每日分享礼包' },
 ]
@@ -1021,6 +1021,7 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_buy', label: '自动购买幼崽', desc: '按养殖策略在牧场商店补栏', group: 'own' },
   { key: 'ranch_upgrade', label: '自动升级设施', desc: '满足等级与材料时升级窝、棚与牧草机', group: 'own' },
   { key: 'ranch_sell', label: '自动出售产物', desc: '出售背包里可出售的产物', group: 'own' },
+  { key: 'ranch_market_organic', label: '集市兑换有机化肥', desc: '只用便便在仓鼠集市兑换有机化肥，优先 4 小时再 1 小时；每 6 小时检查，便便到账即触发', group: 'own' },
   { key: 'ranch_grass', label: '自动补充牧草', desc: '牧草机容量不满时用背包牧草补满', group: 'own' },
   { key: 'ranch_grass_buy', label: '自动购买牧草', desc: '背包牧草不足时先在商店购买，需同时开启补充牧草', group: 'own' },
   { key: 'ranch_fill_cans', label: '自动补充罐头桶', desc: '使用背包罐头为罐头桶增加时长', group: 'own' },
@@ -1043,6 +1044,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_buy: false,
   ranch_upgrade: false,
   ranch_sell: false,
+  // 集市兑换会消耗便便，与后端 ranch_market_organic 默认关闭保持一致。
+  ranch_market_organic: false,
   ranch_grass: false,
   ranch_grass_buy: false,
   // 与后端 ranch_grass_threshold_percent 默认值一致；牧草机余量低于该百分比才自动补满。
