@@ -7,7 +7,12 @@ import { RANCH_AUTOMATION_DEFAULTS } from '@/utils/ranch'
 
 type AlertType = 'primary' | 'danger'
 
-const allFertilizerLandTypes = ['purple', 'gold', 'black', 'red', 'normal']
+// 取值必须与后端 FertilizerLandType 完全一致，否则保存时会被后端过滤丢弃。
+const allFertilizerLandTypes = ['blue-crystal', 'purple-gold', 'gold', 'black', 'red', 'normal']
+// 默认不勾选蓝晶土地，与后端 DEFAULT_FERTILIZER_LAND_TYPES 保持一致，蓝晶需用户显式开启。
+const defaultFertilizerLandTypes = allFertilizerLandTypes.filter(type => type !== 'blue-crystal')
+// 旧版本前端把紫金土地存成了 'purple'，后端不认这个值；读取时迁移，避免用户已有勾选静默丢失。
+const legacyFertilizerLandTypes: Record<string, string> = { purple: 'purple-gold' }
 
 const defaultAutomation = {
   farm: false,
@@ -80,7 +85,7 @@ const defaultAutomation = {
   fertilizer: 'none',
   skip_own_weed_bug: false,
   fertilizer_multi_season: false,
-  fertilizer_land_types: [...allFertilizerLandTypes],
+  fertilizer_land_types: [...defaultFertilizerLandTypes],
   fertilizer_smart_seconds: 300,
   ...RANCH_AUTOMATION_DEFAULTS,
 }
@@ -113,7 +118,8 @@ export function useAutomationSettings({
   const automationSaving = ref(false)
 
   const fertilizerLandTypeOptions = [
-    { label: '紫土地', value: 'purple' },
+    { label: '蓝晶土地', value: 'blue-crystal' },
+    { label: '紫金土地', value: 'purple-gold' },
     { label: '金土地', value: 'gold' },
     { label: '黑土地', value: 'black' },
     { label: '红土地', value: 'red' },
@@ -133,10 +139,11 @@ export function useAutomationSettings({
   ]
 
   function normalizeFertilizerLandTypes(input: unknown) {
-    const source = Array.isArray(input) ? input : allFertilizerLandTypes
+    const source = Array.isArray(input) ? input : defaultFertilizerLandTypes
     const normalized: string[] = []
     for (const item of source) {
-      const value = String(item || '').trim().toLowerCase()
+      const raw = String(item || '').trim().toLowerCase()
+      const value = legacyFertilizerLandTypes[raw] || raw
       if (!allFertilizerLandTypes.includes(value))
         continue
       if (normalized.includes(value))

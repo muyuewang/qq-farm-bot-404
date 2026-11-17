@@ -70,8 +70,11 @@ function position(land: any) {
   }
 }
 
+// 土地贴图等级上限需与官方 LandLevel.json 保持一致（6 = 蓝晶土地）。
+const MAX_LAND_TEXTURE_LEVEL = 6
+
 function textureUrl(land: any) {
-  const level = Math.min(5, Math.max(1, Number(land?.level) || 1))
+  const level = Math.min(MAX_LAND_TEXTURE_LEVEL, Math.max(1, Number(land?.level) || 1))
   if (Number(land?.plantSize) > 1)
     return `/game-config/land_images/land_valid${level}_2x2.png`
   if (land?.status === 'locked')
@@ -116,7 +119,8 @@ async function draw() {
     const large = Number(land?.plantSize) > 1
     const drawWidth = large ? mergedWidth : landWidth
     const drawHeight = large ? mergedHeight : landHeight
-    if (Number(land?.level) === 5 && !large) {
+    // 5 级起的贴图相对 1-4 级是镜像朝向，蓝晶土地沿用 5 级的朝向。
+    if (Number(land?.level) >= 5 && !large) {
       context.save()
       context.translate(x, y)
       context.rotate(Math.PI)

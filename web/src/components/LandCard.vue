@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import OfficialCrystalMutation from './OfficialCrystalMutation.vue'
-import OfficialBichonMutation from './OfficialBichonMutation.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import OfficialBichonMutation from './OfficialBichonMutation.vue'
+import OfficialCrystalMutation from './OfficialCrystalMutation.vue'
 
 const props = withDefaults(defineProps<{
   land: any
@@ -89,9 +89,12 @@ const isFertilizable = computed(() =>
 
 const canFertilize = computed(() => props.showActions && isFertilizable.value)
 
+// 土地贴图等级上限需与官方 LandLevel.json 保持一致（6 = 蓝晶土地）。
+const MAX_LAND_TEXTURE_LEVEL = 6
+
 const landTextureName = computed(() => {
   const targetLand = land.value || {}
-  const level = Math.min(5, Math.max(1, Number(targetLand.level) || 1))
+  const level = Math.min(MAX_LAND_TEXTURE_LEVEL, Math.max(1, Number(targetLand.level) || 1))
   const isSnow = Boolean(
     targetLand.isSnow
     || targetLand.snow
@@ -115,14 +118,15 @@ const landTextureName = computed(() => {
 
 const landTextureUrl = computed(() => {
   if (Number(land.value?.plantSize) > 1)
-    return `/game-config/land_images/land_valid${Math.min(5, Math.max(1, Number(land.value?.level) || 1))}_2x2.png`
+    return `/game-config/land_images/land_valid${Math.min(MAX_LAND_TEXTURE_LEVEL, Math.max(1, Number(land.value?.level) || 1))}_2x2.png`
   return `/game-config/land_images/${landTextureName.value}.png`
 })
 
 const shouldRotateLandTexture = computed(() => {
   const level = Number(land.value?.level) || 1
   // 与 FarmPanel 的 Canvas 保持一致，避免选中 2x2 土地后再次翻转。
-  return level === 5 && Number(land.value?.plantSize) <= 1
+  // 5 级起的贴图相对 1-4 级是镜像朝向，蓝晶土地沿用 5 级的朝向。
+  return level >= 5 && Number(land.value?.plantSize) <= 1
 })
 
 const mutantEffects = computed(() => {
