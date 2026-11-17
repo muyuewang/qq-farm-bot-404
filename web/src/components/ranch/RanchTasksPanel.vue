@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
+import RanchDailyBenefitCard from '@/components/ranch/RanchDailyBenefitCard.vue'
 import RanchDailyShareCard from '@/components/ranch/RanchDailyShareCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
@@ -21,6 +22,7 @@ const useMultiplier = ref(true)
 
 const tasks = computed(() => props.state?.tasks || [])
 const share = computed(() => props.state?.dailyShare ?? null)
+const benefit = computed(() => props.state?.dailyBenefit ?? null)
 const claimable = computed(() => tasks.value.filter(task => task.canClaim))
 const visible = computed(() => tasks.value.filter(task => tab.value === 'all' || task.category === tab.value))
 const guide = computed(() => tasks.value.find(task => task.entry === 'friends') || null)
@@ -96,6 +98,7 @@ function noteOf(task: any) {
         </BaseButton>
       </div>
 
+      <RanchDailyBenefitCard :benefit="benefit" />
       <RanchDailyShareCard :share="share" @request="payload => emit('request', payload)" />
 
       <div

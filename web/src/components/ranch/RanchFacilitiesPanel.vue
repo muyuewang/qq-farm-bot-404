@@ -66,6 +66,14 @@ function completable(facility: RanchFacility) {
     return false
   return facility.upgradeState === 2 || facility.upgradeCountdown === 0
 }
+
+/**
+ * 未激活设施的容量多半是 0、feed 也是 null，此时展示升级与投喂入口只会让人点了必失败。
+ * 配置里查不到「几级解锁」的条件，所以不写死等级，只说明当前未开放。
+ */
+function lockedText(facility: RanchFacility) {
+  return `该${facility.name}尚未开放（服务端状态码 ${facility.state}），开放后可补充牧草与升级。`
+}
 </script>
 
 <template>
@@ -90,8 +98,13 @@ function completable(facility: RanchFacility) {
         </div>
       </div>
 
+      <!-- 未开放：只给状态说明，不渲染任何写操作入口 -->
+      <p v-if="!facility.active" class="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 leading-5 dark:bg-gray-900/40 dark:text-gray-400">
+        {{ lockedText(facility) }}
+      </p>
+
       <!-- 牧草机 -->
-      <div v-if="facility.isGrassMachine" class="mt-3 space-y-3">
+      <div v-if="facility.isGrassMachine && facility.active" class="mt-3 space-y-3">
         <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
           <div class="rounded-lg bg-gray-50 px-2 py-2 dark:bg-gray-900/40">
             <p class="text-gray-500">
@@ -138,7 +151,7 @@ function completable(facility: RanchFacility) {
       </div>
 
       <!-- 升级信息 -->
-      <div v-if="facility.next" class="mt-3 border-t border-gray-100 pt-3 dark:border-gray-700">
+      <div v-if="facility.active && facility.next" class="mt-3 border-t border-gray-100 pt-3 dark:border-gray-700">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="text-xs text-gray-600 dark:text-gray-300">
             下一级 Lv.{{ facility.next.level }} · 容量 {{ facility.next.capacity }} · 耗时 {{ formatSeconds(facility.next.durationSec) }}
@@ -156,7 +169,7 @@ function completable(facility: RanchFacility) {
         </p>
       </div>
 
-      <div v-if="facility.upgradeState" class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+      <div v-if="facility.active && facility.upgradeState" class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
         <span>
           {{ completable(facility) ? '升级已完成，等待领取' : `升级中，约 ${formatSeconds(facility.upgradeCountdown)} 后完成` }}
         </span>

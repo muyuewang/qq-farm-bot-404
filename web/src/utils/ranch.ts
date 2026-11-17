@@ -694,6 +694,22 @@ function mapDailyShare(raw: any) {
   }
 }
 
+/**
+ * 每日福利（牧场商店寄售槽 6 的免单商品）。
+ * 后端只在任务与活动视图下随快照下发，因此这里允许整体缺失，缺失时返回 null。
+ */
+function mapDailyBenefit(raw: any) {
+  if (!raw || typeof raw !== 'object')
+    return null
+  return {
+    dateKey: text(raw.dateKey),
+    claimed: raw.claimed === true,
+    available: raw.available === true,
+    hasGift: raw.hasGift === true,
+    rewards: toItems(raw.rewards),
+  }
+}
+
 function mapBook(raw: any) {
   if (!raw || typeof raw !== 'object')
     return null
@@ -773,6 +789,8 @@ function mapFriendRanch(raw: any, serverTimeMs: unknown) {
 
 export type RanchDailyShare = NonNullable<ReturnType<typeof mapDailyShare>>
 
+export type RanchDailyBenefit = NonNullable<ReturnType<typeof mapDailyBenefit>>
+
 export type RanchFriendRanch = NonNullable<ReturnType<typeof mapFriendRanch>>
 
 export interface RanchState {
@@ -797,6 +815,7 @@ export interface RanchState {
   friends: { gid: string, name: string, avatarUrl: string }[] | null
   friendRanch: ReturnType<typeof mapFriendRanch>
   dailyShare: ReturnType<typeof mapDailyShare>
+  dailyBenefit: ReturnType<typeof mapDailyBenefit>
 }
 
 /** 活动分区：只按服务端毫秒时钟和起止时间分三态，起止时间都没下发时不猜状态。 */
@@ -872,6 +891,7 @@ export function mapRanchState(state?: Record<string, any> | null): RanchState | 
     friends: state.friends === undefined ? null : list(state.friends).map((friend: any) => ({ gid: text(friend.gid), name: text(friend.name) || text(friend.gid), avatarUrl: text(friend.avatarUrl) })),
     friendRanch: state.friendRanch === undefined ? null : mapFriendRanch(state.friendRanch, serverTime),
     dailyShare: state.dailyShare === undefined ? null : mapDailyShare(state.dailyShare),
+    dailyBenefit: state.dailyBenefit === undefined ? null : mapDailyBenefit(state.dailyBenefit),
   }
 }
 
@@ -1013,6 +1033,7 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_friend_mosquito', label: '自动放蚊子', desc: '向好友栏舍投放蚊子', group: 'friend' },
   { key: 'ranch_task', label: '自动领取牧场任务', desc: '领取已完成的牧场任务奖励', group: 'reward' },
   { key: 'ranch_share', label: '自动领取每日分享', desc: '上报分享并领取每日首次分享礼包', group: 'reward' },
+  { key: 'ranch_daily_benefit', label: '自动领取每日福利', desc: '领取牧场商店每日免费福利，每天一次', group: 'reward' },
 ]
 
 /** 与 core/src/config/ranch-automation.ts 的 RANCH_AUTOMATION_DEFAULTS 逐 key、逐值对应，改动需同步。 */
@@ -1034,6 +1055,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_friend_mosquito: false,
   ranch_task: true,
   ranch_share: true,
+  // 后端 ranch_daily_benefit 默认开启，前端需与其保持一致，否则总开关恢复默认时会漏掉这项。
+  ranch_daily_benefit: true,
   ranch_check_minutes: 5,
   ranch_strategy: 'level',
   ranch_bag_fallback: 'level',
