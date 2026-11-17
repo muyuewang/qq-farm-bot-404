@@ -1,5 +1,11 @@
 import animals from '../gameConfig/ranch/MCAnimalConfig.json';
 
+/**
+ * 默认只开「不改账号状态」的领取类动作（任务/分享/每日福利）；
+ * 自动购买、出售、好友互动等会真实改动账号或好友状态的动作一律默认关闭。
+ * 上游把这里全部改成 true，但本项目坚持保守默认：详见
+ * core/tests/ranch-automation.test.js 的「默认只开任务与分享」用例。
+ */
 export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_harvest: false,
     ranch_produce: false,
@@ -8,6 +14,7 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_sell: false,
     ranch_grass: false,
     ranch_grass_buy: false,
+    ranch_grass_threshold_percent: 20,
     ranch_fill_cans: false,
     ranch_feed_normal: false,
     ranch_feed_organic: false,
@@ -47,6 +54,13 @@ export function normalizeRanchSetting(key: string, value: unknown): boolean | nu
         const number = Number(value);
         if (!Number.isInteger(number) || number < 1 || number > 60) {
             throw Object.assign(new Error('牧场巡查间隔必须是 1–60 的整数分钟'), { code: 'INVALID_CONFIG' });
+        }
+        return number;
+    }
+    if (key === 'ranch_grass_threshold_percent') {
+        const number = Number(value);
+        if (!Number.isInteger(number) || number < 1 || number > 100) {
+            throw Object.assign(new Error('牧草补充阈值必须是 1–100 的整数百分比'), { code: 'INVALID_CONFIG' });
         }
         return number;
     }
