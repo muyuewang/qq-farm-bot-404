@@ -45,6 +45,10 @@ const filteredItems = computed(() => {
   return items.value
 })
 
+/** 未读标记来自服务端下发，只有 marked 才上报，避免把已读项重复提交。 */
+const freshItems = computed(() => items.value.filter(item => item.isNew && item.fruitId > 0))
+const clearing = ref(false)
+
 const unlockedCount = computed(() => items.value.filter(item => item.unlocked).length)
 const lockedCount = computed(() => Math.max(0, items.value.length - unlockedCount.value))
 
@@ -104,6 +108,34 @@ async function claimLevelRewards() {
   }
   else {
     toast.error(result.error || '领取图鉴奖励失败')
+  }
+}
+
+async function clearAllNew() {
+  const accountId = currentAccountId.value
+  // 只提交当前图鉴里确实带未读标记的条目，已读的不再重复上报。
+  const fruitIds = freshItems.value.map(item => item.fruitId)
+  if (clearing.value || loading.value || !accountId || scene.value === 'ranch')
+    return
+  if (!fruitIds.length) {
+    toast.warning('当前图鉴没有未读条目')
+    return
+  }
+  clearing.value = true
+  try {
+    const result = await illustratedStore.clearNew(accountId, fruitIds)
+    if (!result.ok) {
+      toast.error(result.error || '图鉴已读清除失败')
+      return
+    }
+    const cleared: number[] = result.data?.cleared || []
+    if (cleared.length)
+      toast.success(`已读 ${cleared.length} 条新增图鉴`)
+    else
+      toast.warning('没有可清除的未读图鉴')
+  }
+  finally {
+    clearing.value = false
   }
 }
 
@@ -182,6 +214,16 @@ onMounted(() => {
             @click="claimLevelRewards"
           >
             领取等级奖励
+          </BaseButton>
+          <BaseButton
+            v-if="!isCollections"
+            class="w-28"
+            variant="secondary"
+            :loading="clearing"
+            :disabled="!currentAccountId || loading || !freshItems.length"
+            @click="clearAllNew"
+          >
+            全部已读{{ freshItems.length ? ` ${freshItems.length}` : '' }}
           </BaseButton>
           <BaseButton v-if="!isCollections" class="w-24" variant="primary" :loading="loading" @click="refresh">
             刷新

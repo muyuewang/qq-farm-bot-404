@@ -36,6 +36,8 @@ export interface IllustratedShopSeed {
 
 export interface IllustratedItem {
   seedId: number
+  /** 果实 ID，「全部已读」按它上报；后端未下发时为 0 */
+  fruitId: number
   name: string
   image?: string
   unlocked: boolean
@@ -132,6 +134,7 @@ function mapShopSeed(raw: any): IllustratedShopSeed | null {
 function mapItem(raw: any): IllustratedItem {
   return {
     seedId: toNumber(raw?.seedId),
+    fruitId: toNumber(raw?.fruitId),
     name: String(raw?.name || ''),
     image: typeof raw?.image === 'string' ? raw.image : '',
     unlocked: raw?.unlocked === true,
@@ -287,6 +290,40 @@ export const useIllustratedStore = defineStore('illustrated', () => {
     }
   }
 
+  async function clearNew(accountId: string, fruitIds: number[]): Promise<IllustratedActionResult> {
+    const ids = (Array.isArray(fruitIds) ? fruitIds : []).filter(id => Number.isFinite(id) && id > 0)
+    if (!accountId)
+      return { ok: false, error: '请先选择账号' }
+    if (!ids.length)
+      return { ok: true, data: { cleared: [] } }
+    const requestedId = String(accountId)
+    try {
+      const { data } = await api.post('/api/illustrated/clear-new', { fruitIds: ids }, {
+        headers: { 'x-account-id': accountId },
+      })
+      if (!data?.ok)
+        return { ok: false, error: String(data?.error || data?.errorMessage || '图鉴已读清除失败') }
+      const cleared: number[] = Array.isArray(data?.data?.cleared) ? data.data.cleared : []
+      // 只更新已确认清除的条目；其余条目保持原状态，等服务端下次快照纠正。
+      if (cleared.length && isCurrentAccount(requestedId)) {
+        const done = new Set(cleared.map((id: any) => toNumber(id)))
+        for (const book of [snapshot.value.crop, snapshot.value.mutant]) {
+          for (const item of (book?.items || [])) {
+            if (done.has(item.fruitId))
+              item.isNew = false
+          }
+        }
+      }
+      return { ok: true, data: { cleared } }
+    }
+    catch (err: any) {
+      return {
+        ok: false,
+        error: String(err?.response?.data?.error || err?.response?.data?.errorMessage || err?.message || '图鉴已读清除失败'),
+      }
+    }
+  }
+
   return {
     snapshot,
     loaded,
@@ -298,5 +335,6 @@ export const useIllustratedStore = defineStore('illustrated', () => {
     clearIllustratedData,
     fetchSnapshot,
     claimRewards,
+    clearNew,
   }
 })
