@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { RANCH_AUTOMATION_DEFAULTS, RANCH_SWITCH_KEYS, RANCH_ANIMAL_OPTIONS, normalizeRanchSetting } = require('../dist/config/ranch-automation');
 
 // 桩件只覆盖 automation 模块在 require 期绑定的依赖，全部使用固定数据，不连服务端。
-function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), operate = async () => ({ status: 'skipped' }), stateDeps = {}, logs = [] } = {}) {
+function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), operate = async () => ({ status: 'skipped' }), stateDeps = {}, friendDeps = {}, logs = [] } = {}) {
     const mock = (name, exports) => {
         const id = require.resolve(`../dist/${name}`);
         require.cache[id] = { id, filename: id, loaded: true, exports };
@@ -26,6 +26,15 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
     mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, getBenefitRoutineState: () => ({ doneToday: true, nextCheckAt: 0 }), claimTasks: async () => {}, claimShare: async () => {}, claimBenefit: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
     mock('services/ranch/context', { getAmbientSendContext: () => null, runWithSendContext: (_ctx, run) => run() });
+    // 牧场好友阶段会复用农场名单；默认给空名单，避免加载真实 friend 服务。
+    mock('services/friend', {
+        getFriendsListCacheOnly: () => friendDeps.cacheOnly?.() ?? [],
+        getFriendsList: async (...args) => { friendDeps.onListCall?.(args); return friendDeps.list?.() ?? []; },
+    });
+    mock('services/ranch/friends', {
+        getInteractionTimes: async () => friendDeps.times?.() ?? { stroke: 1, steal: 1, cleanFriend: 1, putMosquito: 1 },
+        automateFriend: async (gid) => { friendDeps.onVisit?.(gid); return friendDeps.visit?.() ?? { times: {}, results: [], yielded: false }; },
+    });
     mock('utils/utils', { getServerTimeSec: () => 1_800_000_000, log: (tag, message) => logs.push({ tag, message }) });
     const id = require.resolve('../dist/services/ranch/automation');
     delete require.cache[id];
@@ -210,6 +219,49 @@ test('兑换完重置集市排期可立刻重新检查，且开关默认关闭�
     level.resetMarketSchedule();
     assert.ok(level.getRoutineState().nextCheckAt <= Date.now() + 21_000, '重置后应按重进场窗口尽快复查');
     assert.equal(loadAutomation({ automation: {} }).getRoutineState().doneToday, true, '未开集市且无其它动作时不巡查');
+});
+
+test('连接不可继续时牧场不切场景、不执行动作，按重进场窗口退避', async () => {
+    const calls = [];
+    const level = loadAutomation({
+        automation: { ranch_harvest: true, ranch_check_minutes: 30 },
+        prepareAction: async () => ({ skipped: true }),
+        operate: async (action, input) => { calls.push(action); return { status: 'ok' }; },
+    });
+    const before = Date.now();
+    await level.run({ farmDeadline: () => Infinity, canContinue: () => false });
+    assert.deepEqual(calls, [], '网关不可继续时不得执行任何牧场动作');
+    const { doneToday, nextCheckAt } = level.getRoutineState();
+    assert.equal(doneToday, false, '让路不等于当日做完');
+    assert.ok(nextCheckAt >= before + 19_000 && nextCheckAt <= before + 21_000,
+        `让路后应在 20 秒重进场窗口内，实际 ${nextCheckAt - before}ms`);
+});
+
+test('牧场好友阶段复用农场名单：缓存命中不重读，缓存为空只补读一次', async () => {
+    const runWith = async (cacheOnly) => {
+        const listCalls = [];
+        const visits = [];
+        const level = loadAutomation({
+            automation: { ranch_friend_steal: true },
+            friendDeps: {
+                cacheOnly: () => cacheOnly,
+                onListCall: args => listCalls.push(args),
+                onVisit: gid => visits.push(gid),
+            },
+        });
+        await level.run({ farmDeadline: () => Infinity, canContinue: () => true });
+        return { listCalls, visits };
+    };
+
+    const cached = [{ gid: 1, name: 'A' }, { gid: 2, name: 'B' }];
+    const hit = await runWith(cached);
+    assert.deepEqual(hit.listCalls, [], '缓存命中时不得重读好友名单');
+    assert.deepEqual(hit.visits, [1, 2], '按缓存名单顺序拜访，每轮最多三位');
+
+    const miss = await runWith([]);
+    assert.equal(miss.listCalls.length, 1, '缓存为空时补读一次');
+    assert.equal(miss.listCalls[0][1], 'normal', '补读走普通优先级');
+    assert.equal(miss.listCalls[0][2], true, '补读需把连接异常抛给调度器，不能静默降级');
 });
 
 test('核对完待核对账本会重置让路退避，立刻允许重新进牧场', async () => {
