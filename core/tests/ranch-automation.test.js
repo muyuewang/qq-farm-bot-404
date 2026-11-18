@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { RANCH_AUTOMATION_DEFAULTS, RANCH_SWITCH_KEYS, RANCH_ANIMAL_OPTIONS, normalizeRanchSetting } = require('../dist/config/ranch-automation');
 
 // 桩件只覆盖 automation 模块在 require 期绑定的依赖，全部使用固定数据，不连服务端。
-function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), operate = async () => ({ status: 'skipped' }), stateDeps = {}, friendDeps = {}, logs = [] } = {}) {
+function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), operate = async () => ({ status: 'skipped' }), stateDeps = {}, friendDeps = {}, cubs = null, logs = [] } = {}) {
     const mock = (name, exports) => {
         const id = require.resolve(`../dist/${name}`);
         require.cache[id] = { id, filename: id, loaded: true, exports };
@@ -21,7 +21,7 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         market: async () => stateDeps.market?.() ?? { opened: true, present: true, periodDay: '1', roundIndex: '1', goods: [] },
         balance: (bag, id) => stateDeps.balance?.(bag, id) ?? { total: '0', locked: '0' },
     });
-    mock('services/ranch/model', { cubMap: new Map(), quantity: v => Number(v) });
+    mock('services/ranch/model', { cubMap: cubs ? new Map(cubs) : new Map(), quantity: v => Number(v) });
     mock('services/ranch/actions', { prepareAction, operate });
     mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, getBenefitRoutineState: () => ({ doneToday: true, nextCheckAt: 0 }), claimTasks: async () => {}, claimShare: async () => {}, claimBenefit: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
@@ -90,6 +90,62 @@ test('补栏选种按策略过滤：仅可用、金券计价、栏位匹配的�
     assert.equal(shed?.animal.husbandry_type, '棚', 'kind=2 只看棚用幼崽');
     const fallback = loadAutomation({ goods }).selectAnimal(candidates, { ...RANCH_AUTOMATION_DEFAULTS, ranch_strategy: 'bag_priority', ranch_bag_fallback: 'level' }, 1);
     assert.equal(fallback.id, 2, '背包优先无货时按回退策略选种');
+});
+
+test('补栏按窝/棚背包优先顺序放养，放满即停，缺额才进商店', async () => {
+    // cubMap 决定幼崽适用哪种设施：60001/60002 是窝用，70001 是棚用。
+    const cubs = [
+        [60001, { id: 60001, husbandry_type: '窝', name: '窝幼崽甲' }],
+        [60002, { id: 60002, husbandry_type: '窝', name: '窝幼崽乙' }],
+        [70001, { id: 70001, husbandry_type: '棚', name: '棚幼崽' }],
+    ];
+    const stock = () => [
+        { id: 60001, animalId: 60001, count: '2', locked: false },
+        { id: 60002, animalId: 60002, count: '5', locked: false },
+        { id: 70001, animalId: 70001, count: '9', locked: false },
+    ];
+    const runCase = async (automation) => {
+        const places = [];
+        // 棚已住满（3/3）不参与补栏，只有窝（2/5）有空位。
+        // animals/shelves 必须给空数组：updateDeadline 会直接遍历它们。
+        const raw = { bag: {}, cells: { facilities: [
+            { instance_id: '501', state: 1, ranch: { husbandry_type: 1, capacity: 5, animal_count: 2, animals: [], shelves: [] } },
+            { instance_id: '502', state: 1, ranch: { husbandry_type: 2, capacity: 3, animal_count: 3, animals: [], shelves: [] } },
+        ] } };
+        const level = loadAutomation({
+            automation: { ranch_buy: true, ranch_check_minutes: 30, ...automation },
+            raw,
+            cubs,
+            stateDeps: {
+                inventory: stock,
+                // available() 走 balance 结算，幼崽库存也要从这里返回，否则可用量恒为 0。
+                balance: (_bag, id) => ({ total: String(stock().find(item => item.id === id)?.count ?? '0'), locked: '0' }),
+                catalog: () => [],
+            },
+            prepareAction: async action => ({ label: action, skipped: false, costItems: [], rewards: [], expected: {} }),
+            operate: async (action, input) => {
+                if (action !== 'place') return { status: 'ok' };
+                places.push({ itemId: input.itemId, count: input.count });
+                const pen = raw.cells.facilities.find(f => String(f.instance_id) === String(input.ranchId));
+                pen.ranch.animal_count += input.count;
+                return { status: 'ok' };
+            },
+        });
+        await level.run({ farmDeadline: () => Infinity });
+        return places;
+    };
+
+    // 乙优先但空位只有 3：按空位截断，库存 5 只不会超放。
+    assert.deepEqual(await runCase({ ranch_strategy: 'bag_priority', ranch_coop_cub_priority: [60002, 60001] }),
+        [{ itemId: 60002, count: 3 }], '按配置顺序放养，并按剩余空位截断');
+    // 甲优先：库存 2 只先放完，剩 1 个空位继续放下一个优先级的幼崽。
+    assert.deepEqual(await runCase({ ranch_strategy: 'bag_priority', ranch_coop_cub_priority: [60001, 60002] }),
+        [{ itemId: 60001, count: 2 }, { itemId: 60002, count: 1 }], '库存放完自动轮到下一优先级');
+    // 未配置顺序时按等级从高到低，不因缺配置而放弃放养。
+    assert.deepEqual(await runCase({ ranch_strategy: 'bag_priority' }),
+        [{ itemId: 60002, count: 3 }], '未配置顺序时退化为等级从高到低');
+    // 非背包优先策略不消费背包，只按商店选中的动物补栏（商店无货则不放养）。
+    assert.deepEqual(await runCase({ ranch_strategy: 'level' }), [], '指定动物策略不放养背包里的其它幼崽');
 });
 
 test('未解锁或全部开关关闭时不排入牧场巡查', () => {

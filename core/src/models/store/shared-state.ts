@@ -291,6 +291,11 @@ function cloneAccountConfig(base: Partial<AccountConfig> = DEFAULT_ACCOUNT_CONFI
             automation[key] = normalizeFertilizerLandTypes(srcAutomation[key], DEFAULT_FERTILIZER_LAND_TYPES);
             continue;
         }
+        // 幼崽优先顺序是数组，浅拷贝会让各账号共享同一个引用。
+        if (key === 'ranch_coop_cub_priority' || key === 'ranch_shed_cub_priority') {
+            automation[key] = [...((srcAutomation as any)[key] ?? automation[key])];
+            continue;
+        }
         if (srcAutomation[key] !== undefined) (automation as any)[key] = (srcAutomation as any)[key];
     }
 

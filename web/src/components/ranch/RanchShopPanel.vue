@@ -42,15 +42,29 @@ function canBuy(good: any) {
   return good.available === true && maxCount(good) > 0 && affordability(good.balance, good.price.count) === true
 }
 
+/** 单价是 int64 十进制字符串，按 BigInt 相乘再格式化，避免大额金额经 Number 后失真。 */
+function unitTotal(good: any, count: number) {
+  const price = String(good?.price?.count ?? '')
+  if (!/^\d+$/.test(price))
+    return formatQuantity(price)
+  return formatQuantity((BigInt(price) * BigInt(Math.max(1, Math.floor(count)))).toString())
+}
+
 function requestBuy(good: any) {
-  const input: Record<string, any> = { goodsId: good.id, count: countOf(good.id, maxCount(good)), shopId: good.shopId }
+  const count = countOf(good.id, maxCount(good))
+  const input: Record<string, any> = { goodsId: good.id, count, shopId: good.shopId }
   if (good.animal && autoPlace.value[good.id])
     input.autoPlace = true
+  // 总消耗按「单价 × 数量」当场算给用户看，报价弹窗里再用服务端核算值复核一次。
+  const total = unitTotal(good, count)
   emit('request', {
     action: 'buy',
     input,
-    title: `购买${good.reward.name} ×${input.count}`,
-    note: good.animal && input.autoPlace ? '购买后直接放养到空位，空位不足时服务端会拒绝整笔购买。' : undefined,
+    title: `购买${good.reward.name} ×${count}`,
+    note: [
+      `总消耗 ${total} ${good.price.name}。`,
+      good.animal && input.autoPlace ? '购买后直接放养到空位，空位不足时服务端会拒绝整笔购买。' : '',
+    ].filter(Boolean).join(''),
   })
 }
 </script>
@@ -137,6 +151,9 @@ function requestBuy(good: any) {
             <BaseButton variant="primary" size="sm" :disabled="!canBuy(good)" @click="requestBuy(good)">
               购买
             </BaseButton>
+            <span class="rounded-md bg-gray-50 px-2 py-1 text-[11px] text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+              共 {{ unitTotal(good, countOf(good.id, maxCount(good))) }} {{ good.price.name }}
+            </span>
           </div>
 
           <BaseSwitch

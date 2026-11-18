@@ -2,16 +2,30 @@
 import type { RanchAnimal, RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
 import { computed } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import { batchTargets, formatSeconds } from '@/utils/ranch'
+import { batchTargets, formatSeconds, sortFacilities } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
 const emit = defineEmits<{ request: [payload: RanchRequest] }>()
 
-const ranches = computed(() => (props.state?.facilities || []).filter((facility: RanchFacility) => facility.isRanch))
+/** 窝固定排在棚前面：服务器返回顺序不固定，直接渲染会让同一账号每次刷新位置都在变。 */
+const ranches = computed(() => sortFacilities((props.state?.facilities || []).filter((facility: RanchFacility) => facility.isRanch)))
 const cleanable = computed(() => batchTargets(props.state, 'clean'))
 const harvestAll = computed(() => batchTargets(props.state, 'harvest'))
 const produceAll = computed(() => batchTargets(props.state, 'produce'))
+
+/** 顶部按窝/棚汇总，方便一眼看出哪类栏舍还空着。 */
+const penSummary = computed(() => [
+  { housing: '窝', type: 6 },
+  { housing: '棚', type: 7 },
+].map(({ housing, type }) => {
+  const pens = ranches.value.filter(facility => Number(facility.moduleType) === type)
+  return {
+    housing,
+    count: pens.length,
+    free: pens.reduce((sum, facility) => sum + Math.max(0, (facility.ranch?.capacity ?? 0) - (facility.ranch?.count ?? 0)), 0),
+  }
+}).filter(row => row.count > 0))
 
 /** 一键动作让后端自己挑目标（input.all），页面不复制它的筛选条件，避免两边判据不一致。 */
 function batchRequest(action: 'harvest' | 'produce' | 'clean', count: number) {
@@ -44,6 +58,16 @@ function stageText(animal: RanchAnimal) {
   <div class="space-y-3">
     <div v-if="!ranches.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
       当前没有已建造的窝或棚，请在设施分区建造或升级栏舍。
+    </div>
+
+    <div v-if="state" class="flex flex-wrap items-center gap-2">
+      <span
+        v-for="row in penSummary"
+        :key="row.housing"
+        class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300"
+      >
+        {{ row.housing }} {{ row.count }} 座 · 空位 {{ row.free }}
+      </span>
     </div>
 
     <div v-if="state" class="flex flex-wrap gap-2">

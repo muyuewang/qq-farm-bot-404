@@ -593,6 +593,8 @@ function mapBagItem(raw: any) {
     can: item.can && typeof item.can === 'object' ? item.can : null,
     animalId: nullableNumber(item.animalId),
     giantCub: item.giantCub === true,
+    /** 幼崽适用设施：'窝' / '棚'，非幼崽为 null；放养时据此过滤可选设施。 */
+    husbandryType: text(item.husbandryType) || null,
     product: item.product && typeof item.product === 'object'
       ? {
           weightKg: number(item.product.weightX10, 0) / 100,
@@ -1067,6 +1069,9 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_bag_fallback: 'level',
   ranch_coop_animal: 0,
   ranch_shed_animal: 0,
+  // 背包幼崽放养优先顺序，空数组表示不干预（按等级从高到低）。
+  ranch_coop_cub_priority: [] as number[],
+  ranch_shed_cub_priority: [] as number[],
 }
 
 /**
@@ -1101,3 +1106,18 @@ export const RANCH_AUTOMATION_LIMITS = {
   checkMinutes: { min: 1, max: 60 },
   grassThresholdPercent: { min: 1, max: 100 },
 } as const
+
+/** 设施固定顺序：窝（6）、棚（7）、牧草机（8）。服务器返回顺序不固定，列表统一按此排列。 */
+const FACILITY_ORDER: Record<number, number> = { 6: 0, 7: 1, 8: 2 }
+
+/**
+ * 设施按模块类型固定排序，同类型再按实例 id 数字序。
+ * 上游把这份逻辑放在 ranch-shared.ts，本项目没有该文件，统一收进 utils/ranch.ts。
+ */
+export function sortFacilities<T extends { moduleType?: number | string, id?: number | string }>(list: T[]): T[] {
+  return [...list].sort((a, b) => (FACILITY_ORDER[Number(a.moduleType)] ?? 9) - (FACILITY_ORDER[Number(b.moduleType)] ?? 9)
+    || String(a.id ?? '').localeCompare(String(b.id ?? ''), undefined, { numeric: true }))
+}
+
+/** 设施类型：窝 6、棚 7，放养幼崽时只列出适用的设施。 */
+export const PEN_TYPE: Record<string, number> = { 窝: 6, 棚: 7 }

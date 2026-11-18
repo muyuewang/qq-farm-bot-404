@@ -546,7 +546,10 @@ function applyRuntimeConfig(snapshot: any, syncNow: boolean = false): number {
     const appliedSnapshot = applyConfigSnapshot(snapshot || {}, { persist: false, accountId });
     configureEmailClaim({ hour: appliedSnapshot.emailClaimHour, accountId });
     const nextRanchAuto = getAutomation();
-    if (Object.keys(nextRanchAuto).some(key => key.startsWith('ranch_') && nextRanchAuto[key] !== prevAuto[key])) ranchAutomation.resetSchedule();
+    // 幼崽优先顺序是数组，直接 !== 永远为真，改用值比较避免每次下发都重置调度。
+    const ranchChanged = Object.keys(nextRanchAuto).some((key: string) => key.startsWith('ranch_')
+        && JSON.stringify((nextRanchAuto as any)[key]) !== JSON.stringify((prevAuto as any)[key]));
+    if (ranchChanged) ranchAutomation.resetSchedule();
     if (rev > appliedConfigRevision) appliedConfigRevision = rev;
 
     // 优先使用本次下发的间隔，避免 worker 内部 store 漂移导致回退默认值

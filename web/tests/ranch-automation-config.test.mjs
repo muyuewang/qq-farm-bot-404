@@ -28,6 +28,11 @@ function parseScalar(raw) {
     return true
   if (value === 'false')
     return false
+  // 幼崽优先顺序这类键的默认值是数组字面量，按数字数组解析，空数组同样合法。
+  if (/^\[[\d\s,]*\]$/.test(value)) {
+    const inner = value.slice(1, -1).trim()
+    return inner ? inner.split(',').map(entry => Number(entry.trim())) : []
+  }
   if (/^-?\d+(\.\d+)?$/.test(value))
     return Number(value)
   const quoted = value.match(/^'([^']*)'$/)

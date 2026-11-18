@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import RanchCubPriority from '@/components/settings/RanchCubPriority.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -8,6 +9,7 @@ import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useAccountStore } from '@/stores/account'
 import { useRanchStore } from '@/stores/ranch'
 import { useSettingStore } from '@/stores/setting'
+import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import {
   RANCH_AUTOMATION_DEFAULTS,
@@ -32,8 +34,13 @@ const accountStore = useAccountStore()
 const settingStore = useSettingStore()
 const ranchStore = useRanchStore()
 const toast = useToastStore()
+const statusStore = useStatusStore()
 const { currentAccountId } = storeToRefs(accountStore)
 const { settings, loading } = storeToRefs(settingStore)
+const { status, currentStatusReady } = storeToRefs(statusStore)
+
+/** 幼崽优先级组件要读实时背包，只有账号在线才拉取；离线时保留已保存顺序。 */
+const connected = computed(() => currentStatusReady.value && status.value?.connection?.connected === true)
 
 const automation = ref<Record<string, any>>({})
 const saving = ref(false)
@@ -76,6 +83,11 @@ function applySettings() {
   // 服务端尚未下发阈值字段时补默认值，避免输入框空白、保存时提交 undefined 被后端校验拒绝。
   if (typeof next.ranch_grass_threshold_percent !== 'number')
     next.ranch_grass_threshold_percent = RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent
+  // 幼崽优先顺序是数组，且旧账号配置里没有这两个键；补空数组避免子组件拿到 undefined。
+  for (const key of ['ranch_coop_cub_priority', 'ranch_shed_cub_priority'] as const) {
+    if (!Array.isArray(next[key]))
+      next[key] = [...RANCH_AUTOMATION_DEFAULTS[key]]
+  }
   automation.value = next
 }
 
@@ -271,6 +283,10 @@ watch(settings, () => {
           <p v-if="needsPreferredAnimal && ranchStore.animalOptions.length === 0" class="mt-3 text-xs text-amber-600 dark:text-amber-400">
             动物清单未加载成功，当前只能保留「不指定」；保存时后端仍会按官方配置校验窝与棚的适用范围。
           </p>
+          <!-- 只在背包优先策略下有意义：此时放养顺序由这份清单决定，其它策略按等级或指定动物选品。 -->
+          <div v-if="automation.ranch_strategy === 'bag_priority'" class="ui-subtle-panel mt-3 rounded-lg p-3">
+            <RanchCubPriority v-model="automation" :account-id="String(currentAccountId || '')" :connected="connected" />
+          </div>
           <p class="mt-3 text-xs" :style="{ color: 'var(--muted-text)' }">
             补栏、升级与购买牧草只花费金券；报价里出现其他消耗品时后端会跳过本次操作，不会产生钻石消费。
           </p>
