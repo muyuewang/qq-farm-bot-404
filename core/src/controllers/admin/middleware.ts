@@ -62,10 +62,12 @@ const isSoftRuntimeError = (err: any): boolean => {
 
 function isGatewayProtocolError(err: any): boolean {
     const message = String(typeof err === 'string' ? err : err?.message || '').trim();
+    // 服务名前缀与错误码拆成两次独立判断：原先 [\w-]+ 与 .*? 字符集重叠，会触发多项式回溯。
+    const protocolCode = /^(?:[\w-]+\.)+[\w-]+/.test(message) && /\bcode=\d+(?:\s|$)/.test(message);
     return String(err?.name || '') === 'GatewayError'
         || typeof err?.errorMessage === 'string'
         || typeof err?.error_message === 'string'
-        || /^(?:[\w-]+\.)+[\w-]+(?:\s+.*?)?\bcode=\d+(?:\s|$)/.test(message);
+        || protocolCode;
 }
 
 function getProtocolErrorMessage(err: any): string {
@@ -74,7 +76,8 @@ function getProtocolErrorMessage(err: any): string {
 
     const message = String(typeof err === 'string' ? err : err?.message || '').trim();
     if (!isGatewayProtocolError(err)) return '';
-    return message.match(/\bcode=\d+\b\s*(.*)$/)?.[1]?.trim() || '';
+    // (.*) 本就覆盖空白，后面紧接 .trim()，去掉前置 \s* 以消除相邻量词的重叠回溯。
+    return message.match(/\bcode=\d+\b(.*)$/)?.[1]?.trim() || '';
 }
 
 function handleApiError(res: Response, err: any): void {

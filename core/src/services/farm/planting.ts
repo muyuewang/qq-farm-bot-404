@@ -1212,14 +1212,16 @@ async function fertilizeOwnLand(landIdInput: unknown, fertilizerTypeInput: unkno
         reply = await fertilizeOne(landId, fertilizerId);
     }
     catch (error: any) {
+        const rawMessage = String(error?.message || '').trim();
+        // 前缀与错误码拆成两次独立判断：原先 [\w-]+ 与 .*? 字符集重叠，会触发多项式回溯。
+        const protocolCode = /^(?:[\w-]+\.)+[\w-]+/.test(rawMessage) && /\bcode=\d+(?:\s|$)/.test(rawMessage);
         if (error?.name === 'GatewayError'
             || typeof error?.errorMessage === 'string'
             || typeof error?.error_message === 'string'
-            || /^(?:[\w-]+\.)+[\w-]+(?:\s+.*?)?\bcode=\d+(?:\s|$)/.test(String(error?.message || '').trim())) {
+            || protocolCode) {
             throw error;
         }
-        const message = String(error?.message || '').trim() || `${typeName}使用失败`;
-        throw new Error(message);
+        throw new Error(rawMessage || `${typeName}使用失败`);
     }
     const replyLands = Array.isArray(reply && reply.land) ? reply.land : [];
     const updatedRaw = replyLands.find((land: any) => toNum(land?.id) === landId) || replyLands[0] || null;

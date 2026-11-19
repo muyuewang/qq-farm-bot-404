@@ -26,7 +26,7 @@ function readKnownFriendGidsCache(accountId: unknown): number[] | null {
                 return data.gids;
             }
         }
-    } catch (e) {
+    } catch {
         // 忽略读取错误
     }
     return null;
@@ -39,7 +39,7 @@ function writeKnownFriendGidsCache(accountId: unknown, gids: number[]): void {
             gids: gids || [],
             updatedAt: Date.now(),
         });
-    } catch (e) {
+    } catch {
         // 忽略写入错误
     }
 }

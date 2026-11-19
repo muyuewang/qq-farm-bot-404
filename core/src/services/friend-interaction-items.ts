@@ -610,7 +610,8 @@ async function performFriendInteractionItemBatch(friendGidInput: unknown, itemId
     };
 }
 
-async function performFriendFarmInteractionItem(friendGidInput: unknown, itemIdInput: unknown, propagateErrors: boolean = false): Promise<any> {
+// 该函数出错即向上抛（只有 finally 做离场清理），不区分 propagateErrors，签名保留以兼容调用方。
+async function performFriendFarmInteractionItem(friendGidInput: unknown, itemIdInput: unknown, _propagateErrors: boolean = false): Promise<any> {
     const friendGid = positiveDecimal(friendGidInput, 'INVALID_FRIEND_INTERACTION_GID', 'friendGid');
     const friendGidNumber = safePositiveNumber(friendGid, 'INVALID_FRIEND_INTERACTION_GID', 'friendGid');
     const itemId = safePositiveNumber(itemIdInput, 'INVALID_FRIEND_INTERACTION_ITEM_ID', 'itemId');

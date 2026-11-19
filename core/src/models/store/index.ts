@@ -1,5 +1,6 @@
 export {};
-const sharedState = require('./shared-state');
+// 仅保留加载副作用：shared-state 在这里没有被直接引用，但它的初始化需先于下面的配置模块。
+require('./shared-state');
 const globalConfig = require('./global-config');
 const accountConfig = require('./account-config');
 const accounts = require('./accounts');

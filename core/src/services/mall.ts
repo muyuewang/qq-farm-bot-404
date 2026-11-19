@@ -11,13 +11,11 @@ const { toNum, log, sleep, getSystemDateKey } = require('../utils/utils');
 const ORGANIC_FERTILIZER_MALL_GOODS_ID: number = 1002;
 const INORGANIC_FERTILIZER_MALL_GOODS_ID: number = 1003;
 const BUY_COOLDOWN_MS: number = 10 * 60 * 1000;
-const CHECK_BUY_COOLDOWN_MS: number = 60 * 1000;
 const MAX_ROUNDS: number = 100;
 const BUY_PER_ROUND: number = 10;
 const FREE_GIFTS_DAILY_KEY: string = 'mall_free_gifts';
 
 let lastBuyAt: number = 0;
-const lastCheckBuyAt: number = 0;
 let buyDoneDateKey: string = '';
 let buyLastSuccessAt: number = 0;
 let buyPausedNoGoldDateKey: string = '';
@@ -407,7 +405,7 @@ async function checkAndBuyFertilizerByThreshold(type: string, count: number, thr
 
 async function checkAndBuyFertilizerBoth(options: any, propagateErrors: boolean = false): Promise<any> {
     const { getBag, getBagItems, getContainerHoursFromBagItems } = require('./warehouse');
-    const { sleep, randomDelay } = require('../utils/utils');
+    const { sleep } = require('../utils/utils');
 
     const {
         buyOrganic = false,
