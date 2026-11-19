@@ -95,8 +95,9 @@ const emit = defineEmits<{
 
 const settings = defineModel<AutomationSettings>('settings', { required: true })
 
+// 三种催熟模式都用 fertilizer_smart_seconds 判定「临熟」，其余模式不需要这个输入框。
 function isFastMatureFertilizerMode(mode: string) {
-  return mode === 'smart' || mode === 'smart_only' || mode === 'smart_normal'
+  return mode === 'smart' || mode === 'normal_ripen' || mode === 'organic_ripen'
 }
 
 const mysteryShopSettingsVisible = ref(false)

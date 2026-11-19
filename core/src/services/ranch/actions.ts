@@ -213,6 +213,11 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
         plan.expectedRewards = state.claimed ? [] : state.rewards;
     } else if (action === 'exchange') {
         const current = await market(raw);
+        // 报价时带上轮次：如果自动流程排队期间集市场次已换或已结束，直接作废这一单，不按旧价成交。
+        if (input.marketRotation && (current.periodDay !== input.marketRotation.periodDay
+            || current.roundIndex !== input.marketRotation.roundIndex || getServerTimeSec() >= input.marketRotation.endsAt)) {
+            throw error('RANCH_OFFER_CHANGED', '集市场次已变化或已结束');
+        }
         const id = positiveId(input.goodsId, '兑换商品');
         const count = positiveCount(input.count);
         const good = current.goods.find((entry: any) => entry.id === id);

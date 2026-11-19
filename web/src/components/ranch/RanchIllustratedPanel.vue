@@ -10,11 +10,12 @@ const emit = defineEmits<{ request: [payload: RanchRequest] }>()
 
 const TABS = [
   { value: 'animals', label: '动物图鉴' },
+  { value: 'giant', label: '巨大图鉴' },
   { value: 'reward', label: '图鉴奖励' },
   { value: 'mutation', label: '变异规则' },
 ] as const
 
-const tab = ref<'animals' | 'reward' | 'mutation'>('animals')
+const tab = ref<'animals' | 'giant' | 'reward' | 'mutation'>('animals')
 
 const book = computed(() => props.state?.book ?? null)
 const animals = computed(() => book.value?.animals || [])
@@ -24,6 +25,12 @@ const normal = computed(() => book.value?.normal ?? null)
 const giant = computed(() => book.value?.giant ?? null)
 const giantClaimable = computed(() => giantLevels.value.filter(level => level.canClaim))
 const unlockedCount = computed(() => animals.value.filter(animal => animal.unlocked).length)
+// 巨大图鉴按巨大产物单独成条目：图标与名称都取 giantItem，进度/解锁状态沿用所属动物。
+// 后端在巨大产物与普通产物共用同一张图时会清空 giantItem.image，这里按缺图降级。
+const giantEntries = computed(() => animals.value
+  .filter(animal => animal.giantItem)
+  .map(animal => ({ ...animal, ...animal.giantItem, giantItem: undefined })))
+const giantUnlockedCount = computed(() => giantEntries.value.filter(entry => entry.unlocked).length)
 
 function claimNormal() {
   emit('request', {
@@ -73,7 +80,8 @@ function giantText(animal: any) {
           </button>
         </div>
         <span class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
-          已收录 {{ unlockedCount }} / {{ animals.length }} 种
+          <template v-if="tab === 'giant'">已收录 {{ giantUnlockedCount }} / {{ giantEntries.length }} 种巨大化</template>
+          <template v-else>已收录 {{ unlockedCount }} / {{ animals.length }} 种</template>
         </span>
       </div>
 
@@ -134,6 +142,42 @@ function giantText(animal: any) {
               <p v-if="!giantLevels.length" class="text-xs text-gray-500">
                 服务端未下发巨大化档位。
               </p>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="tab === 'giant'">
+        <div v-if="!giantEntries.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-8 text-center text-sm text-gray-500 dark:border-gray-700">
+          服务端未下发巨大化产物条目。
+        </div>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+          <div
+            v-for="entry in giantEntries"
+            :key="entry.id"
+            class="border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+            :class="entry.unlocked ? '' : 'opacity-60'"
+          >
+            <div class="flex items-start gap-2">
+              <img v-if="entry.image" :src="entry.image" :alt="entry.name" class="h-10 w-10 shrink-0 rounded object-contain">
+              <div v-else class="i-fa-solid-star h-10 w-10 shrink-0 text-xl text-gray-300" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium">
+                  {{ entry.name }}
+                </p>
+                <p class="mt-0.5 truncate text-[11px] text-gray-500">
+                  巨大化产物 · 进度 {{ formatQuantity(entry.progress) }}
+                </p>
+              </div>
+              <span v-if="entry.giant?.isNew" class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">NEW</span>
+            </div>
+            <p class="mt-2 truncate text-[11px] text-gray-500 dark:text-gray-400">
+              {{ entry.unlocked ? (entry.giant ? giantText(entry) : '已获得巨大化个体') : '未收录' }}
+            </p>
+            <div v-if="entry.giant" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span class="rounded bg-purple-50 px-1.5 py-0.5 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300">
+                {{ entry.giant.unlocked ? `巨大化 ${entry.giant.tierName || `T${entry.giant.tier}`}` : '巨大化未解锁' }}
+              </span>
             </div>
           </div>
         </div>

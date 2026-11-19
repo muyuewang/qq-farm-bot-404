@@ -1023,7 +1023,7 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_buy', label: '自动购买幼崽', desc: '按养殖策略在牧场商店补栏', group: 'own' },
   { key: 'ranch_upgrade', label: '自动升级设施', desc: '满足等级与材料时升级窝、棚与牧草机', group: 'own' },
   { key: 'ranch_sell', label: '自动出售产物', desc: '出售背包里可出售的产物', group: 'own' },
-  { key: 'ranch_market_organic', label: '集市兑换有机化肥', desc: '只用便便在仓鼠集市兑换有机化肥，优先 4 小时再 1 小时；每 6 小时检查，便便到账即触发', group: 'own' },
+  { key: 'ranch_market_organic', label: '集市兑换有机化肥', desc: '仓鼠集市开张时按到访通知自动兑换：便便优先 4 小时再 1 小时，松果优先 4 小时再 2/1 小时；货币到账也会唤醒检查', group: 'own' },
   { key: 'ranch_grass', label: '自动补充牧草', desc: '牧草机容量不满时用背包牧草补满', group: 'own' },
   { key: 'ranch_grass_buy', label: '自动购买牧草', desc: '背包牧草不足时先在商店购买，需同时开启补充牧草', group: 'own' },
   { key: 'ranch_fill_cans', label: '自动补充罐头桶', desc: '使用背包罐头为罐头桶增加时长', group: 'own' },
@@ -1046,7 +1046,7 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_buy: false,
   ranch_upgrade: false,
   ranch_sell: false,
-  // 集市兑换会消耗便便，与后端 ranch_market_organic 默认关闭保持一致。
+  // 集市兑换会消耗便便与松果，与后端 ranch_market_organic 默认关闭保持一致。
   ranch_market_organic: false,
   ranch_grass: false,
   ranch_grass_buy: false,

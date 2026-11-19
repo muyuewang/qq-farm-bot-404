@@ -1,4 +1,4 @@
-import type { AccountConfig, AutomationConfig, BagSeedFallbackStrategy, FertilizerLandType, GlobalConfig, IntervalConfig, LoginSettings, OfflineReminder, PlantingStrategy, QuietHoursConfig } from '../../types/config';
+import type { AccountConfig, AutomationConfig, BagSeedFallbackStrategy, FertilizerLandType, FertilizerMode, GlobalConfig, IntervalConfig, LoginSettings, OfflineReminder, PlantingStrategy, QuietHoursConfig } from '../../types/config';
 export {};
 
 const { DEFAULT_TIME_ZONE, normalizeTimeZone, resolveClientVersion } = require('../../config/config');
@@ -23,6 +23,8 @@ const PUSHOO_CHANNELS: Set<string> = new Set([
 ]);
 
 const DEFAULT_FERTILIZER_LAND_TYPES: FertilizerLandType[] = ['purple-gold', 'gold', 'black', 'red', 'normal'];
+// 合法施肥策略：normal_ripen / organic_ripen 是「只临熟催熟」模式，播种与多季补肥阶段不动化肥。
+const FERTILIZER_MODES = new Set<FertilizerMode>(['both', 'normal', 'organic', 'smart', 'none', 'normal_ripen', 'organic_ripen']);
 const ALL_FERTILIZER_LAND_TYPES: FertilizerLandType[] = ['blue-crystal', ...DEFAULT_FERTILIZER_LAND_TYPES];
 const FERTILIZER_LAND_TYPE_SET: Set<string> = new Set(ALL_FERTILIZER_LAND_TYPES);
 const INTERVAL_MAX_SEC: number = 86400;
@@ -74,7 +76,9 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         mystery_shop_arrival_notify: false,
         mystery_shop_purchase_notify: false,
         sell: true,
-        fertilizer: 'smart',
+        // 新账号默认不施肥：催熟模式拆分后，'smart' 语义变成「普通 + 临熟有机」，
+        // 会真的消耗化肥，保持保守默认交给用户主动开启。
+        fertilizer: 'none',
         fertilizer_multi_season: true,
         fertilizer_land_types: [...DEFAULT_FERTILIZER_LAND_TYPES],
         fertilizer_smart_seconds: 300,
@@ -347,6 +351,10 @@ function cloneAccountConfig(base: Partial<AccountConfig> = DEFAULT_ACCOUNT_CONFI
     };
 }
 
+function normalizeFertilizerMode(value: unknown, fallback: FertilizerMode): FertilizerMode {
+    return FERTILIZER_MODES.has(value as FertilizerMode) ? value as FertilizerMode : fallback;
+}
+
 function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accountFallbackConfig): AccountConfig {
     const src: Record<string, any> = (input && typeof input === 'object') ? input as Record<string, any> : {};
     const cfg = cloneAccountConfig(fallback || DEFAULT_ACCOUNT_CONFIG);
@@ -355,8 +363,7 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
         for (const [k, v] of Object.entries(src.automation)) {
             if (!ALLOWED_AUTOMATION_KEYS.has(k)) continue;
             if (k === 'fertilizer') {
-                const allowed = ['both', 'normal', 'organic', 'smart', 'none'];
-                (cfg.automation as any)[k] = allowed.includes(v as string) ? v : cfg.automation[k as keyof AutomationConfig];
+                cfg.automation.fertilizer = normalizeFertilizerMode(v, cfg.automation.fertilizer);
             } else if (k === 'fertilizer_land_types') {
                 cfg.automation.fertilizer_land_types = normalizeFertilizerLandTypes(v, cfg.automation.fertilizer_land_types);
             } else if (k.startsWith('ranch_')) {
@@ -653,6 +660,7 @@ module.exports = {
     normalizeBagSeedPriority,
     normalizeBagSeedLandTypes,
     normalizeBagSeedFallbackStrategy,
+    normalizeFertilizerMode,
     normalizeFertilizerLandTypes,
     normalizeTimeString,
     normalizeIntervals,

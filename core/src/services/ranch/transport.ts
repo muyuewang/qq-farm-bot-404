@@ -31,6 +31,8 @@ const ROUTES: Record<string, [string, string, string, string?]> = {
     bagTabs: ['itempb.ItemService', 'GetBagTab', 'RanchGetBagTab'],
     sell: ['itempb.ItemService', 'Sell', 'RanchSell'],
     useCan: ['itempb.ItemService', 'Use', 'RanchUse'],
+    // 读取集市轮次状态：RotationShopNotify 只推送到访，具体场次/时间要从 ShopProfiles 拉。
+    shopProfiles: ['shoppb.ShopService', 'ShopProfiles', 'ShopProfiles'],
     shop: ['shoppb.ShopService', 'ShopInfo', 'ShopInfo'],
     buy: ['shoppb.ShopService', 'BuyGoods', 'BuyGoods'],
     market: ['shoppb.ShopService', 'RotationShopInfo', 'RanchRotationShopInfo'],

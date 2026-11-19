@@ -560,7 +560,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
               <section class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
                 <div class="grid gap-3 sm:grid-cols-2">
                   <BaseSelect v-model="automation.automation.fertilizer" label="施肥策略" :options="fertilizerOptions" />
-                  <BaseInput v-if="['smart', 'smart_only', 'smart_normal'].includes(automation.automation.fertilizer)" v-model.number="automation.automation.fertilizer_smart_seconds" label="快成熟判定秒数" type="number" min="30" max="3600" />
+                  <BaseInput v-if="['smart', 'normal_ripen', 'organic_ripen'].includes(automation.automation.fertilizer)" v-model.number="automation.automation.fertilizer_smart_seconds" label="临熟判定秒数" type="number" min="30" max="3600" />
                 </div>
                 <BaseSwitch v-model="automation.automation.fertilizer_multi_season" label="多季补肥" />
               </section>

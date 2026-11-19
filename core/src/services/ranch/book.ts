@@ -5,8 +5,14 @@ import illustratedConfig from '../../gameConfig/Illustrated.json';
 export {};
 
 const { rpc } = require('./transport');
-const { itemDto, quantity, sumItems, signature, error } = require('./model');
+const { animalMap, mutationMap, itemDto, quantity, sumItems, signature, error } = require('./model');
 const illustratedSort = new Map(illustratedConfig.map(row => [row.param, row.sort]));
+// 普通产物 id → 巨大产物 id：图鉴里「巨大」页签按巨大产物单独展示条目与图标。
+const giantProducts = new Map<number, number>();
+for (const [animalId, mutation] of mutationMap) {
+    const animal = animalMap.get(animalId);
+    if (animal?.product_item?.id) giantProducts.set(animal.product_item.id, mutation.giant_product_item);
+}
 
 async function getBook(): Promise<any> {
     const normal = await rpc('book', { type: 101 });
@@ -17,14 +23,22 @@ async function getBook(): Promise<any> {
             canClaim: normal.has_claimable_reward, rewards: normal.total_rewards.map(itemDto) },
         giant: { score: quantity(weight.total_score), calculationMode: weight.calc_mode,
             levels: weight.levels.map((level: any) => ({ id: level.id, score: quantity(level.score_condition), claimed: level.claimed, canClaim: level.can_claim && !level.claimed, rewards: level.rewards.map(itemDto) })) },
-        animals: [...normal.list].sort((a: any, b: any) => (illustratedSort.get(a.fruit_id) ?? a.fruit_id) - (illustratedSort.get(b.fruit_id) ?? b.fruit_id)).map((entry: any) => ({
-            ...itemDto({ id: entry.fruit_id, count: 1 }), rarity: entry.rarity, layer: entry.layer, unlocked: entry.unlocked, progress: entry.progress,
-            giant: entry.giant ? { unlocked: entry.giant.unlocked, tier: entry.giant.tier,
-                tierName: tiers.find(row => row.tier === entry.giant.tier)?.tier_name || '',
-                // 实机确认：best_weight_x10=1124 在官方界面显示为 11.24 kg。
-                weightKg: entry.giant.best_weight_x10 / 100, minWeightKg: entry.giant.lo_x10 / 100, maxWeightKg: entry.giant.hi_x10 / 100,
-                harvestCount: quantity(entry.giant.harvest_count), isNew: entry.giant.is_new } : null,
-        })),
+        animals: [...normal.list].sort((a: any, b: any) => (illustratedSort.get(a.fruit_id) ?? a.fruit_id) - (illustratedSort.get(b.fruit_id) ?? b.fruit_id)).map((entry: any) => {
+            const item = itemDto({ id: entry.fruit_id, count: 1 });
+            const giantId = giantProducts.get(item.id);
+            const giantItem = giantId ? itemDto({ id: giantId, count: 1 }) : null;
+            // 巨大产物与普通产物共用同一张图时清空 image，前端按「缺图」降级而不是重复展示同一图标。
+            if (giantItem && giantItem.image === item.image) giantItem.image = '';
+            return {
+                ...item, rarity: entry.rarity, layer: entry.layer, unlocked: entry.unlocked, progress: entry.progress,
+                giantItem,
+                giant: entry.giant ? { unlocked: entry.giant.unlocked, tier: entry.giant.tier,
+                    tierName: tiers.find(row => row.tier === entry.giant.tier)?.tier_name || '',
+                    // 实机确认：best_weight_x10=1124 在官方界面显示为 11.24 kg。
+                    weightKg: entry.giant.best_weight_x10 / 100, minWeightKg: entry.giant.lo_x10 / 100, maxWeightKg: entry.giant.hi_x10 / 100,
+                    harvestCount: quantity(entry.giant.harvest_count), isNew: entry.giant.is_new } : null,
+            };
+        }),
         mutations: mutationRules.map(row => ({ type: row.mutation_type, name: row.name, description: row.tips, baseProbabilityPercent: row.pro })),
     };
 }

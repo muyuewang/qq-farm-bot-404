@@ -1,10 +1,11 @@
 import type { RanchAutomationConfig } from '../../config/ranch-automation';
+import type { FriendPatrolProgress } from './friends';
 export {};
 
 const { RANCH_SWITCH_KEYS } = require('../../config/ranch-automation');
 const { getAutomation } = require('../../models/store');
 const { inScene, isUnlocked } = require('./transport');
-const { loadRaw, snapshot, inventory, catalog, market, balance } = require('./state');
+const { loadRaw, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
 const { prepareAction, operate } = require('./actions');
 const { getServerTimeSec, log } = require('../../utils/utils');
@@ -12,46 +13,103 @@ const { getShopGoodsById } = require('../../config/gameConfig');
 const reservations = require('./operation-state');
 const { getAmbientSendContext, runWithSendContext } = require('./context');
 const daily = require('./daily');
+const interactions = require('./friends');
 
 let nextCheckAt = 0;
 let nextFriendIndex = 0;
 let friendVisits = 0;
-let pendingFriendGid: string | null = null;
+let pendingFriend: { gid: string; progress: FriendPatrolProgress } | null = null;
 let cycleStartedAt = 0;
 let cycleChanged = false;
+// 本轮是否已经为「收获/产出」重新打开过一次阶段标记，避免无限复查。
+let ownRecheckUsed = false;
 const completedPhases = new Set<string>();
 const completedSteps = new Set<string>();
 const PATROL_SLICE_MS = 5000;
 const SCENE_REENTRY_MS = 20_000;
-const MARKET_CHECK_MS = 6 * 60 * 60 * 1000;
-// 仓鼠集市只兑有机化肥：4 小时(80012) 优先于 1 小时(80011)。
-const MARKET_GOODS_PRIORITY = [80012, 80011];
-const MARKET_POOP_ID = 7002;
-let nextMarketCheckAt = 0;
+// 仓鼠集市的两种货币：
+// - 7002 便便：兑 4 小时(80012) 优先，其次 1 小时(80011)，余额 3 起；
+// - 1008 松果：兑 4 小时(80013) 优先，其次 80012、80011，余额 1 起。
+const MARKET_EXCHANGES = [
+    { currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
+    { currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
+];
+type MarketRotation = { periodDay: string; roundIndex: number; startsAt: number; endsAt: number; present: boolean };
+// 有事可查而非仅定时轮询：到访通知/货币到账都会把它置 true。
+let marketCheckPending = true;
 let marketRunId = 0;
-let lastMarketPoop: bigint | null = null;
+let lastMarketRotation: MarketRotation | null = null;
+const lastMarketBalances = new Map<number, bigint>();
 
-function resetCycle(): void {
+function resetCycle(keepFriendProgress = false): void {
     completedPhases.clear();
     completedSteps.clear();
-    friendVisits = 0;
-    pendingFriendGid = null;
-    lastMarketPoop = null;
+    // 让路时保留好友巡查进度，下次进牧场从断点续跑。
+    if (!keepFriendProgress) {
+        friendVisits = 0;
+        pendingFriend = null;
+    }
     cycleStartedAt = 0;
     cycleChanged = false;
+    ownRecheckUsed = false;
 }
 const FRIEND_CONTROLS: Record<string, string> = { stroke: 'ranch_stroke', steal: 'ranch_friend_steal', cleanFriend: 'ranch_friend_clean', putMosquito: 'ranch_friend_mosquito' };
 const enabled = (key: string) => getAutomation()[key] === true;
-const marketDue = () => enabled('ranch_market_organic') && Date.now() >= nextMarketCheckAt;
+// 次数已用完的动作当天不再排队，等次日重置时间。
+const canInteract = (action: string) => enabled(FRIEND_CONTROLS[action]) && !interactions.getInteractionQuotaResetAt(action);
+
+function marketRotation(raw: any): MarketRotation {
+    return { periodDay: quantity(raw.period_day), roundIndex: raw.round_index, startsAt: Number(raw.shop_start_time),
+        endsAt: Number(raw.shop_end_time), present: raw.present };
+}
+
+function sameMarketRound(a: Pick<MarketRotation, 'periodDay' | 'roundIndex'>, b: MarketRotation): boolean {
+    return a.periodDay === b.periodDay && a.roundIndex === b.roundIndex;
+}
+
+function marketIsOpen(rotation: MarketRotation | null): rotation is MarketRotation {
+    const now = getServerTimeSec();
+    return !!rotation?.present && rotation.startsAt <= now && now < rotation.endsAt;
+}
+
+function requestMarketCheck(): void {
+    marketCheckPending = true;
+    marketRunId++;
+    completedPhases.delete('market-organic');
+}
+
+/** 收到集市到访通知：同一轮次重复推送不重复排队，返回是否真正唤醒了例程。 */
+function noteMarketVisit(raw: any): boolean {
+    const rotation = marketRotation(raw);
+    const previous = lastMarketRotation;
+    if (previous && sameMarketRound(previous, rotation) && previous.present === rotation.present
+        && previous.startsAt === rotation.startsAt && previous.endsAt === rotation.endsAt) return false;
+    lastMarketRotation = rotation;
+    if (!marketIsOpen(rotation)) {
+        marketRunId++;
+        return false;
+    }
+    requestMarketCheck();
+    return true;
+}
 const due = (state: any) => !state.doneToday && Date.now() >= (state.nextCheckAt || 0);
 
 function getRoutineState(): any {
+    // 未解锁时不再返回 nextCheckAt=0，避免外层每一轮都尝试切场景。
+    if (!isUnlocked()) return { doneToday: true, nextCheckAt: Infinity };
     const auto = getAutomation();
-    const work = RANCH_SWITCH_KEYS.some((key: string) => !['ranch_task', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy', 'ranch_market_organic'].includes(key) && auto[key]);
+    const strokeReset = auto.ranch_stroke ? interactions.getInteractionQuotaResetAt('stroke') : 0;
+    const mosquitoReset = auto.ranch_friend_mosquito ? interactions.getInteractionQuotaResetAt('putMosquito') : 0;
+    // 互动次数用完后仍要保留一个未来的唤醒时间（次日重置），否则当天再也不巡查。
+    const work = auto.ranch_stroke && !strokeReset || auto.ranch_friend_mosquito && !mosquitoReset
+        || RANCH_SWITCH_KEYS.some((key: string) => ![
+            'ranch_task', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy', 'ranch_market_organic', 'ranch_stroke', 'ranch_friend_mosquito',
+        ].includes(key) && auto[key]);
     const routineDue = work || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState()) || auto.ranch_daily_benefit && due(daily.getBenefitRoutineState());
+    const pending = routineDue || auto.ranch_market_organic && marketCheckPending;
     return {
-        doneToday: !isUnlocked() || !(routineDue || auto.ranch_market_organic),
-        nextCheckAt: routineDue ? nextCheckAt : Math.max(nextCheckAt, nextMarketCheckAt),
+        doneToday: !pending,
+        nextCheckAt: pending ? nextCheckAt : Math.min(strokeReset || Infinity, mosquitoReset || Infinity),
     };
 }
 
@@ -73,7 +131,7 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
     try {
         // 名单只用作拜访索引，实际资格由进好友牧场后的回包确认；复用农场已同步的名单。
         let friends: any[] = [];
-        if (!completedPhases.has('friends') && Object.values(FRIEND_CONTROLS).some(enabled)) {
+        if (!completedPhases.has('friends') && Object.keys(FRIEND_CONTROLS).some(canInteract)) {
             const friendService = require('../friend');
             friends = friendService.getFriendsListCacheOnly();
             if (!friends.length) friends = await friendService.getFriendsList(false, 'normal', true);
@@ -86,10 +144,18 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
         await inScene(async (cells: any) => {
             const startedAt = Date.now();
             let steps = 0;
-            const shouldYield = () => options.canContinue?.() === false
-                || Date.now() >= Math.min(startedAt + PATROL_SLICE_MS, options.farmDeadline?.() ?? Infinity);
-            const checkpoint = () => {
-                if (options.canContinue?.() === false || steps > 0 && shouldYield()) throw Object.assign(new Error('牧场巡查让路'), { code: 'RANCH_PATROL_YIELD' });
+            const markStep = (action?: string) => {
+                steps++;
+                // 收获/产出之外的写操作都可能让自家地块又有新产出，放开复查额度。
+                if (action !== 'harvest' && action !== 'produce') ownRecheckUsed = false;
+            };
+            const shouldYield = (friendActed = false) => options.canContinue?.() === false
+                || Date.now() >= (options.farmDeadline?.() ?? Infinity)
+                || (steps > 0 || friendActed) && Date.now() >= startedAt + PATROL_SLICE_MS;
+            const checkpoint = (checkDeadline = false) => {
+                if (shouldYield(checkDeadline)) {
+                    throw Object.assign(new Error('牧场巡查让路'), { code: 'RANCH_PATROL_YIELD' });
+                }
             };
             async function phase(name: string, work: () => Promise<any>): Promise<void> {
                 if (completedPhases.has(name)) return;
@@ -99,7 +165,7 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             checkpoint();
             let raw = await loadRaw(cells);
             let nextActionAt = Infinity;
-            const updateDeadline = () => {
+            const updateDeadline = (reopenOwn = false) => {
                 const state = snapshot(raw);
                 const upcoming = state.facilities.flatMap((f: any) => [
                     ...(auto.ranch_harvest || auto.ranch_produce ? (f.ranch?.animals || []).map((a: any) => a.nextAtMs) : []),
@@ -107,17 +173,21 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 ]).filter((at: any) => at > state.serverTime);
                 nextActionAt = upcoming.length ? Date.now() + Math.min(...upcoming) - state.serverTime : Infinity;
                 // 续跑期间出现新成熟动物时，先处理自家产出，再接着原来的进度。
+                // reopenOwn 只允许用一次，否则每轮都重开会把长巡查拖住。
                 for (const [action, flag] of [['harvest', 'can_harvest'], ['produce', 'can_deliver']]) {
                     const ready = raw.cells.facilities.some((f: any) => f.ranch?.animals.some((a: any) => a[flag])
                         || action === 'harvest' && f.ranch?.shelves.some((s: any) => s.can_collect));
                     if (ready && enabled(action === 'harvest' ? 'ranch_harvest' : 'ranch_produce')) {
-                        completedPhases.delete(action);
-                        completedSteps.delete(`${action}:{"all":true}`);
+                        if (reopenOwn && completedPhases.delete(action)) {
+                            completedSteps.delete(`${action}:{"all":true}`);
+                            ownRecheckUsed = true;
+                        }
                         nextActionAt = Math.min(nextActionAt, Date.now());
                     }
                 }
             };
-            updateDeadline();
+            // 已完成的产出可以提前复查，随后先给本轮其他待办一次执行机会。
+            updateDeadline(!ownRecheckUsed);
             const available = (id: number) => {
                 const funds = balance(raw.bag, id);
                 return BigInt(funds.total) - BigInt(funds.locked) - BigInt(reservations.forCurrentAccount().reserved(`item:${id}`));
@@ -127,24 +197,25 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 const count = money > 0n ? money / BigInt(good.price.count) : 0n;
                 return Number(count < BigInt(wanted) ? count : BigInt(wanted));
             };
-            async function act(key: string, action: string, input: any = {}, currency?: number, progress?: string): Promise<boolean> {
+            async function act(key: string, action: string, input: any = {}, currency?: number, progress?: string, expectedRewardId?: number): Promise<boolean> {
                 const isEnabled = () => enabled(key) && (key !== 'ranch_grass_buy' || enabled('ranch_grass'));
                 if (!isEnabled()) return false;
                 const step = `${action}:${JSON.stringify(input)}${progress === undefined ? '' : `:${progress}`}`;
                 if (completedSteps.has(step)) return false;
-                checkpoint();
+                checkpoint(action === 'exchange');
                 let label = action;
                 try {
                     const quote = await prepareAction(action, input);
                     label = quote.label;
+                    // 兑换要同时校验货币与奖励条目：集市有同名商品但货币不同，只看货币会兑错货。
                     if (quote.skipped || currency && quote.costItems.some((cost: any) => cost.id !== currency)
-                        || key === 'ranch_market_organic' && (quote.rewards.length !== 1 || !MARKET_GOODS_PRIORITY.includes(Number(quote.rewards[0].id)))) {
+                        || expectedRewardId !== undefined && (quote.rewards.length !== 1 || Number(quote.rewards[0].id) !== expectedRewardId)) {
                         completedSteps.add(step);
-                        steps++;
+                        markStep(action);
                         return false;
                     }
                     if (!isEnabled()) return false;
-                    checkpoint();
+                    checkpoint(action === 'exchange');
                     const parent = getAmbientSendContext();
                     const result = await runWithSendContext({
                         check: (service: string, method: string) => parent?.check(service, method) || (isEnabled() ? null
@@ -152,7 +223,7 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                         onSent: (service: string, method: string) => parent?.onSent(service, method),
                     }, () => operate(action, { ...input, expected: quote.expected }));
                     completedSteps.add(step);
-                    steps++;
+                    markStep(action);
                     if (result.status === 'skipped') return false;
                     cycleChanged = true;
                     log('牧场', `${quote.label}${result.notice ? `：${result.notice}` : '完成'}`, { module: 'ranch', event: `ranch_${action}`, result: 'ok' });
@@ -161,9 +232,9 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     return true;
                 } catch (error: any) {
                     // 状态或余额变化交给下一次巡查重新报价；已发出但结果未知的写入由持久账本保护。
-                    if (['INSUFFICIENT_BALANCE', 'RESERVE_PROTECTED', 'PENDING_CONFIRMATION', 'RANCH_OFFER_CHANGED', 'GOODS_UNAVAILABLE', 'RANCH_STATE_CHANGED'].includes(error.code)) {
+                    if (['INSUFFICIENT_BALANCE', 'RESERVE_PROTECTED', 'PENDING_CONFIRMATION', 'RANCH_OFFER_CHANGED', 'RANCH_EXCHANGE_UNAVAILABLE', 'GOODS_UNAVAILABLE', 'RANCH_STATE_CHANGED'].includes(error.code)) {
                         completedSteps.add(step);
-                        steps++;
+                        markStep(action);
                         log('牧场', `${label} 暂未执行：${error.message}`, { module: 'ranch', event: `ranch_${action}`, result: 'skipped' });
                         return false;
                     }
@@ -179,33 +250,51 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             await phase('clean', () => act('ranch_clean', 'clean'));
             await phase('sell', () => act('ranch_sell', 'sell', { all: true }));
 
+            // 集市有到访通知（RotationShopNotify）会把 marketCheckPending 置真；
+            // 同时保留「货币到账就唤醒」的兜底，避免通知漏发时错过一轮。
+            if (auto.ranch_market_organic && marketCheckPending) completedPhases.delete('market-organic');
             await phase('market-organic', async () => {
                 if (!enabled('ranch_market_organic')) return;
-                const poop = available(MARKET_POOP_ID);
-                const stockReady = poop >= 3n && (lastMarketPoop === null || poop > lastMarketPoop);
-                if (!marketDue() && !stockReady) return;
-                checkpoint();
+                const stockReady = MARKET_EXCHANGES.some(({ currencyId, minBalance }) => {
+                    const stock = available(currencyId);
+                    return stock >= minBalance && stock > (lastMarketBalances.get(currencyId) ?? 0n);
+                });
+                if (!marketCheckPending && !stockReady && marketIsOpen(lastMarketRotation)) return;
+                // 兑换前重新核对一次截止时间：真正花钱的动作不该在被叫停后还继续发。
+                checkpoint(true);
                 const runId = marketRunId;
-                const current = await market(raw);
-                // 先兑 4 小时，再兑 1 小时；只使用便便，不碰松果或其它货币的同名商品。
-                if (current.opened && current.present) {
-                    for (const rewardId of MARKET_GOODS_PRIORITY) {
-                        for (const good of current.goods.filter((entry: any) => entry.available && Number(entry.reward.id) === rewardId && Number(entry.price.id) === MARKET_POOP_ID && BigInt(entry.price.count) > 0n)) {
-                            while (good.available) {
-                                const stock = available(MARKET_POOP_ID);
+                const rawRotation = await readMarketRotation();
+                let rotation = rawRotation ? marketRotation(rawRotation) : null;
+                let current = null;
+                if (marketIsOpen(rotation)) {
+                    checkpoint(true);
+                    current = await market(raw);
+                }
+                // 场次必须与 ShopProfiles 读到的一致，否则报价可能已被换货。
+                if (current && marketIsOpen(rotation) && current.opened && current.present && sameMarketRound(current, rotation)) {
+                    for (const { currencyId, rewardPriority } of MARKET_EXCHANGES) {
+                        const goods = current.goods.filter((entry: any) => entry.available && Number(entry.price.id) === currencyId
+                            && BigInt(entry.price.count) > 0n && rewardPriority.includes(Number(entry.reward.id)));
+                        goods.sort((a: any, b: any) => rewardPriority.indexOf(Number(a.reward.id)) - rewardPriority.indexOf(Number(b.reward.id)));
+                        for (const good of goods) {
+                            while (good.remaining !== 0 && marketIsOpen(rotation)) {
+                                const stock = available(currencyId);
                                 const count = affordable(good, Math.min(good.remaining ?? 2147483647, 2147483647));
                                 if (count < 1) break;
-                                const exchanged = await act('ranch_market_organic', 'exchange', { goodsId: good.id, count }, MARKET_POOP_ID, `${runId}:${good.id}:${stock}`);
+                                const exchanged = await act('ranch_market_organic', 'exchange', { goodsId: good.id, count, marketRotation: rotation },
+                                    currencyId, `${runId}:${good.id}:${stock}`, Number(good.reward.id));
                                 if (!exchanged) break;
                                 if (good.remaining !== null) good.remaining = Math.max(0, good.remaining - count);
-                                if (good.remaining === 0) good.available = false;
                             }
                         }
                     }
+                } else if (current) rotation = null;
+                for (const { currencyId } of MARKET_EXCHANGES) lastMarketBalances.set(currencyId, available(currencyId));
+                // 旧一轮结束时保留执行期间收到的到访或到账待办。
+                if (runId === marketRunId) {
+                    lastMarketRotation = rotation;
+                    marketCheckPending = false;
                 }
-                // 完成后才推迟检查；让路时保留到期状态，到账通知也不能被旧一轮覆盖。
-                lastMarketPoop = available(MARKET_POOP_ID);
-                if (runId === marketRunId) nextMarketCheckAt = Date.now() + MARKET_CHECK_MS;
             });
 
             await phase('upgrade', async () => {
@@ -312,45 +401,56 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             await phase('feed-normal', async () => { if (enabled('ranch_feed_normal') && available(7003) > 0n) await act('ranch_feed_normal', 'feed', { all: true, bucketType: 2 }); });
             await phase('feed-organic', async () => { if (enabled('ranch_feed_organic') && available(7004) > 0n) await act('ranch_feed_organic', 'feed', { all: true, bucketType: 1 }); });
 
+            async function claimDailyRewards(): Promise<void> {
+                if (cycleChanged && !completedPhases.has('tasks')) daily.markTasksChanged();
+                await phase('tasks', async () => { if (enabled('ranch_task') && due(daily.getTaskRoutineState())) { checkpoint(); await daily.claimTasks(); markStep(); } });
+                await phase('share', async () => { if (enabled('ranch_share') && due(daily.getShareRoutineState())) { checkpoint(); await daily.claimShare(); markStep(); } });
+                await phase('benefit', async () => { if (enabled('ranch_daily_benefit') && due(daily.getBenefitRoutineState())) { checkpoint(); await daily.claimBenefit(); markStep(); } });
+            }
+            // 大名单会跨多个切片，到期的每日奖励在继续巡查前先执行，避免拖到最后被让路截断。
+            if (pendingFriend || friendVisits > 0) await claimDailyRewards();
             await phase('friends', async () => {
-                if (Object.values(FRIEND_CONTROLS).some(enabled)) {
+                if (friends.length && Object.keys(FRIEND_CONTROLS).some(canInteract)) {
                     checkpoint();
-                    const interactions = require('./friends');
-                    const times = await interactions.getInteractionTimes();
-                    const wanted = (action: string) => enabled(FRIEND_CONTROLS[action])
-                        && (!['stroke', 'putMosquito'].includes(action) || times[action] > 0);
+                    // 偷取/清理不消耗次数，不必先查次数；只有摸头/放蚊才需要。
+                    const hasBulkWork = enabled('ranch_friend_steal') || enabled('ranch_friend_clean');
+                    const times = hasBulkWork ? {} : await interactions.getInteractionTimes();
+                    const wanted = (action: string) => canInteract(action) && times[action] !== 0;
                     if (Object.keys(FRIEND_CONTROLS).some(wanted)) {
                         // 沿用本轮巡查，每轮最多拜访三位，避免长期占用农牧场共用连接。
                         for (; friendVisits < Math.min(3, friends.length) && Object.keys(FRIEND_CONTROLS).some(wanted); friendVisits++) {
                             checkpoint();
-                            const friend = friends.find((row: any) => String(row.gid) === pendingFriendGid) || friends[nextFriendIndex % friends.length];
+                            const friend = friends.find((row: any) => String(row.gid) === pendingFriend?.gid) || friends[nextFriendIndex % friends.length];
+                            const gid = String(friend.gid);
+                            if (pendingFriend?.gid !== gid) pendingFriend = { gid, progress: {} };
                             try {
-                                const result = await interactions.automateFriend(friend.gid, wanted, shouldYield);
+                                const result = await interactions.automateFriend(friend.gid, wanted, shouldYield, (outcome: any) => {
+                                    const confirmed = outcome.status === 'confirmed';
+                                    if (confirmed) daily.markTasksChanged();
+                                    ownRecheckUsed = false;
+                                    log('牧场', `${friend.name}：${outcome.notice}`, {
+                                        module: 'ranch', event: `ranch_${outcome.action}`, result: confirmed ? 'ok' : 'skipped',
+                                    });
+                                }, pendingFriend.progress);
                                 Object.assign(times, result.times);
-                                steps++;
-                                for (const outcome of result.results) {
-                                    daily.markTasksChanged();
-                                    log('牧场', `${friend.name}：${outcome.notice}`, { module: 'ranch', event: `ranch_${outcome.action}`, result: 'ok' });
-                                }
                                 if (result.yielded) {
-                                    pendingFriendGid = String(friend.gid);
+                                    // 保留 pendingFriend，下次进牧场从这位好友的断点续跑。
                                     throw Object.assign(new Error('牧场好友巡查让路'), { code: 'RANCH_PATROL_YIELD' });
                                 }
+                                markStep();
                             } catch (error: any) {
                                 if (error.name !== 'GatewayError' || error.methodName !== 'EnterHomestead') throw error;
+                                markStep();
                                 log('牧场', `暂不能拜访 ${friend.name}：${error.message}`, { module: 'ranch', event: 'ranch_friend', result: 'skipped' });
                             }
-                            pendingFriendGid = null;
+                            pendingFriend = null;
                             nextFriendIndex++;
                         }
                     }
                 }
             });
 
-            if (cycleChanged) daily.markTasksChanged();
-            await phase('tasks', async () => { if (enabled('ranch_task') && due(daily.getTaskRoutineState())) { checkpoint(); await daily.claimTasks(); steps++; } });
-            await phase('share', async () => { if (enabled('ranch_share') && due(daily.getShareRoutineState())) { checkpoint(); await daily.claimShare(); steps++; } });
-            await phase('benefit', async () => { if (enabled('ranch_daily_benefit') && due(daily.getBenefitRoutineState())) { checkpoint(); await daily.claimBenefit(); steps++; } });
+            await claimDailyRewards();
             nextCheckAt = Math.max(Date.now() + SCENE_REENTRY_MS, Math.min(nextCheckAt, nextActionAt, cycleChanged ? Date.now() + 30_000 : Infinity));
             resetCycle();
         });
@@ -359,7 +459,8 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             nextCheckAt = Date.now() + SCENE_REENTRY_MS;
             return;
         }
-        resetCycle();
+        // 好友巡查没跑完时保留进度，切场景异常不再让整轮从头开始。
+        resetCycle(pendingFriend !== null);
         if (error.code === 'RANCH_AUTOMATION_DISABLED') return;
         nextCheckAt = Date.now() + Math.max(auto.ranch_check_minutes, 10) * 60_000;
         log('牧场', `日常牧场巡查失败：${error.message}`, { module: 'ranch', event: 'ranch_automation', result: 'error' });
@@ -367,13 +468,12 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
 }
 
 module.exports = {
-    run, getRoutineState, selectAnimal,
-    resetSchedule: () => { marketRunId++; nextCheckAt = 0; nextMarketCheckAt = 0; lastMarketPoop = null; resetCycle(); },
-    resetMarketSchedule: () => {
-        nextMarketCheckAt = 0;
-        lastMarketPoop = null;
-        marketRunId++;
-        completedPhases.delete('market-organic');
-        nextCheckAt = Math.min(nextCheckAt, Date.now() + SCENE_REENTRY_MS);
+    run, getRoutineState, selectAnimal, requestMarketCheck, noteMarketVisit,
+    resetSchedule: () => {
+        requestMarketCheck();
+        nextCheckAt = 0;
+        lastMarketRotation = null;
+        lastMarketBalances.clear();
+        resetCycle();
     },
 };

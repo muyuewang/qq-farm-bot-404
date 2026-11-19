@@ -126,15 +126,16 @@ export function useAutomationSettings({
     { label: '普通土地', value: 'normal' },
   ]
 
+  // 与 core/src/types/config.ts 的 FertilizerMode 严格一致：后端只认这 7 个值，
+  // 其它写法会被 normalizeFertilizerMode 静默回退，所以前端不提供无效选项。
+  // 后两个「催熟」模式只在临熟阶段动化肥，播种与多季补肥完全不施肥。
   const fertilizerOptions = [
     { label: '普通 + 有机', value: 'both' },
-    { label: '普通 + 快成熟有机', value: 'smart' },
-    { label: '快成熟有机', value: 'smart_only' },
-    { label: '快成熟普通', value: 'smart_normal' },
-    { label: '最终阶段普通肥', value: 'final_normal' },
-    { label: '最终阶段有机肥', value: 'final_organic' },
+    { label: '普通 + 临熟有机催熟', value: 'smart' },
     { label: '仅普通化肥', value: 'normal' },
     { label: '仅有机化肥', value: 'organic' },
+    { label: '普通化肥催熟（只临熟）', value: 'normal_ripen' },
+    { label: '有机化肥催熟（只临熟）', value: 'organic_ripen' },
     { label: '不施肥', value: 'none' },
   ]
 

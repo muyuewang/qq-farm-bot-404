@@ -18,7 +18,10 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         snapshot: () => ({ facilities: [], serverTime: 1_800_000_000_000 }),
         inventory: () => stateDeps.inventory?.() ?? [],
         catalog: async () => ({ goods: stateDeps.catalog?.() ?? [] }),
-        market: async () => stateDeps.market?.() ?? { opened: true, present: true, periodDay: '1', roundIndex: '1', goods: [] },
+        market: async () => stateDeps.market?.() ?? { opened: true, present: true, periodDay: 1, roundIndex: 1, goods: [] },
+        // 集市轮次与 market 桩保持同一场次，否则兑换阶段会按「场次已变化」整段跳过。
+        readMarketRotation: async () => stateDeps.rotation?.() ?? { shop_id: 7, period_day: '1', round_index: 1,
+            shop_start_time: 1_799_000_000, shop_end_time: 1_801_000_000, present: true },
         balance: (bag, id) => stateDeps.balance?.(bag, id) ?? { total: '0', locked: '0' },
     });
     mock('services/ranch/model', { cubMap: cubs ? new Map(cubs) : new Map(), quantity: v => Number(v) });
@@ -33,7 +36,12 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
     });
     mock('services/ranch/friends', {
         getInteractionTimes: async () => friendDeps.times?.() ?? { stroke: 1, steal: 1, cleanFriend: 1, putMosquito: 1 },
-        automateFriend: async (gid) => { friendDeps.onVisit?.(gid); return friendDeps.visit?.() ?? { times: {}, results: [], yielded: false }; },
+        // 0 表示当天次数未用完；让路/停排测试靠它区分「能不能排进巡查」。
+        getInteractionQuotaResetAt: action => friendDeps.quotaReset?.(action) ?? 0,
+        automateFriend: async (gid, _enabled, _shouldYield, _onOutcome, progress) => {
+            friendDeps.onVisit?.(gid);
+            return friendDeps.visit?.(progress) ?? { times: {}, results: [], yielded: false };
+        },
     });
     mock('utils/utils', { getServerTimeSec: () => 1_800_000_000, log: (tag, message) => logs.push({ tag, message }) });
     const id = require.resolve('../dist/services/ranch/automation');
@@ -210,20 +218,21 @@ test('牧草按容量阈值补满：达到阈值不补，低于阈值才补，�
     assert.deepEqual(await runCase(10, 5, 100), [], '阈值越低越保守，达到阈值不补');
 });
 
-test('仓鼠集市只用便便兑换有机化肥：4 小时优先、便便不足不超兑、非目标商品跳过', async () => {
+// 集市已改为「便便 7002 / 松果 1008」双货币，并按到访通知排队，用例覆盖两种货币各自的目标奖励。
+test('仓鼠集市按双货币兑换有机化肥：优先顺序、余额不足不超兑、非目标商品跳过', async () => {
     const good = (id, rewardId, priceId, priceCount, remaining) => ({
         id, available: true, remaining,
         reward: { id: rewardId, count: '1' },
         price: { id: priceId, count: priceCount },
     });
-    const runCase = async ({ goods, poop }) => {
+    const runCase = async ({ goods, balances }) => {
         const calls = [];
         const level = loadAutomation({
             automation: { ranch_market_organic: true, ranch_check_minutes: 30 },
             raw: { bag: {}, cells: { facilities: [] } },
             stateDeps: {
-                market: () => ({ opened: true, present: true, periodDay: '1', roundIndex: '1', goods }),
-                balance: (_bag, id) => ({ total: String(id === 7002 ? poop : 0), locked: '0' }),
+                market: () => ({ opened: true, present: true, periodDay: 1, roundIndex: 1, goods }),
+                balance: (_bag, id) => ({ total: String(balances[id] ?? 0), locked: '0' }),
             },
             // 只有目标商品的报价放行，其余按 prepareAction 的奖励校验在 act 内被跳过。
             prepareAction: async (action, input) => {
@@ -236,44 +245,48 @@ test('仓鼠集市只用便便兑换有机化肥：4 小时优先、便便不足
         return calls.map(call => ({ goodsId: call.goodsId, count: call.count }));
     };
 
-    // 4 小时(80012) 与 1 小时(80011) 都在售、便便充足：先兑 4 小时，且分商品累计提示优先顺序。
-    const both = await runCase({
+    // 便便 7002：4 小时(80012) 优先于 1 小时(80011)。
+    const poop = await runCase({
         goods: [good(11, 80011, 7002, '2', 10), good(12, 80012, 7002, '2', 10)],
-        poop: 40,
+        balances: { 7002: 40 },
     });
-    assert.deepEqual(both[0], { goodsId: 12, count: 10 }, '先按 4 小时商品的可兑上限兑换');
-    assert.deepEqual(both[1], { goodsId: 11, count: 10 }, '再兑换 1 小时商品');
+    assert.deepEqual(poop[0], { goodsId: 12, count: 10 }, '便便先兑 4 小时商品');
+    assert.deepEqual(poop[1], { goodsId: 11, count: 10 }, '便便再兑 1 小时商品');
 
-    // 便便只够 5 个：不会按限购 10 超兑。
-    const limited = await runCase({
-        goods: [good(12, 80012, 7002, '2', 10)],
-        poop: 5,
+    // 松果 1008：4 小时(80013) 优先级最高。
+    const pinecone = await runCase({
+        goods: [good(21, 80012, 1008, '1', 5), good(22, 80013, 1008, '1', 5)],
+        balances: { 1008: 20 },
     });
-    assert.deepEqual(limited, [{ goodsId: 12, count: 2 }], '按便便余额向下取整，不得超兑');
+    assert.deepEqual(pinecone[0], { goodsId: 22, count: 5 }, '松果先兑 4 小时商品');
+    assert.deepEqual(pinecone[1], { goodsId: 21, count: 5 }, '松果再兑次优先商品');
 
-    // 非便便计价（松果 1001）的同名奖励不得兑换。
-    const wrongCurrency = await runCase({
-        goods: [good(12, 80012, 1001, '1', 10)],
-        poop: 100,
-    });
-    assert.deepEqual(wrongCurrency, [], '非便便计价商品一律跳过');
+    // 余额只够 2 件：按余额向下取整，不按限购 10 超兑。
+    const limited = await runCase({ goods: [good(12, 80012, 7002, '2', 10)], balances: { 7002: 5 } });
+    assert.deepEqual(limited, [{ goodsId: 12, count: 2 }], '按余额向下取整，不得超兑');
 
-    // 非目标奖励（普通化肥）不得兑换。
-    const wrongReward = await runCase({
-        goods: [good(12, 7003, 7002, '1', 10)],
-        poop: 100,
-    });
-    assert.deepEqual(wrongReward, [], '非有机化肥奖励一律跳过');
+    // 非便便/松果计价（金券 1001）的商品一律跳过。
+    const wrongCurrency = await runCase({ goods: [good(12, 80012, 1001, '1', 10)], balances: { 7002: 100 } });
+    assert.deepEqual(wrongCurrency, [], '非集市货币计价商品一律跳过');
+
+    // 非目标奖励（普通化肥 7003）不得兑换。
+    const wrongReward = await runCase({ goods: [good(12, 7003, 7002, '1', 10)], balances: { 7002: 100 } });
+    assert.deepEqual(wrongReward, [], '非目标奖励一律跳过');
 });
 
-test('兑换完重置集市排期可立刻重新检查，且开关默认关闭时不排入巡查', async () => {
+test('集市开关默认关闭时不排入巡查，到访通知可立刻重新排队', async () => {
     const level = loadAutomation({
         automation: { ranch_market_organic: true },
         stateDeps: { market: () => ({ opened: true, present: true, goods: [] }) },
     });
-    assert.equal(level.getRoutineState().doneToday, false, '集市开关打开即需要排入巡查');
-    level.resetMarketSchedule();
-    assert.ok(level.getRoutineState().nextCheckAt <= Date.now() + 21_000, '重置后应按重进场窗口尽快复查');
+    assert.equal(level.getRoutineState().doneToday, false, '集市开关打开且有待查标记时排入巡查');
+    // 同一场次重复推送不重复唤醒；换一轮次才唤醒。
+    const rotation = { shop_id: 7, period_day: 1, round_index: 1, shop_start_time: 1_799_000_000, shop_end_time: 1_801_000_000, present: true };
+    assert.equal(level.noteMarketVisit(rotation), true, '首次到访通知应唤醒例程');
+    assert.equal(level.noteMarketVisit(rotation), false, '同一场次重复通知不重复唤醒');
+    assert.equal(level.noteMarketVisit({ ...rotation, round_index: 2 }), true, '换轮次应重新唤醒');
+    level.resetSchedule();
+    assert.equal(level.getRoutineState().nextCheckAt, 0, '重置后立刻复查');
     assert.equal(loadAutomation({ automation: {} }).getRoutineState().doneToday, true, '未开集市且无其它动作时不巡查');
 });
 

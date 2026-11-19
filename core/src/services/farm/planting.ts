@@ -15,6 +15,8 @@ const { recordOperation } = require('../stats');
 const { getBagSeeds } = require('../warehouse');
 const { getCareerInfoOrNull } = require('../career');
 const { getAllLands, buyGoods, removePlant, fertilizeOne } = require('./api');
+// 临熟催熟逻辑抽到 ripening.ts，这里只负责按策略调度。
+const { isRipeningOnlyMode, runRipeningFertilizer } = require('./ripening');
 const {
     selectFutureLayoutReservation,
     getRegisteredLayout,
@@ -30,7 +32,6 @@ const {
     summarizeLandDetails,
     getOrganicFertilizerTargetsFromLands,
     filterLandIdsForNormalFertilizer,
-    getFastMatureLands,
     normalizeFertilizerLandTypes,
     formatFertilizerLandTypes,
     filterLandIdsByTypes,
@@ -1012,6 +1013,12 @@ async function runFertilizerByConfig(plantedLands: any[] = [], options: { skipNo
     const { fertilize, fertilizeOrganicLoop } = require('./api');
     const automation = getAutomation() || {};
     const fertilizerConfig = automation.fertilizer || 'none';
+    // 只临熟催熟模式：播种与多季补肥阶段完全不动化肥，催熟统一走 scheduler。
+    if (isRipeningOnlyMode(fertilizerConfig)) return { normal: 0, organic: 0 };
+    const { skipNormal = false } = options;
+    if (skipNormal && fertilizerConfig === 'smart') {
+        return { normal: 0, organic: await runRipeningFertilizer(automation, undefined, options.propagateErrors) };
+    }
     const reason = String(options.reason || '').trim().toLowerCase() === 'multi_season' ? 'multi_season' : 'normal';
     const reasonLabel = reason === 'multi_season' ? '多季补肥' : '常规施肥';
     const eventName = reason === 'multi_season' ? '多季节施肥' : '常规施肥';
@@ -1029,8 +1036,6 @@ async function runFertilizerByConfig(plantedLands: any[] = [], options: { skipNo
         });
         return { normal: 0, organic: 0 };
     }
-
-    const { skipNormal = false } = options;
 
     if (fertilizerConfig === 'none') {
         log('施肥', `${reasonLabel}：当前施肥策略为不施肥，跳过`, {
@@ -1176,28 +1181,13 @@ async function runFertilizerByConfig(plantedLands: any[] = [], options: { skipNo
         }
     }
     else if (fertilizerConfig === 'smart') {
-        let organicTargets: number[] = [];
-        const smartSeconds = toNum(automation.fertilizer_smart_seconds) || 300;
+        // 临熟目标查询与发放都由 ripening.ts 负责；这里只传已读到的地块快照，省一次全农场请求。
         try {
-            const latest = await getAllLands();
-            organicTargets = getFastMatureLands(latest && latest.lands, smartSeconds);
+            const snapshot = normalTargets.length === 0 && latestLands.length > 0 ? latestLands : undefined;
+            fertilizedOrganic = await runRipeningFertilizer(automation, snapshot, options.propagateErrors);
         } catch (e: any) {
-            logWarn('施肥', `获取全农场地块失败 ${e.message}`);
+            logWarn('施肥', `临熟催熟失败: ${e.message}`);
             if (options.propagateErrors) throw e;
-        }
-
-        if (organicTargets.length > 0) {
-            fertilizedOrganic = await fertilizeOrganicLoop(organicTargets, options.propagateErrors);
-            if (fertilizedOrganic > 0) {
-                log('施肥', `有机化肥循环施肥完成，共施${fertilizedOrganic} 次`, {
-                    module: 'farm',
-                    event: '施肥',
-                    result: 'ok',
-                    type: 'organic',
-                    count: fertilizedOrganic,
-                });
-                recordOperation('fertilize', fertilizedOrganic);
-            }
         }
     }
 

@@ -678,6 +678,13 @@ function handleNotify(msg: any): void {
             return;
         }
 
+        // 集市开张/刷新通知：只带轮次状态，具体报价要再拉一次 ShopProfiles。
+        if (type === 'gamepb.shoppb.RotationShopNotify') {
+            const rotation = types.RanchRotationShopNotify.decode(eventBody).shops.find((shop: any) => toNum(shop.shop_id) === 7);
+            if (rotation) networkEvents.emit('ranchMarketVisitChanged', rotation);
+            return;
+        }
+
         // 物品变化通知
         if (type.includes('ItemNotify')) {
             try {
@@ -707,8 +714,8 @@ function handleNotify(msg: any): void {
                         } else if (delta !== 0) {
                             userState.coupon = Math.max(0, Number(userState.coupon || 0) + delta);
                         }
-                    } else if (id === 7002 && delta > 0) {
-                        // 便便到账即唤醒牧场集市兑换，读取最新余额后再判断是否达到门槛。
+                    } else if ((id === 7002 || id === 1008) && delta > 0) {
+                        // 集市货币（便便 7002 / 松果 1008）到账即唤醒牧场例程，按最新余额和报价兑换。
                         networkEvents.emit('ranchMarketStockReady', { id, count, delta });
                     } else if (id === 1005) {
                         if (count > 0) {
