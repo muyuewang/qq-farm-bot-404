@@ -285,11 +285,13 @@ async function automateFriend(
     hostGid: unknown,
     enabled: (action: string) => boolean,
     shouldYield: (acted: boolean) => boolean = () => false,
-    onOutcome?: (outcome: any) => void,
+    onOutcome?: (outcome: any, nickname: string) => void,
     progress: FriendPatrolProgress = {},
 ): Promise<any> {
-    return visit(hostGid, async (_entry, ranches, host) => {
+    return visit(hostGid, async (entry, ranches, host) => {
         const results: any[] = [];
+        // 昵称取牧场回包里的 basic.name；GID 只是查询线索，显示以回包为准。
+        const nickname = entry.basic.name.trim();
         const times: Record<string, number> = {};
         let acted = false;
         const pause = () => shouldYield(acted);
@@ -311,12 +313,12 @@ async function automateFriend(
                 const rejected = e.name === 'GatewayError';
                 if (e.code !== 'PENDING_CONFIRMATION' && !rejected) throw e;
                 if (rejected) acted = true;
-                onOutcome?.({ action, status: 'skipped', notice: `${label}暂未执行：${e.message}` });
+                onOutcome?.({ action, status: 'skipped', notice: `${label}暂未执行：${e.message}` }, nickname);
                 return null;
             }
             if (outcome.status === 'confirmed') results.push(outcome);
             // 偷取没有 confirmed 状态，也要把结果交给上层记日志。
-            if (outcome.status === 'confirmed' || action === 'steal') onOutcome?.(outcome);
+            if (outcome.status === 'confirmed' || action === 'steal') onOutcome?.(outcome, nickname);
             return outcome;
         }
         // 可偷产物可能被好友收走，先处理当前货架再做清理和需要查询次数的互动。

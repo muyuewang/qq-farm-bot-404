@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import type { RanchRequest, RanchState } from '@/utils/ranch'
+import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
+import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import { useAccountStore } from '@/stores/account'
+import { useToastStore } from '@/stores/toast'
 import { formatQuantity, itemListLine } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
 const emit = defineEmits<{ request: [payload: RanchRequest] }>()
+
+const { currentAccountId } = storeToRefs(useAccountStore())
+const toast = useToastStore()
 
 const TABS = [
   { value: 'animals', label: '动物图鉴' },
@@ -31,6 +38,12 @@ const giantEntries = computed(() => animals.value
   .filter(animal => animal.giantItem)
   .map(animal => ({ ...animal, ...animal.giantItem, giantItem: undefined })))
 const giantUnlockedCount = computed(() => giantEntries.value.filter(entry => entry.unlocked).length)
+// 「全部已读」只针对巨大图鉴的未读条目：后端按 fruit_id 清除，未读标记在所属动物的 giant 上。
+const freshGiantIds = computed(() => animals.value
+  .filter(animal => animal.giantItem && animal.giant?.isNew)
+  .map(animal => Number(animal.id) || 0)
+  .filter(id => id > 0))
+const clearing = ref(false)
 
 function claimNormal() {
   emit('request', {
@@ -48,6 +61,48 @@ function claimGiant() {
     title: `领取巨大化重量积分奖励（${giantClaimable.value.length} 档）`,
     note: '逐档领取巨大变异重量积分奖励，只领取服务端标记为可领取的档位。',
   })
+}
+
+/**
+ * 巨大图鉴「全部已读」：把当前未读的 fruit_id 一次性交给后端清除。
+ * 回包只带被服务端确认清除的 id，因此这里按 cleared 精确改本地标记，而不是整体清空。
+ */
+async function clearGiantNew() {
+  const accountId = String(currentAccountId.value || '')
+  const fruitIds = freshGiantIds.value
+  if (clearing.value || !accountId)
+    return
+  if (!fruitIds.length) {
+    toast.warning('没有未读的巨大图鉴')
+    return
+  }
+  clearing.value = true
+  try {
+    const { data } = await api.post('/api/illustrated/clear-new', { fruitIds }, {
+      headers: { 'x-account-id': accountId },
+      skipErrorToast: true,
+    } as any)
+    if (!data?.ok)
+      throw new Error(data?.error || '清除巨大图鉴已读失败')
+    const cleared: number[] = Array.isArray(data?.data?.cleared) ? data.data.cleared.map((id: any) => Number(id)) : []
+    if (cleared.length) {
+      const done = new Set(cleared)
+      for (const animal of animals.value) {
+        if (done.has(Number(animal.id)) && animal.giant)
+          animal.giant.isNew = false
+      }
+      toast.success(`已读 ${cleared.length} 条巨大图鉴`)
+    }
+    else {
+      toast.warning('没有未读的巨大图鉴')
+    }
+  }
+  catch (cause: any) {
+    toast.error(cause?.response?.data?.error || cause?.message || '清除巨大图鉴已读失败')
+  }
+  finally {
+    clearing.value = false
+  }
 }
 
 function giantText(animal: any) {
@@ -83,6 +138,16 @@ function giantText(animal: any) {
           <template v-if="tab === 'giant'">已收录 {{ giantUnlockedCount }} / {{ giantEntries.length }} 种巨大化</template>
           <template v-else>已收录 {{ unlockedCount }} / {{ animals.length }} 种</template>
         </span>
+        <BaseButton
+          v-if="tab === 'giant'"
+          variant="outline"
+          size="sm"
+          :loading="clearing"
+          :disabled="!freshGiantIds.length || !currentAccountId"
+          @click="clearGiantNew"
+        >
+          全部已读<span v-if="freshGiantIds.length" class="ml-1">（{{ freshGiantIds.length }}）</span>
+        </BaseButton>
       </div>
 
       <template v-if="tab === 'reward'">

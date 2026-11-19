@@ -739,6 +739,8 @@ function mapBook(raw: any) {
     },
     animals: list(raw.animals).map((entry: any) => ({
       ...toItem(entry),
+      // 巨大图鉴按巨大产物单独成条目，必须保留该字段；toItem 只取通用五字段，直接展开会把它丢掉。
+      giantItem: entry.giantItem && typeof entry.giantItem === 'object' ? toItem(entry.giantItem) : null,
       rarity: number(entry.rarity, 0) || 0,
       layer: number(entry.layer, 0) || 0,
       unlocked: entry.unlocked === true,
