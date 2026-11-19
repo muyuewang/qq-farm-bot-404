@@ -11,6 +11,16 @@ function bagItems(bag: any): any[] {
     return [...bag.physical_items, ...bag.virtual_items];
 }
 
+/**
+ * 可出售单价列表。产物可能同时标多种货币（例如金币 + 金券），
+ * 任一价格条目的 id 或 count 非法就整批作废，避免按不完整报价成交。
+ */
+function salePrices(item: any): any[] {
+    if (item.is_locked || !item.show || item.show.sell_cond.length || BigInt(quantity(item.count)) <= 0n) return [];
+    const prices = item.show.sells;
+    return prices.every((price: any) => BigInt(quantity(price.id)) > 0n && BigInt(quantity(price.count)) > 0n) ? prices : [];
+}
+
 function balance(bag: any, id: number): any {
     const entries = bagItems(bag).filter(item => Number(item.id) === id);
     const total = entries.reduce((sum, item) => sum + BigInt(quantity(item.count)), 0n);
@@ -83,6 +93,13 @@ async function loadRaw(cells?: any): Promise<any> {
     return { cells: currentCells, bag };
 }
 
+function shedAwaitingActivation(raw: any): any {
+    // 达到开放等级后，服务端下发一级棚（facility_id 6002001）且 state=3 表示待激活，
+    // 需要单独发 ActivateFacility 才会变成正式可用设施，光靠 upgrade 不会自动解锁。
+    return raw.cells.facilities.find((facility: any) =>
+        facility.module_type === 7 && facility.facility_id === 6002001 && facility.state === 3);
+}
+
 function snapshot(raw: any): any {
     const info = levelInfo(Number(balance(raw.bag, 1102).total));
     return {
@@ -101,7 +118,8 @@ function inventory(raw: any): any[] {
         return {
             ...itemDto(item), uid: quantity(item.uid), locked: item.is_locked, tabId: Number(item.tab_id) || Number(metadata?.show_tab_ids) || 0,
             type: metadata?.type || 0, sellPrices: item.show?.sells?.map(itemDto) || [],
-            canSell: !item.is_locked && !!item.show?.sells?.length && !item.show.sell_cond.length && [106, 107].includes(metadata?.type),
+            // 是否可卖统一走 salePrices：锁定、有出售条件、数量为 0 或多货币报价不完整都会返回空。
+            canSell: salePrices(item).length > 0,
             can: canMap.get(Number(item.id)) || null, animalId: animal?.id || null, giantCub: !!animal?.giantCubItemId,
             husbandryType: animal?.husbandry_type ?? null,
             product: item.item_detail?.ranch_product ? {
@@ -249,4 +267,4 @@ async function resourceBalances(keys: string[]): Promise<any[]> {
     });
 }
 
-module.exports = { getState, loadRaw, snapshot, balance, bagItems, inventory, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };

@@ -29,7 +29,12 @@ const counts = ref<Record<string, string | number>>({})
 const ranchTargets = ref<Record<string, string | number>>({})
 
 const items = computed(() => props.state?.bag || [])
-const sellable = computed(() => items.value.filter(item => item.canSell))
+/**
+ * 一键出售只针对产物（type 106/107）。后端 canSell 是「有有效报价」的通用判定，
+ * 幼崽与罐头同样可能有报价，直接用 canSell 会把它们一起卖掉。
+ */
+const PRODUCT_TYPES = [106, 107]
+const sellable = computed(() => items.value.filter(item => item.canSell && PRODUCT_TYPES.includes(Number(item.type))))
 const ranches = computed(() => sortFacilities((props.state?.facilities || []).filter(facility => facility.isRanch)))
 const ranchOptions = computed(() => ranches.value.map(facility => ({
   value: facility.id,
@@ -100,18 +105,29 @@ function requestSellAll() {
   })
 }
 
-const ACTION_LABELS: Record<BagFilter, string> = { all: '', coop: '放养', shed: '放养', can: '加入罐头桶', product: '出售' }
+/**
+ * 同一批物品可以同时有多个动作：幼崽既能放养也能卖，罐头既能入桶也能卖。
+ * 之前按分类只给一个动作，导致背包里的幼崽与罐头根本卖不掉。
+ */
+type BagActionKey = 'useCan' | 'place' | 'sell'
 
-function isCub(item: any) {
-  const kind = kindOf(item)
-  return kind === 'coop' || kind === 'shed'
+function actionsFor(item: any): Array<{ key: BagActionKey, label: string, primary: boolean }> {
+  if (item.locked || Number(item.count) <= 0)
+    return []
+  const actions: Array<{ key: BagActionKey, label: string, primary: boolean }> = []
+  if (item.can)
+    actions.push({ key: 'useCan', label: '加入罐头桶', primary: true })
+  else if (item.animalId)
+    actions.push({ key: 'place', label: '放养', primary: true })
+  if (item.canSell)
+    actions.push({ key: 'sell', label: '出售', primary: actions.length === 0 })
+  return actions
 }
 
-function onAction(item: any) {
-  const kind = kindOf(item)
-  if (kind === 'coop' || kind === 'shed')
+function onAction(item: any, key: BagActionKey) {
+  if (key === 'place')
     requestPlace(item)
-  else if (kind === 'can')
+  else if (key === 'useCan')
     requestUseCan(item)
   else
     requestSell(item)
@@ -147,8 +163,9 @@ function requestPlace(item: any) {
   })
 }
 
+/** 一条物品可能有多个报价，全部拼出来；后端已保证多货币报价要么全有效要么整批作废。 */
 function unitPrice(item: any) {
-  return item.sellPrices.map((price: any) => `${price.name} ×${formatQuantity(price.count)}`).join('、')
+  return item.sellPrices.map((price: any) => `${price.name} ×${formatQuantity(price.count)}`).join(' + ')
 }
 </script>
 
@@ -224,12 +241,13 @@ function unitPrice(item: any) {
               {{ item.husbandryType }}幼崽
             </span>
             <span v-if="item.giantCub" class="rounded bg-purple-50 px-1.5 py-0.5 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300">巨大幼崽</span>
-            <span v-if="kindOf(item) === 'all'" class="rounded bg-gray-50 px-1.5 py-0.5 text-gray-500 dark:bg-gray-900/40">无牧场操作</span>
+            <span v-if="!actionsFor(item).length" class="rounded bg-gray-50 px-1.5 py-0.5 text-gray-500 dark:bg-gray-900/40">无牧场操作</span>
+            <span v-if="item.canSell && !PRODUCT_TYPES.includes(Number(item.type))" class="rounded bg-sky-50 px-1.5 py-0.5 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300">可单卖</span>
           </div>
 
-          <div v-if="kindOf(item) !== 'all'" class="mt-3 flex flex-wrap items-end gap-2">
+          <div v-if="actionsFor(item).length" class="mt-3 flex flex-wrap items-end gap-2">
             <BaseSelect
-              v-if="isCub(item)"
+              v-if="item.animalId"
               v-model="ranchTargets[item.uid]"
               :options="targetOptions(item)"
               :placeholder="item.husbandryType ? `选择${item.husbandryType}` : '选择栏舍'"
@@ -238,18 +256,20 @@ function unitPrice(item: any) {
             <BaseInput
               v-model="counts[item.uid]"
               type="number"
-              :label="isCub(item) ? '只数' : '个数'"
+              :label="item.animalId ? '只数' : '个数'"
               class="w-20"
               :min="1"
               :max="Number(item.count) || 1"
             />
             <BaseButton
+              v-for="row in actionsFor(item)"
+              :key="row.key"
               size="sm"
-              :variant="isCub(item) ? 'primary' : 'secondary'"
-              :disabled="item.locked || Number(item.count) <= 0 || (isCub(item) && !targetOptions(item).length)"
-              @click="onAction(item)"
+              :variant="row.primary ? 'primary' : 'secondary'"
+              :disabled="item.animalId && row.key === 'place' && !targetOptions(item).length"
+              @click="onAction(item, row.key)"
             >
-              {{ ACTION_LABELS[kindOf(item)] }}
+              {{ row.label }}
             </BaseButton>
           </div>
         </div>

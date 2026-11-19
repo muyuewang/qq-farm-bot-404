@@ -72,6 +72,11 @@ export interface AutomationConfig {
   // 牧场牧草机余量低于该百分比时才会自动补满（1–100），后端默认 20。
   ranch_grass_threshold_percent?: number
   ranch_market_organic?: boolean
+  // 集市兑换按货币拆成独立开关；旧 ranch_market_organic 只用于兼容旧配置。
+  ranch_market_organic_poop?: boolean
+  ranch_market_organic_pinecone?: boolean
+  // 动物腾栏后顺带补领普通与巨大图鉴奖励。
+  ranch_illustrated?: boolean
   // 背包幼崽的放养优先顺序，只允许放对应设施能养的幼崽；空数组表示按等级从高到低。
   ranch_coop_cub_priority?: number[]
   ranch_shed_cub_priority?: number[]

@@ -1015,7 +1015,7 @@ export type RanchAutomationGroup = 'own' | 'friend' | 'reward'
 export const RANCH_AUTOMATION_GROUPS: ReadonlyArray<{ key: RanchAutomationGroup, title: string, detail: string }> = [
   { key: 'own', title: '自家牧场', detail: '收获、催产、补栏、升级、出售、牧草、罐头、清理与集市兑换' },
   { key: 'friend', title: '好友牧场', detail: '进入好友牧场偷取、清理、抚摸与放蚊子，每轮巡查最多拜访三位好友' },
-  { key: 'reward', title: '每日奖励', detail: '领取牧场任务奖励与每日分享礼包' },
+  { key: 'reward', title: '每日奖励', detail: '领取牧场任务奖励、图鉴奖励、每日分享礼包与商店福利' },
 ]
 
 /** 牧场自动化配置：与 core/src/config/ranch-automation.ts 的默认值一一对应。 */
@@ -1025,7 +1025,9 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_buy', label: '自动购买幼崽', desc: '按养殖策略在牧场商店补栏', group: 'own' },
   { key: 'ranch_upgrade', label: '自动升级设施', desc: '满足等级与材料时升级窝、棚与牧草机', group: 'own' },
   { key: 'ranch_sell', label: '自动出售产物', desc: '出售背包里可出售的产物', group: 'own' },
-  { key: 'ranch_market_organic', label: '集市兑换有机化肥', desc: '仓鼠集市开张时按到访通知自动兑换：便便优先 4 小时再 1 小时，松果优先 4 小时再 2/1 小时；货币到账也会唤醒检查', group: 'own' },
+  // 两种货币拆成独立开关：便便与松果的库存往往一多一少，合在一个开关里容易误兑掉稀缺的那种。
+  { key: 'ranch_market_organic_poop', label: '集市便便兑换化肥', desc: '用便便在仓鼠集市兑换有机化肥，优先换 4 小时档，其次 1 小时档；便便到账也会唤醒检查', group: 'own' },
+  { key: 'ranch_market_organic_pinecone', label: '集市松果兑换化肥', desc: '用松果在仓鼠集市兑换有机化肥，优先换 8 小时档，其次 4 小时、1 小时档；松果到账也会唤醒检查', group: 'own' },
   { key: 'ranch_grass', label: '自动补充牧草', desc: '牧草机容量不满时用背包牧草补满', group: 'own' },
   { key: 'ranch_grass_buy', label: '自动购买牧草', desc: '背包牧草不足时先在商店购买，需同时开启补充牧草', group: 'own' },
   { key: 'ranch_fill_cans', label: '自动补充罐头桶', desc: '使用背包罐头为罐头桶增加时长', group: 'own' },
@@ -1037,6 +1039,7 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_friend_clean', label: '自动清理好友栏舍', desc: '清理好友栏舍危险物', group: 'friend' },
   { key: 'ranch_friend_mosquito', label: '自动放蚊子', desc: '向好友栏舍投放蚊子', group: 'friend' },
   { key: 'ranch_task', label: '自动领取牧场任务', desc: '领取已完成的牧场任务奖励', group: 'reward' },
+  { key: 'ranch_illustrated', label: '自动领取图鉴奖励', desc: '动物成熟腾栏后顺带核对普通与巨大图鉴，只领已达标的奖励', group: 'reward' },
   { key: 'ranch_share', label: '自动领取每日分享', desc: '上报分享并领取每日首次分享礼包', group: 'reward' },
   { key: 'ranch_daily_benefit', label: '自动领取每日福利', desc: '领取牧场商店每日免费福利，每天一次', group: 'reward' },
 ]
@@ -1048,8 +1051,11 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_buy: false,
   ranch_upgrade: false,
   ranch_sell: false,
-  // 集市兑换会消耗便便与松果，与后端 ranch_market_organic 默认关闭保持一致。
+  // 集市兑换会消耗便便与松果，两种货币拆成独立开关后仍默认关闭。
+  // ranch_market_organic 是旧总开关，仅用于兼容旧配置，运行时不读它。
   ranch_market_organic: false,
+  ranch_market_organic_poop: false,
+  ranch_market_organic_pinecone: false,
   ranch_grass: false,
   ranch_grass_buy: false,
   // 与后端 ranch_grass_threshold_percent 默认值一致；牧草机余量低于该百分比才自动补满。
@@ -1064,6 +1070,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_friend_mosquito: false,
   ranch_task: true,
   ranch_share: true,
+  // 补领图鉴奖励只收已达标奖励，不改账号其它状态，与后端默认一致保持开启。
+  ranch_illustrated: true,
   // 后端 ranch_daily_benefit 默认开启，前端需与其保持一致，否则总开关恢复默认时会漏掉这项。
   ranch_daily_benefit: true,
   ranch_check_minutes: 5,

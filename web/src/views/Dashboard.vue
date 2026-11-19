@@ -135,6 +135,7 @@ const events = [
   { label: '出售牧场产物', value: 'ranch_sell' },
   { label: '清理牧场', value: 'ranch_clean' },
   { label: '升级牧场建筑', value: 'ranch_upgrade' },
+  { label: '解锁牧场棚', value: 'ranch_activateShed' },
   { label: '完成建筑升级', value: 'ranch_completeUpgrade' },
   { label: '领取牧场任务', value: 'ranch_claimTasks' },
   { label: '牧场成长任务', value: 'ranch_reportEntry' },

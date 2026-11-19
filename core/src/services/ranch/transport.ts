@@ -11,6 +11,8 @@ const ROUTES: Record<string, [string, string, string, string?]> = {
     cells: ['homesteadpb.HomesteadService', 'AllCells', 'RanchAllCells'],
     buildings: ['homesteadpb.HomesteadService', 'GetBuildingList', 'RanchGetBuildingList'],
     facility: ['homesteadpb.HomesteadService', 'GetFacilityDetail', 'RanchGetFacilityDetail'],
+    // 21 级开放的棚需要单独激活（state=3 → 1），光靠 upgrade 不会自动解锁。
+    activateShed: ['homesteadpb.HomesteadService', 'ActivateFacility', 'RanchActivateFacility'],
     upgrade: ['homesteadpb.HomesteadService', 'UpgradeBuilding', 'RanchUpgradeBuilding'],
     completeUpgrade: ['homesteadpb.HomesteadService', 'CompleteBuildingUpgrade', 'RanchCompleteBuildingUpgrade'],
     addGrass: ['homesteadpb.FeedMachineService', 'AddFeed', 'RanchAddFeed'],

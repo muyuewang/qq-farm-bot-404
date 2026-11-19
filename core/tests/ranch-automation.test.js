@@ -10,7 +10,8 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         require.cache[id] = { id, filename: id, loaded: true, exports };
     };
     mock('config/gameConfig', { getShopGoodsById: id => goods[id] });
-    mock('models/store', { getAutomation: () => automation });
+    // automation 在 require 期就解构了 getFriendBlacklist，所以这里必须让它按需读取，测试才能注入黑名单。
+    mock('models/store', { getAutomation: () => automation, getFriendBlacklist: () => friendDeps.blacklist?.() ?? [] });
     // 与真实 transport 一致地把巡查体跑一遍，让路时序才可以被断言。
     mock('services/ranch/transport', { isUnlocked: () => unlocked, inScene: async (work) => work({}) });
     mock('services/ranch/state', {
@@ -23,16 +24,23 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         readMarketRotation: async () => stateDeps.rotation?.() ?? { shop_id: 7, period_day: '1', round_index: 1,
             shop_start_time: 1_799_000_000, shop_end_time: 1_801_000_000, present: true },
         balance: (bag, id) => stateDeps.balance?.(bag, id) ?? { total: '0', locked: '0' },
+        // 21 级待激活棚：默认没有，需要解锁的用例自己提供。
+        shedAwaitingActivation: raw => stateDeps.shed?.(raw) ?? null,
     });
     mock('services/ranch/model', { cubMap: cubs ? new Map(cubs) : new Map(), quantity: v => Number(v) });
     mock('services/ranch/actions', { prepareAction, operate });
     mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, getBenefitRoutineState: () => ({ doneToday: true, nextCheckAt: 0 }), claimTasks: async () => {}, claimShare: async () => {}, claimBenefit: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
     mock('services/ranch/context', { getAmbientSendContext: () => null, runWithSendContext: (_ctx, run) => run() });
-    // 牧场好友阶段会复用农场名单；默认给空名单，避免加载真实 friend 服务。
-    mock('services/friend', {
-        getFriendsListCacheOnly: () => friendDeps.cacheOnly?.() ?? [],
-        getFriendsList: async (...args) => { friendDeps.onListCall?.(args); return friendDeps.list?.() ?? []; },
+    // 牧场好友名单改为按 global_scene_id=2 独立同步（上游 #160），不再复用农场名单。
+    mock('services/ranch/friend-roster', {
+        getRanchFriendList: async (checkpoint) => {
+            friendDeps.onRosterCall?.();
+            const roster = friendDeps.roster?.() ?? [];
+            // 名单同步会分批回调 checkpoint，让路时序用例需要它被真实触发一次。
+            checkpoint?.(true);
+            return roster;
+        },
     });
     mock('services/ranch/friends', {
         getInteractionTimes: async () => friendDeps.times?.() ?? { stroke: 1, steal: 1, cleanFriend: 1, putMosquito: 1 },
@@ -49,12 +57,14 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
     return require(id);
 }
 
-test('牧场自动化默认只开任务与分享，其余会改状态的动作全部关闭', () => {
-    const actions = ['ranch_buy', 'ranch_upgrade', 'ranch_grass_buy', 'ranch_sell', 'ranch_fill_cans', 'ranch_feed_normal', 'ranch_feed_organic', 'ranch_harvest', 'ranch_produce', 'ranch_clean', 'ranch_grass', 'ranch_market_organic'];
+test('牧场自动化默认只开领取类动作，会改状态的动作全部关闭', () => {
+    const actions = ['ranch_buy', 'ranch_upgrade', 'ranch_grass_buy', 'ranch_sell', 'ranch_fill_cans', 'ranch_feed_normal', 'ranch_feed_organic', 'ranch_harvest', 'ranch_produce', 'ranch_clean', 'ranch_grass', 'ranch_market_organic', 'ranch_market_organic_poop', 'ranch_market_organic_pinecone'];
     assert.deepEqual(actions.filter(key => RANCH_AUTOMATION_DEFAULTS[key] !== false), []);
     assert.deepEqual(actions.filter(key => !RANCH_SWITCH_KEYS.includes(key)), [], '每个自动动作都必须有对应开关');
+    // 领取类动作只是把已达标奖励收下，不改账号其它状态，保持默认开启。
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_task, true);
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_share, true);
+    assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_illustrated, true, '补领图鉴奖励属于领取类，默认开启');
     // 上游把动作默认值全改成 true，本项目坚持保守默认，不受其影响。
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent, 20, '牧草补满阈值默认 20%');
 });
@@ -218,17 +228,17 @@ test('牧草按容量阈值补满：达到阈值不补，低于阈值才补，�
     assert.deepEqual(await runCase(10, 5, 100), [], '阈值越低越保守，达到阈值不补');
 });
 
-// 集市已改为「便便 7002 / 松果 1008」双货币，并按到访通知排队，用例覆盖两种货币各自的目标奖励。
+// 集市已拆成「便便 7002 / 松果 1008」两个独立开关并各自按到访通知排队，用例覆盖两种货币各自的目标奖励。
 test('仓鼠集市按双货币兑换有机化肥：优先顺序、余额不足不超兑、非目标商品跳过', async () => {
     const good = (id, rewardId, priceId, priceCount, remaining) => ({
         id, available: true, remaining,
         reward: { id: rewardId, count: '1' },
         price: { id: priceId, count: priceCount },
     });
-    const runCase = async ({ goods, balances }) => {
+    const runCase = async ({ goods, balances, switches = { ranch_market_organic_poop: true, ranch_market_organic_pinecone: true } }) => {
         const calls = [];
         const level = loadAutomation({
-            automation: { ranch_market_organic: true, ranch_check_minutes: 30 },
+            automation: { ...switches, ranch_check_minutes: 30 },
             raw: { bag: {}, cells: { facilities: [] } },
             stateDeps: {
                 market: () => ({ opened: true, present: true, periodDay: 1, roundIndex: 1, goods }),
@@ -272,14 +282,44 @@ test('仓鼠集市按双货币兑换有机化肥：优先顺序、余额不足�
     // 非目标奖励（普通化肥 7003）不得兑换。
     const wrongReward = await runCase({ goods: [good(12, 7003, 7002, '1', 10)], balances: { 7002: 100 } });
     assert.deepEqual(wrongReward, [], '非目标奖励一律跳过');
+
+    // 只开便便兑换：松果商品即便有余额也不兑。
+    const poopOnly = await runCase({
+        goods: [good(12, 80012, 7002, '1', 5), good(22, 80013, 1008, '1', 5)],
+        balances: { 7002: 20, 1008: 20 },
+        switches: { ranch_market_organic_poop: true, ranch_market_organic_pinecone: false },
+    });
+    assert.deepEqual(poopOnly, [{ goodsId: 12, count: 5 }], '只开便便时不得兑松果商品');
+
+    // 只开松果兑换：便便商品即便有余额也不兑。
+    const pineconeOnly = await runCase({
+        goods: [good(12, 80012, 7002, '1', 5), good(22, 80013, 1008, '1', 5)],
+        balances: { 7002: 20, 1008: 20 },
+        switches: { ranch_market_organic_poop: false, ranch_market_organic_pinecone: true },
+    });
+    assert.deepEqual(pineconeOnly, [{ goodsId: 22, count: 5 }], '只开松果时不得兑便便商品');
+
+    // 两项都关：即使旧总开关开着也不兑（总开关只用于迁移旧配置）。
+    const bothOff = await runCase({
+        goods: [good(12, 80012, 7002, '1', 5), good(22, 80013, 1008, '1', 5)],
+        balances: { 7002: 20, 1008: 20 },
+        switches: { ranch_market_organic: true, ranch_market_organic_poop: false, ranch_market_organic_pinecone: false },
+    });
+    assert.deepEqual(bothOff, [], '两项独立开关都关时不得兑换');
 });
 
 test('集市开关默认关闭时不排入巡查，到访通知可立刻重新排队', async () => {
+    // 旧总开关不再单独生效：任意一种货币的独立开关打开即排入巡查。
     const level = loadAutomation({
-        automation: { ranch_market_organic: true },
+        automation: { ranch_market_organic_poop: true },
         stateDeps: { market: () => ({ opened: true, present: true, goods: [] }) },
     });
-    assert.equal(level.getRoutineState().doneToday, false, '集市开关打开且有待查标记时排入巡查');
+    assert.equal(level.getRoutineState().doneToday, false, '便便兑换开关打开且有待查标记时排入巡查');
+    // 只开松果兑换同样能排入巡查。
+    assert.equal(loadAutomation({ automation: { ranch_market_organic_pinecone: true } }).getRoutineState().doneToday, false, '松果兑换开关打开时同样排入巡查');
+    // 仅旧总开关为 true、两项独立开关显式关闭时不得排入巡查。
+    assert.equal(loadAutomation({ automation: { ranch_market_organic: true, ranch_market_organic_poop: false, ranch_market_organic_pinecone: false } }).getRoutineState().doneToday, true,
+        '两项独立开关都关时不排入巡查');
     // 同一场次重复推送不重复唤醒；换一轮次才唤醒。
     const rotation = { shop_id: 7, period_day: 1, round_index: 1, shop_start_time: 1_799_000_000, shop_end_time: 1_801_000_000, present: true };
     assert.equal(level.noteMarketVisit(rotation), true, '首次到访通知应唤醒例程');
@@ -288,6 +328,17 @@ test('集市开关默认关闭时不排入巡查，到访通知可立刻重新�
     level.resetSchedule();
     assert.equal(level.getRoutineState().nextCheckAt, 0, '重置后立刻复查');
     assert.equal(loadAutomation({ automation: {} }).getRoutineState().doneToday, true, '未开集市且无其它动作时不巡查');
+});
+
+test('旧配置只有总开关时迁移成便便与松果两个独立开关', () => {
+    const { migrateRanchMarketAutomation } = require('../dist/config/ranch-automation');
+    // 旧配置：只有总开关，两个新字段缺失 → 都继承总开关的值。
+    assert.deepEqual(migrateRanchMarketAutomation({ ranch_market_organic: true }),
+        { ranch_market_organic: true, ranch_market_organic_poop: true, ranch_market_organic_pinecone: true }, '旧总开关为 true 时两个新开关都被填充');
+    assert.deepEqual(migrateRanchMarketAutomation({ ranch_market_organic: false, ranch_market_organic_poop: true }),
+        { ranch_market_organic: false, ranch_market_organic_poop: true, ranch_market_organic_pinecone: false }, '已明确设置的新开关优先，不被旧总开关覆盖');
+    // 没有总开关时不做任何填充，避免给新账号凭空开启兑换。
+    assert.deepEqual(migrateRanchMarketAutomation({ ranch_grass: true }), { ranch_grass: true }, '缺少旧总开关时不填充');
 });
 
 test('连接不可继续时牧场不切场景、不执行动作，按重进场窗口退避', async () => {
@@ -306,31 +357,41 @@ test('连接不可继续时牧场不切场景、不执行动作，按重进场�
         `让路后应在 20 秒重进场窗口内，实际 ${nextCheckAt - before}ms`);
 });
 
-test('牧场好友阶段复用农场名单：缓存命中不重读，缓存为空只补读一次', async () => {
-    const runWith = async (cacheOnly) => {
-        const listCalls = [];
+test('牧场好友阶段按场景独立同步名单，并过滤黑名单', async () => {
+    const runWith = async (roster, blacklist = []) => {
+        const rosterCalls = [];
         const visits = [];
         const level = loadAutomation({
             automation: { ranch_friend_steal: true },
             friendDeps: {
-                cacheOnly: () => cacheOnly,
-                onListCall: args => listCalls.push(args),
+                roster: () => roster,
+                blacklist: () => blacklist,
+                onRosterCall: () => rosterCalls.push(1),
                 onVisit: gid => visits.push(gid),
             },
         });
         await level.run({ farmDeadline: () => Infinity, canContinue: () => true });
-        return { listCalls, visits };
+        return { rosterCalls, visits };
     };
 
-    const cached = [{ gid: 1, name: 'A' }, { gid: 2, name: 'B' }];
-    const hit = await runWith(cached);
-    assert.deepEqual(hit.listCalls, [], '缓存命中时不得重读好友名单');
-    assert.deepEqual(hit.visits, [1, 2], '按缓存名单顺序拜访，每轮最多三位');
+    const roster = [{ gid: 1, name: 'A' }, { gid: 2, name: 'B' }];
+    const hit = await runWith(roster);
+    assert.equal(hit.rosterCalls.length, 1, '牧场名单按场景同步一次');
+    assert.deepEqual(hit.visits, [1, 2], '按牧场名单顺序拜访，每轮最多三位');
 
-    const miss = await runWith([]);
-    assert.equal(miss.listCalls.length, 1, '缓存为空时补读一次');
-    assert.equal(miss.listCalls[0][1], 'normal', '补读走普通优先级');
-    assert.equal(miss.listCalls[0][2], true, '补读需把连接异常抛给调度器，不能静默降级');
+    // 黑名单里的好友不得拜访。
+    const filtered = await runWith(roster, [1]);
+    assert.deepEqual(filtered.visits, [2], '黑名单好友应被跳过');
+});
+
+test('名单为空时不拜访任何好友', async () => {
+    const visits = [];
+    const level = loadAutomation({
+        automation: { ranch_friend_steal: true },
+        friendDeps: { roster: () => [], onVisit: gid => visits.push(gid) },
+    });
+    await level.run({ farmDeadline: () => Infinity, canContinue: () => true });
+    assert.deepEqual(visits, [], '牧场名单为空时不发起拜访');
 });
 
 test('核对完待核对账本会重置让路退避，立刻允许重新进牧场', async () => {

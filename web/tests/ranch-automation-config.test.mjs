@@ -55,16 +55,29 @@ function parseBackendDefaults() {
 
 const backendDefaults = parseBackendDefaults()
 const backendSwitchKeys = Object.keys(backendDefaults).filter(key => typeof backendDefaults[key] === 'boolean')
+/**
+ * 后端仍保留、但已不对应任何可切换动作的历史兼容键。
+ * ranch_market_organic 是集市兑换的旧总开关，上游拆成便便/松果两个独立开关后它只用于迁移旧配置，
+ * 保留在默认值里是为了让老账号的配置能继续被读到，前端不应再给它一张开关卡片。
+ */
+const LEGACY_KEYS = ['ranch_market_organic']
+const actionSwitchKeys = backendSwitchKeys.filter(key => !LEGACY_KEYS.includes(key))
 
 test('牧场开关清单与后端默认值逐 key、逐值一致', () => {
-  assert.deepEqual(RANCH_AUTOMATION_SWITCHES.map(item => item.key).sort(), [...backendSwitchKeys].sort())
+  assert.deepEqual(RANCH_AUTOMATION_SWITCHES.map(item => item.key).sort(), [...actionSwitchKeys].sort())
   assert.deepEqual(Object.keys(RANCH_AUTOMATION_DEFAULTS).sort(), Object.keys(backendDefaults).sort())
   for (const [key, value] of Object.entries(backendDefaults))
     assert.deepEqual(RANCH_AUTOMATION_DEFAULTS[key], value, `${key} 的默认值与后端不一致`)
+  // 历史兼容键必须留在默认值里（旧配置迁移要用），但不能出现在可切换清单里。
+  for (const key of LEGACY_KEYS) {
+    assert.ok(key in RANCH_AUTOMATION_DEFAULTS, `${key} 是旧配置兼容键，默认值里必须保留`)
+    assert.ok(!RANCH_AUTOMATION_SWITCHES.some(item => item.key === key), `${key} 只做配置迁移，不应再出现在开关清单里`)
+  }
 })
 
 test('卡片总开关只恢复后端默认里本就为 true 的动作', () => {
-  const defaultOn = Object.keys(backendDefaults).filter(key => backendDefaults[key] === true)
+  // 兼容键不参与卡片总开关：它没有卡片，被算进 defaultOn 会让断言恒不等。
+  const defaultOn = actionSwitchKeys.filter(key => backendDefaults[key] === true)
   assert.deepEqual(RANCH_AUTOMATION_SWITCHES.filter(item => isRanchSwitchDefaultOn(item.key)).map(item => item.key).sort(), [...defaultOn].sort())
   for (const key of backendSwitchKeys) {
     if (defaultOn.includes(key))

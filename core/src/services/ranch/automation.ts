@@ -4,10 +4,10 @@ import type { FriendPatrolProgress } from './friends';
 import { getRanchFriendList } from './friend-roster';
 export {};
 
-const { RANCH_SWITCH_KEYS } = require('../../config/ranch-automation');
+const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, isRanchMarketEnabled } = require('../../config/ranch-automation');
 const { getAutomation, getFriendBlacklist } = require('../../models/store');
 const { inScene, isUnlocked } = require('./transport');
-const { loadRaw, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
+const { loadRaw, shedAwaitingActivation, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
 const { prepareAction, operate } = require('./actions');
 const { getServerTimeSec, log } = require('../../utils/utils');
@@ -29,14 +29,16 @@ let cycleChanged = false;
 let ownRecheckUsed = false;
 const completedPhases = new Set<string>();
 const completedSteps = new Set<string>();
+// 本轮收获过成熟动物后待补领的图鉴种类；让路时保留，下个切片继续。
+const pendingBookKinds = new Set<'normal' | 'giant'>();
 const PATROL_SLICE_MS = 5000;
 const SCENE_REENTRY_MS = 20_000;
-// 仓鼠集市的两种货币：
-// - 7002 便便：兑 4 小时(80012) 优先，其次 1 小时(80011)，余额 3 起；
-// - 1008 松果：兑 4 小时(80013) 优先，其次 80012、80011，余额 1 起。
+// 仓鼠集市的两种货币各由独立开关控制：
+// - 7002 便便（ranch_market_organic_poop）：兑 4 小时(80012) 优先，其次 1 小时(80011)，余额 3 起；
+// - 1008 松果（ranch_market_organic_pinecone）：兑 8 小时(80013) 优先，其次 80012、80011，余额 1 起。
 const MARKET_EXCHANGES = [
-    { currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
-    { currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
+    { key: 'ranch_market_organic_poop', currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
+    { key: 'ranch_market_organic_pinecone', currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
 ];
 type MarketRotation = { periodDay: string; roundIndex: number; startsAt: number; endsAt: number; present: boolean };
 // 有事可查而非仅定时轮询：到访通知/货币到账都会把它置 true。
@@ -48,6 +50,7 @@ const lastMarketBalances = new Map<number, bigint>();
 function resetCycle(keepFriendProgress = false): void {
     completedPhases.clear();
     completedSteps.clear();
+    pendingBookKinds.clear();
     // 让路时保留好友巡查进度，下次进牧场从断点续跑。
     if (!keepFriendProgress) {
         friendVisits = 0;
@@ -108,10 +111,10 @@ function getRoutineState(): any {
     // 互动次数用完后仍要保留一个未来的唤醒时间（次日重置），否则当天再也不巡查。
     const work = auto.ranch_stroke && !strokeReset || auto.ranch_friend_mosquito && !mosquitoReset
         || RANCH_SWITCH_KEYS.some((key: string) => ![
-            'ranch_task', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy', 'ranch_market_organic', 'ranch_stroke', 'ranch_friend_mosquito',
+            'ranch_task', 'ranch_illustrated', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy', 'ranch_market_organic', ...RANCH_MARKET_SWITCH_KEYS, 'ranch_stroke', 'ranch_friend_mosquito',
         ].includes(key) && auto[key]);
     const routineDue = work || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState()) || auto.ranch_daily_benefit && due(daily.getBenefitRoutineState());
-    const pending = routineDue || auto.ranch_market_organic && marketCheckPending;
+    const pending = routineDue || isRanchMarketEnabled(auto) && marketCheckPending;
     return {
         doneToday: !pending,
         nextCheckAt: pending ? nextCheckAt : Math.min(strokeReset || Infinity, mosquitoReset || Infinity),
@@ -224,6 +227,13 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     completedSteps.add(step);
                     markStep(action);
                     if (result.status === 'skipped') return false;
+                    // 收获到成熟动物说明腾出了栏位、也可能达成新的图鉴等级，登记待补领两种图鉴。
+                    if (action === 'harvest' && result.harvestedAnimals > 0 && enabled('ranch_illustrated')) {
+                        for (const kind of ['normal', 'giant'] as const) {
+                            pendingBookKinds.add(kind);
+                            completedSteps.delete(`claimIllustrated:${JSON.stringify({ kind })}`);
+                        }
+                    }
                     cycleChanged = true;
                     log('牧场', `${quote.label}${result.notice ? `：${result.notice}` : '完成'}`, { module: 'ranch', event: `ranch_${action}`, result: 'ok' });
                     raw = await loadRaw();
@@ -251,12 +261,12 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
 
             // 集市有到访通知（RotationShopNotify）会把 marketCheckPending 置真；
             // 同时保留「货币到账就唤醒」的兜底，避免通知漏发时错过一轮。
-            if (auto.ranch_market_organic && marketCheckPending) completedPhases.delete('market-organic');
+            if (isRanchMarketEnabled(auto) && marketCheckPending) completedPhases.delete('market-organic');
             await phase('market-organic', async () => {
-                if (!enabled('ranch_market_organic')) return;
-                const stockReady = MARKET_EXCHANGES.some(({ currencyId, minBalance }) => {
+                if (!isRanchMarketEnabled(getAutomation())) return;
+                const stockReady = MARKET_EXCHANGES.some(({ key, currencyId, minBalance }) => {
                     const stock = available(currencyId);
-                    return stock >= minBalance && stock > (lastMarketBalances.get(currencyId) ?? 0n);
+                    return enabled(key) && stock >= minBalance && stock > (lastMarketBalances.get(currencyId) ?? 0n);
                 });
                 if (!marketCheckPending && !stockReady && marketIsOpen(lastMarketRotation)) return;
                 // 兑换前重新核对一次截止时间：真正花钱的动作不该在被叫停后还继续发。
@@ -271,16 +281,18 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 }
                 // 场次必须与 ShopProfiles 读到的一致，否则报价可能已被换货。
                 if (current && marketIsOpen(rotation) && current.opened && current.present && sameMarketRound(current, rotation)) {
-                    for (const { currencyId, rewardPriority } of MARKET_EXCHANGES) {
+                    for (const { key, currencyId, rewardPriority } of MARKET_EXCHANGES) {
+                        if (!enabled(key)) continue;
                         const goods = current.goods.filter((entry: any) => entry.available && Number(entry.price.id) === currencyId
                             && BigInt(entry.price.count) > 0n && rewardPriority.includes(Number(entry.reward.id)));
                         goods.sort((a: any, b: any) => rewardPriority.indexOf(Number(a.reward.id)) - rewardPriority.indexOf(Number(b.reward.id)));
                         for (const good of goods) {
-                            while (good.remaining !== 0 && marketIsOpen(rotation)) {
+                            // 循环里重新判开关：运行中关掉某一项后要立刻停手，不能把剩余额度兑完。
+                            while (enabled(key) && good.remaining !== 0 && marketIsOpen(rotation)) {
                                 const stock = available(currencyId);
                                 const count = affordable(good, Math.min(good.remaining ?? 2147483647, 2147483647));
                                 if (count < 1) break;
-                                const exchanged = await act('ranch_market_organic', 'exchange', { goodsId: good.id, count, marketRotation: rotation },
+                                const exchanged = await act(key, 'exchange', { goodsId: good.id, count, marketRotation: rotation },
                                     currencyId, `${runId}:${good.id}:${stock}`, Number(good.reward.id));
                                 if (!exchanged) break;
                                 if (good.remaining !== null) good.remaining = Math.max(0, good.remaining - count);
@@ -296,6 +308,11 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 }
             });
 
+            // 21 级开放的棚不是「升级」出来的：服务端下发 state=3 的待激活实例，
+            // 必须单独发 ActivateFacility 才会变成可用设施，所以放在 upgrade 阶段之前单独处理。
+            const shed = enabled('ranch_upgrade') && shedAwaitingActivation(raw);
+            if (shed) await act('ranch_upgrade', 'activateShed', { facilityId: quantity(shed.instance_id) });
+
             await phase('upgrade', async () => {
                 if (enabled('ranch_upgrade')) {
                     for (const facility of snapshot(raw).facilities) {
@@ -308,6 +325,13 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     }
                 }
             });
+
+            // 成熟动物腾栏后可能达成新的图鉴等级，在补栏前补领一次；
+            // 让路时 pendingBookKinds 保留，下个切片继续补。
+            for (const kind of pendingBookKinds) {
+                await act('ranch_illustrated', 'claimIllustrated', { kind });
+                pendingBookKinds.delete(kind);
+            }
 
             // 补栏：先把背包里适用本设施的幼崽按优先顺序放养，缺额才在商店购买。
             // 放养不放在 phase 内：收获后空位会变多，即使本轮 buy 已跑过也要能重新补栏。

@@ -3,7 +3,7 @@ export {};
 
 const sharedState = require('./shared-state');
 const { assertEmailClaimHour } = require('../../utils/hour-of-day');
-const { normalizeRanchSetting } = require('../../config/ranch-automation');
+const { normalizeRanchSetting, migrateRanchMarketAutomation } = require('../../config/ranch-automation');
 const { readKnownFriendGidsCache, writeKnownFriendGidsCache } = require('./gid-cache');
 
 const {
@@ -141,7 +141,8 @@ function applyConfigSnapshot(snapshot: Record<string, any> | undefined, options:
     const next = normalizeAccountConfig(current, sharedState.accountFallbackConfig);
 
     if (cfg.automation && typeof cfg.automation === 'object') {
-        for (const [k, v] of Object.entries(cfg.automation)) {
+        // 旧客户端只提交 ranch_market_organic，先迁移成便便/松果两个独立开关再逐项归一化。
+        for (const [k, v] of Object.entries(migrateRanchMarketAutomation(cfg.automation))) {
             if ((next.automation as any)[k] === undefined) continue;
             if (k === 'fertilizer') {
                 next.automation.fertilizer = normalizeFertilizerMode(v, next.automation.fertilizer);
