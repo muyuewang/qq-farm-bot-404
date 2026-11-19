@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import type { RanchAnimal, RanchRequest, RanchState } from '@/utils/ranch'
-import { computed, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, ref, watch } from 'vue'
+import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import { useAccountStore } from '@/stores/account'
+import { useToastStore } from '@/stores/toast'
 import { formatQuantity, itemListLine } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
@@ -14,6 +18,18 @@ const emit = defineEmits<{
 
 const keyword = ref('')
 
+const { currentAccountId } = storeToRefs(useAccountStore())
+const toast = useToastStore()
+
+/**
+ * 牧场拜访黑名单。后端巡查按这份名单跳过好友，「不是好友」被服务端拒绝的 GID 也会自动进来。
+ * 名单与农场好友黑名单彼此独立：牧场好友本身就是按场景单独同步的另一批人。
+ */
+const blacklistGids = ref<number[]>([])
+const blacklistedSet = computed(() => new Set(blacklistGids.value))
+const showBlacklist = ref(false)
+const toggling = ref('')
+
 const friends = computed(() => props.state?.friends || [])
 const ranch = computed(() => props.state?.friendRanch ?? null)
 const visibleFriends = computed(() => {
@@ -21,6 +37,67 @@ const visibleFriends = computed(() => {
   if (!text)
     return friends.value
   return friends.value.filter(friend => friend.name.toLowerCase().includes(text) || friend.gid.includes(text))
+})
+
+/** 黑名单视图：能对上好友列表的补昵称头像，纯 GID 的兜底显示 GID。 */
+const blacklistItems = computed(() => blacklistGids.value.map((gid) => {
+  const friend = friends.value.find(entry => Number(entry.gid) === gid)
+  return { gid, name: friend?.name || `GID:${gid}`, avatarUrl: friend?.avatarUrl || '' }
+}))
+
+async function loadBlacklist() {
+  const accountId = String(currentAccountId.value || '')
+  if (!accountId)
+    return
+  try {
+    const { data } = await api.get('/api/ranch-friend-blacklist', {
+      headers: { 'x-account-id': accountId },
+      skipErrorToast: true,
+    } as any)
+    if (data?.ok)
+      blacklistGids.value = Array.isArray(data.data?.gids) ? data.data.gids.map((gid: any) => Number(gid)) : []
+  }
+  catch {
+    // 名单读取失败不影响好友列表本身，静默降级为空名单。
+  }
+}
+
+/**
+ * 加入/移出黑名单。后端回包带最新全量 gids，直接覆盖本地，避免多端并发时本地与服务器不一致。
+ */
+async function toggleBlacklist(gid: string | number) {
+  const target = Number(gid)
+  const accountId = String(currentAccountId.value || '')
+  if (!accountId || toggling.value)
+    return
+  toggling.value = String(target)
+  try {
+    const { data } = await api.post('/api/ranch-friend-blacklist/toggle', { gid: target }, {
+      headers: { 'x-account-id': accountId },
+      skipErrorToast: true,
+    } as any)
+    if (!data?.ok)
+      throw new Error(data?.error || '操作失败')
+    blacklistGids.value = Array.isArray(data.data?.gids) ? data.data.gids.map((item: any) => Number(item)) : []
+    toast.success(blacklistGids.value.includes(target) ? '已加入牧场黑名单，巡查不再拜访' : '已移出牧场黑名单')
+  }
+  catch (cause: any) {
+    toast.error(cause?.response?.data?.error || cause?.message || '操作失败')
+  }
+  finally {
+    toggling.value = ''
+  }
+}
+
+onMounted(() => {
+  void loadBlacklist()
+})
+
+// 切换账号时重读名单，避免把上一个账号的黑名单状态显示到新账号上。
+watch(currentAccountId, () => {
+  blacklistGids.value = []
+  showBlacklist.value = false
+  void loadBlacklist()
 })
 
 function requestStealAll() {
@@ -189,38 +266,99 @@ function shelfText(shelf: any) {
       <div class="flex flex-wrap items-center gap-2">
         <BaseInput v-model="keyword" placeholder="搜索好友昵称或 GID" class="w-56" clearable />
         <span class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
-          共 {{ friends.length }} 位好友
+          {{ showBlacklist ? `黑名单 ${blacklistGids.length} 位` : `共 ${friends.length} 位好友` }}
         </span>
+        <BaseButton variant="ghost" size="sm" @click="showBlacklist = !showBlacklist">
+          {{ showBlacklist ? '返回好友列表' : '牧场黑名单' }}
+        </BaseButton>
       </div>
 
-      <div v-if="!friends.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
-        没有可访问的好友。
-      </div>
-      <div v-else-if="!visibleFriends.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-8 text-center text-sm text-gray-500 dark:border-gray-700">
-        没有匹配 {{ keyword }} 的好友。
-      </div>
-
-      <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-        <div
-          v-for="friend in visibleFriends"
-          :key="friend.gid"
-          class="flex items-center gap-2 border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-        >
-          <img v-if="friend.avatarUrl" :src="friend.avatarUrl" :alt="friend.name" class="h-9 w-9 shrink-0 rounded-full object-cover">
-          <div v-else class="i-carbon-user-avatar h-9 w-9 shrink-0 text-xl text-gray-300" />
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium">
-              {{ friend.name }}
-            </p>
-            <p class="truncate text-[11px] text-gray-500">
-              {{ friend.gid }}
-            </p>
-          </div>
-          <BaseButton variant="secondary" size="sm" @click="emit('hostGid', friend.gid)">
-            进入
-          </BaseButton>
+      <template v-if="showBlacklist">
+        <p class="rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500 leading-5 dark:bg-gray-900/40 dark:text-gray-400">
+          黑名单里的好友不会被自动巡查、偷取或清理；拜访时被服务端判定「不是好友」的对象也会自动加入。
+        </p>
+        <div v-if="!blacklistItems.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
+          黑名单为空，在好友列表里点「拉黑」即可加入。
         </div>
-      </div>
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+          <div
+            v-for="row in blacklistItems"
+            :key="row.gid"
+            class="flex items-center gap-2 border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <img v-if="row.avatarUrl" :src="row.avatarUrl" :alt="row.name" class="h-9 w-9 shrink-0 rounded-full object-cover">
+            <div v-else class="i-carbon-user-avatar h-9 w-9 shrink-0 text-xl text-gray-300" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">
+                {{ row.name }}
+              </p>
+              <p class="truncate text-[11px] text-gray-500">
+                GID {{ row.gid }}
+              </p>
+            </div>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="toggling === String(row.gid)"
+              @click="toggleBlacklist(row.gid)"
+            >
+              移出
+            </BaseButton>
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <div v-if="!friends.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
+          没有可访问的好友。
+        </div>
+        <div v-else-if="!visibleFriends.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-8 text-center text-sm text-gray-500 dark:border-gray-700">
+          没有匹配 {{ keyword }} 的好友。
+        </div>
+
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+          <div
+            v-for="friend in visibleFriends"
+            :key="friend.gid"
+            class="flex items-center gap-2 border border-gray-200 rounded-xl bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+            :class="{ 'opacity-70': blacklistedSet.has(Number(friend.gid)) }"
+          >
+            <img v-if="friend.avatarUrl" :src="friend.avatarUrl" :alt="friend.name" class="h-9 w-9 shrink-0 rounded-full object-cover">
+            <div v-else class="i-carbon-user-avatar h-9 w-9 shrink-0 text-xl text-gray-300" />
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">
+                {{ friend.name }}
+              </p>
+              <p class="truncate text-[11px] text-gray-500">
+                {{ friend.gid }}
+              </p>
+            </div>
+            <span
+              v-if="blacklistedSet.has(Number(friend.gid))"
+              class="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-600 dark:bg-red-950/40 dark:text-red-300"
+            >
+              已拉黑
+            </span>
+            <BaseButton
+              v-else
+              variant="secondary"
+              size="sm"
+              :loading="toggling === friend.gid"
+              @click="toggleBlacklist(friend.gid)"
+            >
+              拉黑
+            </BaseButton>
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              :disabled="blacklistedSet.has(Number(friend.gid))"
+              @click="emit('hostGid', friend.gid)"
+            >
+              进入
+            </BaseButton>
+          </div>
+        </div>
+      </template>
     </template>
   </div>
 </template>

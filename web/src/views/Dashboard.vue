@@ -150,6 +150,7 @@ const events = [
   { label: '清理好友牧场', value: 'ranch_cleanFriend' },
   { label: '拜访好友牧场', value: 'ranch_friend' },
   { label: '离开好友牧场', value: 'ranch_friend_leave' },
+  { label: '牧场黑名单', value: 'ranch_friend_blacklist' },
   { label: '恢复场景', value: 'ranch_scene_restore' },
   { label: '牧场任务', value: 'ranch_task_claim' },
   { label: '牧场分享礼包', value: 'ranch_daily_share' },

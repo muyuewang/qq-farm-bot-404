@@ -29,6 +29,10 @@ module.exports = {
     getFriendBlacklist: accountConfig.getFriendBlacklist,
     setFriendBlacklist: accountConfig.setFriendBlacklist,
     addFriendToBlacklist: accountConfig.addFriendToBlacklist,
+    // 牧场拜访黑名单与农场好友黑名单相互独立：牧场好友名单本身是单独同步的。
+    getRanchFriendBlacklist: accountConfig.getRanchFriendBlacklist,
+    setRanchFriendBlacklist: accountConfig.setRanchFriendBlacklist,
+    addRanchFriendToBlacklist: accountConfig.addRanchFriendToBlacklist,
     getStealDelaySeconds: accountConfig.getStealDelaySeconds,
     getPlantOrderRandom: accountConfig.getPlantOrderRandom,
     getPlantDelaySeconds: accountConfig.getPlantDelaySeconds,

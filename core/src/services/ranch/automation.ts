@@ -5,7 +5,7 @@ import { getRanchFriendList } from './friend-roster';
 export {};
 
 const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, isRanchMarketEnabled } = require('../../config/ranch-automation');
-const { getAutomation, getFriendBlacklist } = require('../../models/store');
+const { getAutomation, getRanchFriendBlacklist, addRanchFriendToBlacklist } = require('../../models/store');
 const { inScene, isUnlocked } = require('./transport');
 const { loadRaw, shedAwaitingActivation, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
@@ -441,7 +441,8 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                         if (completedBatch) markStep();
                         checkpoint();
                     });
-                    const blacklist = new Set(getFriendBlacklist(process.env.FARM_ACCOUNT_ID));
+                    // 牧场黑名单与农场好友黑名单分开：牧场好友名单本身是单独同步的。
+                    const blacklist = new Set(getRanchFriendBlacklist(process.env.FARM_ACCOUNT_ID));
                     const friends = patrolFriends.filter(friend => !blacklist.has(friend.gid));
                     if (!friends.length) return;
                     // 偷取/清理不消耗次数，不必先查次数；只有摸头/放蚊才需要。
@@ -474,7 +475,15 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                             } catch (error: any) {
                                 if (error.name !== 'GatewayError' || error.methodName !== 'EnterHomestead') throw error;
                                 markStep();
-                                log('牧场', `暂不能拜访 ${friend.name}：${error.message}`, { module: 'ranch', event: 'ranch_friend', result: 'skipped' });
+                                // 服务端判定不是好友（code=1002002）：加入牧场黑名单，之后巡查与列表都不再处理。
+                                // 这类 GID 往往来自农场名单残留，反复尝试只会每轮白跑一次进场景请求。
+                                if (error.code === 1002002) {
+                                    if (addRanchFriendToBlacklist(process.env.FARM_ACCOUNT_ID, gid)) {
+                                        log('牧场', `${friend.name}（${gid}）不是好友，已加入牧场拜访黑名单`, { module: 'ranch', event: 'ranch_friend_blacklist', result: 'ok' });
+                                    }
+                                } else {
+                                    log('牧场', `暂不能拜访 ${friend.name}：${error.message}`, { module: 'ranch', event: 'ranch_friend', result: 'skipped' });
+                                }
                             }
                             pendingFriend = null;
                             nextFriendIndex++;

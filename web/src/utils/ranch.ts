@@ -816,7 +816,7 @@ export interface RanchState {
   tasks: ReturnType<typeof mapTask>[] | null
   book: ReturnType<typeof mapBook>
   activities: { id: string, name: string, startTime: number, endTime: number, status: ReturnType<typeof activityStatus> }[] | null
-  friends: { gid: string, name: string, avatarUrl: string }[] | null
+  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean }[] | null
   friendRanch: ReturnType<typeof mapFriendRanch>
   dailyShare: ReturnType<typeof mapDailyShare>
   dailyBenefit: ReturnType<typeof mapDailyBenefit>
@@ -892,7 +892,7 @@ export function mapRanchState(state?: Record<string, any> | null): RanchState | 
           endTime: number(activity.endTime, 0) || 0,
           status: activityStatus(activity, serverTime),
         })),
-    friends: state.friends === undefined ? null : list(state.friends).map((friend: any) => ({ gid: text(friend.gid), name: text(friend.name) || text(friend.gid), avatarUrl: text(friend.avatarUrl) })),
+    friends: state.friends === undefined ? null : list(state.friends).map((friend: any) => ({ gid: text(friend.gid), name: text(friend.name) || text(friend.gid), avatarUrl: text(friend.avatarUrl), blacklisted: friend.blacklisted === true })),
     friendRanch: state.friendRanch === undefined ? null : mapFriendRanch(state.friendRanch, serverTime),
     dailyShare: state.dailyShare === undefined ? null : mapDailyShare(state.dailyShare),
     dailyBenefit: state.dailyBenefit === undefined ? null : mapDailyBenefit(state.dailyBenefit),

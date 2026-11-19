@@ -10,8 +10,17 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         require.cache[id] = { id, filename: id, loaded: true, exports };
     };
     mock('config/gameConfig', { getShopGoodsById: id => goods[id] });
-    // automation 在 require 期就解构了 getFriendBlacklist，所以这里必须让它按需读取，测试才能注入黑名单。
-    mock('models/store', { getAutomation: () => automation, getFriendBlacklist: () => friendDeps.blacklist?.() ?? [] });
+    // automation 在 require 期就解构了这两个函数，所以这里必须让它按需读取，测试才能注入名单。
+    // 牧场黑名单已与农场好友黑名单拆分（上游 PR#163），桩件必须用 getRanchFriendBlacklist，
+    // 否则黑名单过滤会静默失效、断言假通过。
+    mock('models/store', {
+        getAutomation: () => automation,
+        getRanchFriendBlacklist: () => friendDeps.blacklist?.() ?? [],
+        addRanchFriendToBlacklist: (_accountId, gid) => {
+            friendDeps.onAutoBlacklist?.(Number(gid));
+            return friendDeps.autoBlacklistResult?.() ?? true;
+        },
+    });
     // 与真实 transport 一致地把巡查体跑一遍，让路时序才可以被断言。
     mock('services/ranch/transport', { isUnlocked: () => unlocked, inScene: async (work) => work({}) });
     mock('services/ranch/state', {
@@ -48,6 +57,13 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         getInteractionQuotaResetAt: action => friendDeps.quotaReset?.(action) ?? 0,
         automateFriend: async (gid, _enabled, _shouldYield, _onOutcome, progress) => {
             friendDeps.onVisit?.(gid);
+            // 让用例模拟「不是好友」被服务端拒绝：抛 EnterHomestead 网关错误。
+            const reject = friendDeps.reject?.(gid);
+            if (reject) {
+                throw Object.assign(new Error(reject.message ?? '不是好友'), {
+                    name: 'GatewayError', methodName: 'EnterHomestead', code: reject.code,
+                });
+            }
             return friendDeps.visit?.(progress) ?? { times: {}, results: [], yielded: false };
         },
     });
@@ -382,6 +398,34 @@ test('牧场好友阶段按场景独立同步名单，并过滤黑名单', async
     // 黑名单里的好友不得拜访。
     const filtered = await runWith(roster, [1]);
     assert.deepEqual(filtered.visits, [2], '黑名单好友应被跳过');
+});
+
+test('拜访被判定不是好友时自动加入牧场黑名单，其他网关错误只跳过', async () => {
+    const runWith = async (code) => {
+        const autoBlacklisted = [];
+        const logs = [];
+        const level = loadAutomation({
+            automation: { ranch_friend_steal: true },
+            logs,
+            friendDeps: {
+                roster: () => [{ gid: 7, name: 'C' }],
+                reject: () => ({ code, message: '不是好友' }),
+                onAutoBlacklist: gid => autoBlacklisted.push(gid),
+            },
+        });
+        await level.run({ farmDeadline: () => Infinity, canContinue: () => true });
+        return { autoBlacklisted, logs };
+    };
+
+    // 1002002 是服务端判定「不是好友」的错误码：加入黑名单，之后巡查与列表都不再处理。
+    const notFriend = await runWith(1002002);
+    assert.deepEqual(notFriend.autoBlacklisted, [7], '不是好友应自动拉黑');
+    assert.ok(notFriend.logs.some(entry => entry.message.includes('已加入牧场拜访黑名单')), '自动拉黑要有日志');
+
+    // 其他网关错误（如临时不可达）不能误拉黑，只记一条跳过日志。
+    const other = await runWith(500100);
+    assert.deepEqual(other.autoBlacklisted, [], '非「不是好友」错误不得拉黑');
+    assert.ok(other.logs.some(entry => entry.message.includes('暂不能拜访')), '其他错误按跳过记录');
 });
 
 test('名单为空时不拜访任何好友', async () => {

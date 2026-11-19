@@ -249,7 +249,11 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
         if (view === 'friends') {
             if (hostGid !== undefined) state.friendRanch = await require('./friends').getFriend(hostGid);
             // 牧场好友名单单独按 global_scene_id=2 同步，不再复用农场名单。
-            else state.friends = (await getRanchFriendList()).map(friend => ({ ...friend, gid: String(friend.gid) }));
+            // 拉黑的好友仍留在列表里，但带 blacklisted 标记，前端据此置灰并跳过拜访。
+            else {
+                const blacklist = new Set(require('../../models/store').getRanchFriendBlacklist());
+                state.friends = (await getRanchFriendList()).map(friend => ({ ...friend, gid: String(friend.gid), blacklisted: blacklist.has(friend.gid) }));
+            }
         }
         return state;
     });
