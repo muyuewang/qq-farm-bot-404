@@ -170,7 +170,7 @@ async function prepareInteraction(action: string, input: any): Promise<any> {
     });
 }
 
-async function commitInteraction(plan: any): Promise<any> {
+async function commitInteraction(plan: any, ranch?: any): Promise<any> {
     if (!plan.count) return { action: plan.action, status: 'skipped', costs: [], rewards: [], completed: 0, snapshot: null };
     return reservations.forCurrentAccount().spend({ target: plan.target, label: plan.label, costs: [], balances: [] }, async () => {
         const reset = nextQuotaReset();
@@ -210,6 +210,8 @@ async function commitInteraction(plan: any): Promise<any> {
         if (rewards.some((item: any) => BigInt(quantity(item.count)) <= 0n)) invalid();
         // 服务端回包确认后才记账，未确认的请求不写配额，避免误判为「今天用完」。
         if (plan.action !== 'cleanFriend') rememberQuota(plan.action, remaining, reset);
+        // 放蚊子的回包已经带回栏舍全部污物，直接回填就能规划下一只，不必再拉一次牧场。
+        if (plan.action === 'putMosquito' && ranch) ranch.hazards = reply.hazards;
         const items = sumItems(rewards);
         return { action: plan.action, status: completed ? 'confirmed' : 'skipped', snapshot: null, costs: [], rewards: items, completed,
             remainingTimes: plan.action === 'cleanFriend' ? undefined : remaining, triggered: reply.triggered === true, refreshRequired: true,
@@ -376,12 +378,10 @@ async function automateFriend(
             if (enabled(step.action) && times[step.action] > 0 && eligible) {
                 if (pause()) return { results, times, yielded: true };
                 const plan = interactionPlan(step.action, step, ranches, host, times);
-                const outcome = await act(plan, () => commitInteraction(plan));
+                const outcome = await act(plan, () => commitInteraction(plan, ranch));
                 if (outcome) times[step.action] = outcome.remainingTimes;
-                // 同一栏舍还要继续放蚊子时，先拉最新 hazards 再继续。
+                // 回包已回填该栏舍的 hazards，直接继续放下一只，不用再拉整个牧场。
                 if (outcome && step.action === 'putMosquito' && --step.remaining > 0 && times.putMosquito > 0) {
-                    if (pause()) return { results, times, yielded: true };
-                    ranches = (await rpc('animals', { host_gid: host })).ranches;
                     continue;
                 }
             }

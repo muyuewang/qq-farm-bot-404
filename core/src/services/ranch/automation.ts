@@ -1,16 +1,18 @@
 import type { RanchAutomationConfig } from '../../config/ranch-automation';
 import type { RanchFriend } from './friend-roster';
 import type { FriendPatrolProgress } from './friends';
-import { getRanchFriendList } from './friend-roster';
+import { getRanchFriendList, refreshRanchFriendStatus } from './friend-roster';
+import { postToMaster } from '../friend/gid-manager';
 export {};
 
-const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, isRanchMarketEnabled } = require('../../config/ranch-automation');
-const { getAutomation, getRanchFriendBlacklist, addRanchFriendToBlacklist } = require('../../models/store');
+const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, RANCH_MARKET_SWITCH_BY_CURRENCY, isRanchMarketEnabled } = require('../../config/ranch-automation');
+// 牧场黑名单的落盘改由主进程负责（子进程通过 postToMaster 请求），这里不再直接写库。
+const { getAutomation, getRanchFriendBlacklist } = require('../../models/store');
 const { inScene, isUnlocked } = require('./transport');
-const { loadRaw, shedAwaitingActivation, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
+const { loadRaw, isPendingShed, shedAwaitingActivation, snapshot, inventory, catalog, market, readMarketRotation, balance } = require('./state');
 const { cubMap, quantity } = require('./model');
 const { prepareAction, operate } = require('./actions');
-const { getServerTimeSec, log } = require('../../utils/utils');
+const { getServerTimeSec, log, randomDelay } = require('../../utils/utils');
 const { getShopGoodsById } = require('../../config/gameConfig');
 const reservations = require('./operation-state');
 const { getAmbientSendContext, runWithSendContext } = require('./context');
@@ -18,11 +20,19 @@ const daily = require('./daily');
 const interactions = require('./friends');
 
 let nextCheckAt = 0;
+// 上一轮巡查结束时间，用于 SCENE_REENTRY_MS 之外再给图鉴/一级棚留出快速复查窗口。
+let lastCycleEndAt = 0;
+// 失败后到 retryAt 之前不再被通知唤醒，避免服务端报错时被反复拉起。
+let retryAt = 0;
 let nextFriendIndex = 0;
 let friendVisits = 0;
 let pendingFriend: { gid: string; progress: FriendPatrolProgress } | null = null;
 // 本次巡查用的牧场场景名单。首次同步可能跨多批，让路后复用它继续巡查。
 let patrolFriends: RanchFriend[] | null = null;
+// 好友状态批量刷新：attempted 记录本轮已核对的 GID，rejected 表示服务端拒绝后本轮不再尝试。
+let patrolStatusRefresh = { attempted: new Set<number>(), lastAt: 0, rejected: false };
+// 进不去的好友按下一次可重试时间退避，避免每轮都为同一个 GID 白跑一次进场景。
+const friendRetryAt = new Map<number, number>();
 let cycleStartedAt = 0;
 let cycleChanged = false;
 // 本轮是否已经为「收获/产出」重新打开过一次阶段标记，避免无限复查。
@@ -31,15 +41,23 @@ const completedPhases = new Set<string>();
 const completedSteps = new Set<string>();
 // 本轮收获过成熟动物后待补领的图鉴种类；让路时保留，下个切片继续。
 const pendingBookKinds = new Set<'normal' | 'giant'>();
+// 一级棚待激活标记：服务端下发 state=3 后置真，激活成功才清掉。
+let shedCheckPending = true;
+// 设施通知版本号：用来区分「本轮收到了新通知」和「过期标记」。
+let shedNotifyRevision = 0;
 const PATROL_SLICE_MS = 5000;
 const SCENE_REENTRY_MS = 20_000;
+// 好友状态数据超过这个时间就认为需要重新核对，避免用陈旧状态决定要不要进门。
+const FRIEND_STATUS_FRESH_MS = 10_000;
+// 进不去的好友半小时后才重试。
+const FRIEND_ENTRY_RETRY_MS = 30 * 60_000;
 // 仓鼠集市的两种货币各由独立开关控制：
 // - 7002 便便（ranch_market_organic_poop）：兑 4 小时(80012) 优先，其次 1 小时(80011)，余额 3 起；
 // - 1008 松果（ranch_market_organic_pinecone）：兑 8 小时(80013) 优先，其次 80012、80011，余额 1 起。
 const MARKET_EXCHANGES = [
-    { key: 'ranch_market_organic_poop', currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
-    { key: 'ranch_market_organic_pinecone', currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
-];
+    { currencyId: 7002, rewardPriority: [80012, 80011], minBalance: 3n },
+    { currencyId: 1008, rewardPriority: [80013, 80012, 80011], minBalance: 1n },
+].map(exchange => ({ ...exchange, key: RANCH_MARKET_SWITCH_BY_CURRENCY[exchange.currencyId] }));
 type MarketRotation = { periodDay: string; roundIndex: number; startsAt: number; endsAt: number; present: boolean };
 // 有事可查而非仅定时轮询：到访通知/货币到账都会把它置 true。
 let marketCheckPending = true;
@@ -50,12 +68,12 @@ const lastMarketBalances = new Map<number, bigint>();
 function resetCycle(keepFriendProgress = false): void {
     completedPhases.clear();
     completedSteps.clear();
-    pendingBookKinds.clear();
-    // 让路时保留好友巡查进度，下次进牧场从断点续跑。
+    // 图鉴待补领状态跨轮次保留：让路时清掉会让已经探到的奖励永远等不到下一次。
     if (!keepFriendProgress) {
         friendVisits = 0;
         pendingFriend = null;
         patrolFriends = null;
+        patrolStatusRefresh = { attempted: new Set<number>(), lastAt: 0, rejected: false };
     }
     cycleStartedAt = 0;
     cycleChanged = false;
@@ -63,8 +81,41 @@ function resetCycle(keepFriendProgress = false): void {
 }
 const FRIEND_CONTROLS: Record<string, string> = { stroke: 'ranch_stroke', steal: 'ranch_friend_steal', cleanFriend: 'ranch_friend_clean', putMosquito: 'ranch_friend_mosquito' };
 const enabled = (key: string) => getAutomation()[key] === true;
+/** 罐头相关日志统一带事件名，方便在运行日志里区分普通罐头与有机罐头。 */
+function logCanFeed(canLabel: string, message: string, result: 'skipped' | 'ok'): void {
+    log('牧场', `${canLabel}：${message}`, {
+        module: 'ranch', event: 'ranch_feed', result, accountId: process.env.FARM_ACCOUNT_ID,
+    });
+}
 // 次数已用完的动作当天不再排队，等次日重置时间。
 const canInteract = (action: string) => enabled(FRIEND_CONTROLS[action]) && !interactions.getInteractionQuotaResetAt(action);
+
+/** 通知类唤醒：只在对应开关打开、当前没有正在跑的轮次、且不在退避期时才提前排期。 */
+function wakeRanchCheck(key: string): void {
+    if (enabled(key) && !cycleStartedAt && Date.now() >= retryAt) {
+        nextCheckAt = Math.min(nextCheckAt, lastCycleEndAt + SCENE_REENTRY_MS);
+    }
+}
+
+/** 设施变更通知：只关心「待激活的一级棚」，重复通知不重复排队。 */
+function noteRanchFacilities(facilities: any[]): boolean {
+    if (!facilities.some(isPendingShed)) return false;
+    shedNotifyRevision++;
+    if (shedCheckPending) return false;
+    shedCheckPending = true;
+    wakeRanchCheck('ranch_activate_shed');
+    return true;
+}
+
+/** 图鉴红点通知：记录待补领种类，返回是否真的改变了状态。 */
+function noteBookReward(kind: 'normal' | 'giant', available: boolean): boolean {
+    if (pendingBookKinds.has(kind) === available) return false;
+    if (available) {
+        pendingBookKinds.add(kind);
+        wakeRanchCheck('ranch_illustrated');
+    } else pendingBookKinds.delete(kind);
+    return true;
+}
 
 function marketRotation(raw: any): MarketRotation {
     return { periodDay: quantity(raw.period_day), roundIndex: raw.round_index, startsAt: Number(raw.shop_start_time),
@@ -111,9 +162,13 @@ function getRoutineState(): any {
     // 互动次数用完后仍要保留一个未来的唤醒时间（次日重置），否则当天再也不巡查。
     const work = auto.ranch_stroke && !strokeReset || auto.ranch_friend_mosquito && !mosquitoReset
         || RANCH_SWITCH_KEYS.some((key: string) => ![
-            'ranch_task', 'ranch_illustrated', 'ranch_share', 'ranch_daily_benefit', 'ranch_grass_buy', 'ranch_market_organic', ...RANCH_MARKET_SWITCH_KEYS, 'ranch_stroke', 'ranch_friend_mosquito',
+            'ranch_task', 'ranch_illustrated', 'ranch_share', 'ranch_daily_benefit', 'ranch_activate_shed', 'ranch_grass_buy',
+            'ranch_market_organic', ...RANCH_MARKET_SWITCH_KEYS, 'ranch_stroke', 'ranch_friend_mosquito',
         ].includes(key) && auto[key]);
-    const routineDue = work || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState()) || auto.ranch_daily_benefit && due(daily.getBenefitRoutineState());
+    // 图鉴待补领与一级棚待激活都是「有事要办」的信号，不能因为其余开关都关着就判定无事可做。
+    const routineDue = work || auto.ranch_activate_shed && shedCheckPending || auto.ranch_illustrated && pendingBookKinds.size > 0
+        || auto.ranch_task && due(daily.getTaskRoutineState()) || auto.ranch_share && due(daily.getShareRoutineState())
+        || auto.ranch_daily_benefit && due(daily.getBenefitRoutineState());
     const pending = routineDue || isRanchMarketEnabled(auto) && marketCheckPending;
     return {
         doneToday: !pending,
@@ -136,6 +191,8 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
     const auto: RanchAutomationConfig = getAutomation();
     if (!cycleStartedAt) cycleStartedAt = Date.now();
     nextCheckAt = cycleStartedAt + auto.ranch_check_minutes * 60_000;
+    // 记下进门时的通知版本，用来区分「本轮中途收到新通知」与「上一轮留下的旧标记」。
+    const shedNotifyAtStart = shedNotifyRevision;
     try {
         // 名单改为进牧场场景后按 global_scene_id=2 单独同步：牧场好友资格以牧场回包为准，
         // 农场名单里的好友不一定开了牧场。名单同步在 friends 阶段内做，避免带着农场名单切场景。
@@ -170,7 +227,9 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             const updateDeadline = (reopenOwn = false) => {
                 const state = snapshot(raw);
                 const upcoming = state.facilities.flatMap((f: any) => [
-                    ...(auto.ranch_harvest || auto.ranch_produce ? (f.ranch?.animals || []).map((a: any) => a.nextAtMs) : []),
+                    // 收获还要盯产物真正上架的时点：deliveringUntilMs 晚于 nextAtMs。
+                    ...(auto.ranch_harvest || auto.ranch_produce ? (f.ranch?.animals || []).flatMap((a: any) =>
+                        [a.nextAtMs, auto.ranch_harvest ? a.deliveringUntilMs : 0]) : []),
                     auto.ranch_upgrade && f.upgradeState ? (f.upgradeEndTime < 100_000_000_000 ? f.upgradeEndTime * 1000 : f.upgradeEndTime) : 0,
                 ]).filter((at: any) => at > state.serverTime);
                 nextActionAt = upcoming.length ? Date.now() + Math.min(...upcoming) - state.serverTime : Infinity;
@@ -200,6 +259,9 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 return Number(count < BigInt(wanted) ? count : BigInt(wanted));
             };
             async function act(key: string, action: string, input: any = {}, currency?: number, progress?: string, expectedRewardId?: number): Promise<boolean> {
+                // 喂养的日志要能看出用的是哪种罐头、按什么阶段筛的目标。
+                const canLabel = key === 'ranch_feed_organic' ? '有机罐头'
+                    : key === 'ranch_feed_normal' ? (input.normalStage === 'longest' ? '普通罐头（仅最长阶段）' : '普通罐头') : '';
                 const isEnabled = () => enabled(key) && (key !== 'ranch_grass_buy' || enabled('ranch_grass'));
                 if (!isEnabled()) return false;
                 const step = `${action}:${JSON.stringify(input)}${progress === undefined ? '' : `:${progress}`}`;
@@ -212,6 +274,8 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     // 兑换要同时校验货币与奖励条目：集市有同名商品但货币不同，只看货币会兑错货。
                     if (quote.skipped || currency && quote.costItems.some((cost: any) => cost.id !== currency)
                         || expectedRewardId !== undefined && (quote.rewards.length !== 1 || Number(quote.rewards[0].id) !== expectedRewardId)) {
+                        // 罐头没喂成时把原因写清楚，否则界面上只看到「本轮没喂」不知道为什么。
+                        if (canLabel) logCanFeed(canLabel, quote.message || '本轮未找到喂养目标', 'skipped');
                         completedSteps.add(step);
                         markStep(action);
                         return false;
@@ -226,25 +290,33 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     }, () => operate(action, { ...input, expected: quote.expected }));
                     completedSteps.add(step);
                     markStep(action);
-                    if (result.status === 'skipped') return false;
-                    // 收获到成熟动物说明腾出了栏位、也可能达成新的图鉴等级，登记待补领两种图鉴。
-                    if (action === 'harvest' && result.harvestedAnimals > 0 && enabled('ranch_illustrated')) {
-                        for (const kind of ['normal', 'giant'] as const) {
-                            pendingBookKinds.add(kind);
-                            completedSteps.delete(`claimIllustrated:${JSON.stringify({ kind })}`);
-                        }
+                    if (result.status === 'skipped') {
+                        if (canLabel) logCanFeed(canLabel, result.notice || '动物状态已变化，本轮未喂养', 'skipped');
+                        return false;
                     }
                     cycleChanged = true;
-                    log('牧场', `${quote.label}${result.notice ? `：${result.notice}` : '完成'}`, { module: 'ranch', event: `ranch_${action}`, result: 'ok' });
+                    // 喂养成功时给出目标数、消耗时长与桶内余量，方便判断还能喂多久。
+                    if (canLabel) {
+                        const used = result.costs?.[0]?.count ?? 0;
+                        logCanFeed(canLabel, `喂养完成，目标 ${quote.count} 只，消耗 ${used} 秒，桶内剩余 ${result.bucketRemainingSeconds} 秒`, 'ok');
+                    } else {
+                        log('牧场', `${quote.label}${result.notice ? `：${result.notice}` : '完成'}`, { module: 'ranch', event: `ranch_${action}`, result: 'ok' });
+                    }
                     raw = await loadRaw();
                     updateDeadline();
                     return true;
                 } catch (error: any) {
                     // 状态或余额变化交给下一次巡查重新报价；已发出但结果未知的写入由持久账本保护。
-                    if (['INSUFFICIENT_BALANCE', 'RESERVE_PROTECTED', 'PENDING_CONFIRMATION', 'RANCH_OFFER_CHANGED', 'RANCH_EXCHANGE_UNAVAILABLE', 'GOODS_UNAVAILABLE', 'RANCH_STATE_CHANGED'].includes(error.code)) {
+                    // 罐头容器已满不是失败：只跳过本次，等动物消耗后再来，不必每轮重试。
+                    const canBucketFull = action === 'useCan' && error.code === 1003002
+                        && /罐头容器已(?:达到上限|满)/.test(error.errorMessage ?? error.message);
+                    if (canBucketFull || ['INSUFFICIENT_BALANCE', 'RESERVE_PROTECTED', 'PENDING_CONFIRMATION', 'RANCH_OFFER_CHANGED', 'RANCH_EXCHANGE_UNAVAILABLE', 'GOODS_UNAVAILABLE', 'RANCH_STATE_CHANGED'].includes(error.code)) {
+                        // 图鉴报价失效说明确实还有可领奖励，留到下个切片再核对，不要就此丢掉待补领标记。
+                        if (action === 'claimIllustrated' && error.code === 'RANCH_OFFER_CHANGED') pendingBookKinds.add(input.kind);
                         completedSteps.add(step);
                         markStep(action);
-                        log('牧场', `${label} 暂未执行：${error.message}`, { module: 'ranch', event: `ranch_${action}`, result: 'skipped' });
+                        if (canLabel) logCanFeed(canLabel, `暂未执行：${error.message}`, 'skipped');
+                        else log('牧场', `${label} 暂未执行：${error.message}`, { module: 'ranch', event: `ranch_${action}`, result: 'skipped' });
                         return false;
                     }
                     throw error;
@@ -310,8 +382,17 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
 
             // 21 级开放的棚不是「升级」出来的：服务端下发 state=3 的待激活实例，
             // 必须单独发 ActivateFacility 才会变成可用设施，所以放在 upgrade 阶段之前单独处理。
-            const shed = enabled('ranch_upgrade') && shedAwaitingActivation(raw);
-            if (shed) await act('ranch_upgrade', 'activateShed', { facilityId: quantity(shed.instance_id) });
+            // 一级棚激活免费但会改动账号状态，因此受独立开关 ranch_activate_shed 控制。
+            if (enabled('ranch_activate_shed')) {
+                const shed = shedAwaitingActivation(raw);
+                if (shed) {
+                    shedCheckPending = true;
+                    if (await act('ranch_activate_shed', 'activateShed', { facilityId: quantity(shed.instance_id) })) shedCheckPending = false;
+                } else if (shedNotifyAtStart === shedNotifyRevision) {
+                    // 进门时没有待激活实例，且本轮也没有收到新通知，说明标记已经过期。
+                    shedCheckPending = false;
+                }
+            }
 
             await phase('upgrade', async () => {
                 if (enabled('ranch_upgrade')) {
@@ -326,11 +407,19 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 }
             });
 
-            // 成熟动物腾栏后可能达成新的图鉴等级，在补栏前补领一次；
-            // 让路时 pendingBookKinds 保留，下个切片继续补。
-            for (const kind of pendingBookKinds) {
-                await act('ranch_illustrated', 'claimIllustrated', { kind });
-                pendingBookKinds.delete(kind);
+            // 成熟动物腾栏后可能达成新的图鉴等级，在补栏前核对一次；
+            // 让路时尚未核对的种类保留在 pendingBookKinds 里，下个切片继续。
+            for (const kind of ['normal', 'giant'] as const) {
+                if (!enabled('ranch_illustrated') || !pendingBookKinds.delete(kind)) continue;
+                completedSteps.delete(`claimIllustrated:${JSON.stringify({ kind })}`);
+                try {
+                    await act('ranch_illustrated', 'claimIllustrated', { kind });
+                } catch (cause: any) {
+                    // 结果未知时不再重试，避免重复领取；其余错误保留标记下轮再来。
+                    if (cause.outcomeUnknown || cause.code === 'RANCH_RESULT_UNKNOWN') pendingBookKinds.delete(kind);
+                    else pendingBookKinds.add(kind);
+                    throw cause;
+                }
             }
 
             // 补栏：先把背包里适用本设施的幼崽按优先顺序放养，缺额才在商店购买。
@@ -421,8 +510,24 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                 }
             });
 
-            await phase('feed-normal', async () => { if (enabled('ranch_feed_normal') && available(7003) > 0n) await act('ranch_feed_normal', 'feed', { all: true, bucketType: 2 }); });
-            await phase('feed-organic', async () => { if (enabled('ranch_feed_organic') && available(7004) > 0n) await act('ranch_feed_organic', 'feed', { all: true, bucketType: 1 }); });
+            await phase('feed-normal', async () => {
+                if (!enabled('ranch_feed_normal')) return;
+                // 普通罐头的使用阶段由设置决定：'longest' 只喂最长生长阶段，'any' 不筛。
+                const normalStage = getAutomation().ranch_feed_normal_stage;
+                if (available(7003) <= 0n) {
+                    logCanFeed(normalStage === 'longest' ? '普通罐头（仅最长阶段）' : '普通罐头', '罐头桶没有可用时长，本轮未喂养', 'skipped');
+                    return;
+                }
+                await act('ranch_feed_normal', 'feed', { all: true, bucketType: 2, normalStage });
+            });
+            await phase('feed-organic', async () => {
+                if (!enabled('ranch_feed_organic')) return;
+                if (available(7004) <= 0n) {
+                    logCanFeed('有机罐头', '罐头桶没有可用时长，本轮未喂养', 'skipped');
+                    return;
+                }
+                await act('ranch_feed_organic', 'feed', { all: true, bucketType: 1 });
+            });
 
             async function claimDailyRewards(): Promise<void> {
                 if (cycleChanged && !completedPhases.has('tasks')) daily.markTasksChanged();
@@ -449,16 +554,52 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     const hasBulkWork = enabled('ranch_friend_steal') || enabled('ranch_friend_clean');
                     const times = hasBulkWork ? {} : await interactions.getInteractionTimes();
                     const wanted = (action: string) => canInteract(action) && times[action] !== 0;
+                    // 摸头和放蚊都用完次数时，只能靠好友状态名单决定还要不要进门。
+                    const statusDecides = () => !wanted('stroke') && !wanted('putMosquito');
                     if (Object.keys(FRIEND_CONTROLS).some(wanted)) {
                         // 沿用本轮巡查，每轮最多拜访三位，避免长期占用农牧场共用连接。
-                        for (; friendVisits < Math.min(3, friends.length) && Object.keys(FRIEND_CONTROLS).some(wanted); friendVisits++) {
+                        // scanned 与 friendVisits 分开：跳过的好友不计入拜访名额。
+                        for (let scanned = 0; scanned < friends.length && friendVisits < Math.min(3, friends.length)
+                            && Object.keys(FRIEND_CONTROLS).some(wanted); scanned++, nextFriendIndex++) {
                             checkpoint();
-                            const friend = friends.find(row => String(row.gid) === pendingFriend?.gid) || friends[nextFriendIndex % friends.length];
+                            const friend = (pendingFriend && friends.find(row => String(row.gid) === pendingFriend?.gid))
+                                || friends[nextFriendIndex % friends.length];
                             const gid = String(friend.gid);
+                            // 黑名单可能在巡查过程中被主进程更新，每次进门前重新读一次。
+                            const canVisit = () => !getRanchFriendBlacklist(process.env.FARM_ACCOUNT_ID).includes(friend.gid);
+                            if (!canVisit() || (friendRetryAt.get(friend.gid) ?? 0) > Date.now()) {
+                                pendingFriend = null;
+                                continue;
+                            }
+                            if (pendingFriend?.gid !== gid && statusDecides() && !patrolStatusRefresh.rejected
+                                && !patrolStatusRefresh.attempted.has(friend.gid) && Date.now() - friend.statusAtMs > FRIEND_STATUS_FRESH_MS) {
+                                // 批量刷新状态有频率限制，两次之间至少隔一秒。
+                                if (Date.now() - patrolStatusRefresh.lastAt < 1000) await randomDelay(500, 1000);
+                                checkpoint(true);
+                                try {
+                                    const queried = await refreshRanchFriendStatus(friends, nextFriendIndex % friends.length);
+                                    for (const id of queried) patrolStatusRefresh.attempted.add(id);
+                                } catch (error: any) {
+                                    // 服务端不支持该接口时本轮改为直接进门核对，不当作失败。
+                                    if (error.name !== 'GatewayError') throw error;
+                                    patrolStatusRefresh.rejected = true;
+                                    log('牧场', `好友状态刷新失败，本轮进门核对：${error.message}`, { module: 'ranch', event: 'ranch_friend', result: 'skipped' });
+                                }
+                                patrolStatusRefresh.lastAt = Date.now();
+                                markStep();
+                                checkpoint();
+                            }
+                            // 状态足够新时直接用状态判断：没得偷也没得帮就不进门。
+                            if (!canVisit() || (pendingFriend?.gid !== gid && statusDecides() && Date.now() - friend.statusAtMs <= FRIEND_STATUS_FRESH_MS
+                                && !(wanted('steal') && friend.canSteal) && !(wanted('cleanFriend') && friend.canHelp))) {
+                                pendingFriend = null;
+                                continue;
+                            }
                             if (pendingFriend?.gid !== gid) pendingFriend = { gid, progress: {} };
                             try {
                                 // 昵称以牧场回包为准，回包里没有时才退回名单上的名字。
-                                const result = await interactions.automateFriend(friend.gid, wanted, shouldYield, (outcome: any, nickname: string) => {
+                                // 动作开关与黑名单在每次小动作前都重新判断，运行中被关掉就停手。
+                                const result = await interactions.automateFriend(friend.gid, (action: string) => wanted(action) && canVisit(), shouldYield, (outcome: any, nickname: string) => {
                                     const confirmed = outcome.status === 'confirmed';
                                     if (confirmed) daily.markTasksChanged();
                                     ownRecheckUsed = false;
@@ -471,29 +612,36 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                                     // 保留 pendingFriend，下次进牧场从这位好友的断点续跑。
                                     throw Object.assign(new Error('牧场好友巡查让路'), { code: 'RANCH_PATROL_YIELD' });
                                 }
+                                friendRetryAt.delete(friend.gid);
                                 markStep();
                             } catch (error: any) {
-                                if (error.name !== 'GatewayError' || error.methodName !== 'EnterHomestead') throw error;
+                                if (error.name !== 'GatewayError' || error.serviceName !== 'gamepb.visitpb.VisitService'
+                                    || error.methodName !== 'EnterHomestead') throw error;
                                 markStep();
-                                // 服务端判定不是好友（code=1002002）：加入牧场黑名单，之后巡查与列表都不再处理。
-                                // 这类 GID 往往来自农场名单残留，反复尝试只会每轮白跑一次进场景请求。
-                                if (error.code === 1002002) {
-                                    if (addRanchFriendToBlacklist(process.env.FARM_ACCOUNT_ID, gid)) {
-                                        log('牧场', `${friend.name}（${gid}）不是好友，已加入牧场拜访黑名单`, { module: 'ranch', event: 'ranch_friend_blacklist', result: 'ok' });
-                                    }
-                                } else {
+                                // 进不去的好友先退避半小时，避免每轮都为同一个 GID 白跑一次进场景请求。
+                                friendRetryAt.set(friend.gid, Date.now() + FRIEND_ENTRY_RETRY_MS);
+                                // 只有服务端明确说是「非好友」时才请求主进程写黑名单，其他失败只跳过。
+                                const nonFriend = error.code === 1002002
+                                    && /不是(?:你的)?好友|非好友|(?:没有|不存在)好友关系|\bnot (?:a |your )?friend\b/i.test(error.errorMessage);
+                                if (!nonFriend || !postToMaster({ type: 'ranch_friend_blacklist_add', gid: friend.gid, friendName: friend.name })) {
                                     log('牧场', `暂不能拜访 ${friend.name}：${error.message}`, { module: 'ranch', event: 'ranch_friend', result: 'skipped' });
                                 }
                             }
                             pendingFriend = null;
-                            nextFriendIndex++;
+                            friendVisits++;
                         }
                     }
                 }
             });
 
             await claimDailyRewards();
-            nextCheckAt = Math.max(Date.now() + SCENE_REENTRY_MS, Math.min(nextCheckAt, nextActionAt, cycleChanged ? Date.now() + 30_000 : Infinity));
+            lastCycleEndAt = Date.now();
+            // 图鉴待补领与一级棚待激活不等到下个常规间隔，本轮结束就立刻再排一次。
+            const bookDue = enabled('ranch_illustrated') && pendingBookKinds.size > 0;
+            const shedDue = enabled('ranch_activate_shed') && shedCheckPending && shedNotifyAtStart !== shedNotifyRevision;
+            const nextRoutine = Math.min(nextCheckAt, nextActionAt, cycleChanged ? lastCycleEndAt + 30_000 : Infinity);
+            nextCheckAt = Math.max(lastCycleEndAt + SCENE_REENTRY_MS, bookDue || shedDue ? lastCycleEndAt : nextRoutine);
+            retryAt = 0;
             resetCycle();
         });
     } catch (error: any) {
@@ -505,17 +653,23 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
         resetCycle(pendingFriend !== null);
         if (error.code === 'RANCH_AUTOMATION_DISABLED') return;
         nextCheckAt = Date.now() + Math.max(auto.ranch_check_minutes, 10) * 60_000;
+        // 失败后进入退避，通知类唤醒在此期间不再提前排期。
+        retryAt = nextCheckAt;
         log('牧场', `日常牧场巡查失败：${error.message}`, { module: 'ranch', event: 'ranch_automation', result: 'error' });
     }
 }
 
 module.exports = {
-    run, getRoutineState, selectAnimal, requestMarketCheck, noteMarketVisit,
+    run, getRoutineState, selectAnimal, requestMarketCheck, noteMarketVisit, noteBookReward, noteRanchFacilities,
     resetSchedule: () => {
         requestMarketCheck();
         nextCheckAt = 0;
         lastMarketRotation = null;
         lastMarketBalances.clear();
+        friendRetryAt.clear();
+        shedCheckPending = true;
+        shedNotifyRevision++;
+        retryAt = 0;
         resetCycle();
     },
 };

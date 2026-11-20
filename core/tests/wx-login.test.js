@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const { WxLoginService } = require('../dist/services/wx-login/service');
 
 test('WeChat confirm fetches user info and uses nick_name for the session nickname', async () => {
-    const originalFetch = global.fetch;
+    const originalFetch = globalThis.fetch;
     const calls = [];
     const responses = [
         '{}',
@@ -13,7 +13,7 @@ test('WeChat confirm fetches user info and uses nick_name for the session nickna
         JSON.stringify({ code: 0, nick_name: 'wechat-nickname', head_img_url: 'https://example.test/avatar.jpg' }),
     ];
 
-    global.fetch = async (url, init = {}) => {
+    globalThis.fetch = async (url, init = {}) => {
         calls.push({ url: String(url), init });
         const body = responses.shift();
         assert.notEqual(body, undefined);
@@ -54,6 +54,6 @@ test('WeChat confirm fetches user info and uses nick_name for the session nickna
         );
     }
     finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
     }
 });

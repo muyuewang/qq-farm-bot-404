@@ -29,6 +29,9 @@ const blacklistGids = ref<number[]>([])
 const blacklistedSet = computed(() => new Set(blacklistGids.value))
 const showBlacklist = ref(false)
 const toggling = ref('')
+/** 名单读取态：失败时不冒充「空名单」，否则界面会让人以为黑名单被清空了。 */
+const blacklistLoading = ref(false)
+const blacklistError = ref('')
 
 const friends = computed(() => props.state?.friends || [])
 const ranch = computed(() => props.state?.friendRanch ?? null)
@@ -47,39 +50,52 @@ const blacklistItems = computed(() => blacklistGids.value.map((gid) => {
 
 async function loadBlacklist() {
   const accountId = String(currentAccountId.value || '')
-  if (!accountId)
+  if (!accountId || blacklistLoading.value)
     return
+  blacklistLoading.value = true
+  blacklistError.value = ''
   try {
     const { data } = await api.get('/api/ranch-friend-blacklist', {
       headers: { 'x-account-id': accountId },
       skipErrorToast: true,
     } as any)
-    if (data?.ok)
-      blacklistGids.value = Array.isArray(data.data?.gids) ? data.data.gids.map((gid: any) => Number(gid)) : []
+    if (!data?.ok)
+      throw new Error(data?.error || '牧场黑名单读取失败')
+    blacklistGids.value = Array.isArray(data.data?.gids) ? data.data.gids.map((gid: any) => Number(gid)) : []
   }
-  catch {
-    // 名单读取失败不影响好友列表本身，静默降级为空名单。
+  catch (cause: any) {
+    // 失败时保留上一次读到的名单，只把错误显示出来供重试。
+    blacklistError.value = cause?.response?.data?.error || cause?.message || '牧场黑名单读取失败'
+  }
+  finally {
+    blacklistLoading.value = false
   }
 }
 
 /**
- * 加入/移出黑名单。后端回包带最新全量 gids，直接覆盖本地，避免多端并发时本地与服务器不一致。
+ * 加入/移出黑名单。
+ * 显式传 blacklisted 而不是让后端按当前状态取反：并发或重复点击时取反会抖到相反结果。
+ * 后端回包带最终状态与最新全量 gids，直接覆盖本地。
  */
 async function toggleBlacklist(gid: string | number) {
   const target = Number(gid)
   const accountId = String(currentAccountId.value || '')
   if (!accountId || toggling.value)
     return
+  const wanted = !blacklistedSet.value.has(target)
   toggling.value = String(target)
   try {
-    const { data } = await api.post('/api/ranch-friend-blacklist/toggle', { gid: target }, {
+    const { data } = await api.post('/api/ranch-friend-blacklist/toggle', { gid: target, blacklisted: wanted }, {
       headers: { 'x-account-id': accountId },
       skipErrorToast: true,
     } as any)
     if (!data?.ok)
       throw new Error(data?.error || '操作失败')
     blacklistGids.value = Array.isArray(data.data?.gids) ? data.data.gids.map((item: any) => Number(item)) : []
-    toast.success(blacklistGids.value.includes(target) ? '已加入牧场黑名单，巡查不再拜访' : '已移出牧场黑名单')
+    blacklistError.value = ''
+    // 以服务端返回的最终状态为准，避免网络重试后本地提示与实际相反。
+    const actual = data.data?.blacklisted === true
+    toast.success(actual ? '已加入牧场黑名单，巡查不再拜访' : '已移出牧场黑名单')
   }
   catch (cause: any) {
     toast.error(cause?.response?.data?.error || cause?.message || '操作失败')
@@ -96,6 +112,7 @@ onMounted(() => {
 // 切换账号时重读名单，避免把上一个账号的黑名单状态显示到新账号上。
 watch(currentAccountId, () => {
   blacklistGids.value = []
+  blacklistError.value = ''
   showBlacklist.value = false
   void loadBlacklist()
 })
@@ -277,7 +294,17 @@ function shelfText(shelf: any) {
         <p class="rounded-lg bg-gray-50 px-3 py-2 text-[11px] text-gray-500 leading-5 dark:bg-gray-900/40 dark:text-gray-400">
           黑名单里的好友不会被自动巡查、偷取或清理；拜访时被服务端判定「不是好友」的对象也会自动加入。
         </p>
-        <div v-if="!blacklistItems.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
+        <!-- 名单读取失败时不显示「黑名单为空」，否则会让人误以为已清空。 -->
+        <div v-if="blacklistError" class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/40 dark:text-red-300">
+          <span>{{ blacklistError }}</span>
+          <BaseButton variant="secondary" size="sm" :loading="blacklistLoading" @click="loadBlacklist()">
+            重试
+          </BaseButton>
+        </div>
+        <p v-else-if="blacklistLoading && !blacklistGids.length" class="px-3 py-6 text-center text-sm text-gray-500">
+          正在读取牧场黑名单…
+        </p>
+        <div v-else-if="!blacklistItems.length" class="border border-gray-200 rounded-lg border-dashed px-6 py-10 text-center text-sm text-gray-500 dark:border-gray-700">
           黑名单为空，在好友列表里点「拉黑」即可加入。
         </div>
         <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">

@@ -35,12 +35,21 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
         balance: (bag, id) => stateDeps.balance?.(bag, id) ?? { total: '0', locked: '0' },
         // 21 级待激活棚：默认没有，需要解锁的用例自己提供。
         shedAwaitingActivation: raw => stateDeps.shed?.(raw) ?? null,
+        // 设施通知过滤用：只有 state=3 的一级棚才算「待激活」。
+        isPendingShed: facility => (stateDeps.isPendingShed ?? (f => f?.module_type === 7 && f?.facility_id === 6002001 && f?.state === 3))(facility),
     });
     mock('services/ranch/model', { cubMap: cubs ? new Map(cubs) : new Map(), quantity: v => Number(v) });
     mock('services/ranch/actions', { prepareAction, operate });
     mock('services/ranch/daily', { getTaskRoutineState: () => taskState, getShareRoutineState: () => shareState, getBenefitRoutineState: () => ({ doneToday: true, nextCheckAt: 0 }), claimTasks: async () => {}, claimShare: async () => {}, claimBenefit: async () => {}, markTasksChanged: () => {} });
     mock('services/ranch/operation-state', { forCurrentAccount: () => ({ reserved: () => 0 }) });
     mock('services/ranch/context', { getAmbientSendContext: () => null, runWithSendContext: (_ctx, run) => run() });
+    // 黑名单不再由子进程直接写库：改为向主进程发消息（上游 #167）。
+    mock('services/friend/gid-manager', {
+        postToMaster: payload => {
+            friendDeps.onPostToMaster?.(payload);
+            return friendDeps.postToMasterResult?.() ?? true;
+        },
+    });
     // 牧场好友名单改为按 global_scene_id=2 独立同步（上游 #160），不再复用农场名单。
     mock('services/ranch/friend-roster', {
         getRanchFriendList: async (checkpoint) => {
@@ -49,6 +58,11 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
             // 名单同步会分批回调 checkpoint，让路时序用例需要它被真实触发一次。
             checkpoint?.(true);
             return roster;
+        },
+        // 批量刷新好友状态：默认把结果原样回填并返回被核对的 GID。
+        refreshRanchFriendStatus: async (friends, start) => {
+            friendDeps.onStatusRefresh?.(friends, start);
+            return friendDeps.refreshStatus?.(friends) ?? [];
         },
     });
     mock('services/ranch/friends', {
@@ -61,13 +75,20 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
             const reject = friendDeps.reject?.(gid);
             if (reject) {
                 throw Object.assign(new Error(reject.message ?? '不是好友'), {
-                    name: 'GatewayError', methodName: 'EnterHomestead', code: reject.code,
+                    name: 'GatewayError', serviceName: 'gamepb.visitpb.VisitService',
+                    methodName: 'EnterHomestead', code: reject.code,
+                    errorMessage: reject.errorMessage ?? reject.message ?? '不是好友',
                 });
             }
             return friendDeps.visit?.(progress) ?? { times: {}, results: [], yielded: false };
         },
     });
-    mock('utils/utils', { getServerTimeSec: () => 1_800_000_000, log: (tag, message) => logs.push({ tag, message }) });
+    mock('utils/utils', {
+        getServerTimeSec: () => 1_800_000_000,
+        log: (tag, message) => logs.push({ tag, message }),
+        // 状态刷新之间的随机间隔在测试里直接跳过，避免用例变慢。
+        randomDelay: async () => {},
+    });
     const id = require.resolve('../dist/services/ranch/automation');
     delete require.cache[id];
     return require(id);
@@ -362,7 +383,7 @@ test('连接不可继续时牧场不切场景、不执行动作，按重进场�
     const level = loadAutomation({
         automation: { ranch_harvest: true, ranch_check_minutes: 30 },
         prepareAction: async () => ({ skipped: true }),
-        operate: async (action, input) => { calls.push(action); return { status: 'ok' }; },
+        operate: async (action, _input) => { calls.push(action); return { status: 'ok' }; },
     });
     const before = Date.now();
     await level.run({ farmDeadline: () => Infinity, canContinue: () => false });
@@ -400,32 +421,39 @@ test('牧场好友阶段按场景独立同步名单，并过滤黑名单', async
     assert.deepEqual(filtered.visits, [2], '黑名单好友应被跳过');
 });
 
-test('拜访被判定不是好友时自动加入牧场黑名单，其他网关错误只跳过', async () => {
-    const runWith = async (code) => {
-        const autoBlacklisted = [];
+test('拜访被判定不是好友时请求主进程拉黑，其他网关错误只跳过', async () => {
+    const runWith = async (code, errorMessage = '不是好友') => {
+        const blacklistRequests = [];
         const logs = [];
         const level = loadAutomation({
             automation: { ranch_friend_steal: true },
             logs,
             friendDeps: {
                 roster: () => [{ gid: 7, name: 'C' }],
-                reject: () => ({ code, message: '不是好友' }),
-                onAutoBlacklist: gid => autoBlacklisted.push(gid),
+                reject: () => ({ code, message: errorMessage, errorMessage }),
+                // 子进程不再直接写库，改为向主进程发消息（上游 #167）。
+                onPostToMaster: payload => blacklistRequests.push(payload),
             },
         });
         await level.run({ farmDeadline: () => Infinity, canContinue: () => true });
-        return { autoBlacklisted, logs };
+        return { blacklistRequests, logs };
     };
 
-    // 1002002 是服务端判定「不是好友」的错误码：加入黑名单，之后巡查与列表都不再处理。
+    // 1002002 且文案明确是「不是好友」时，才请求主进程持久化黑名单。
     const notFriend = await runWith(1002002);
-    assert.deepEqual(notFriend.autoBlacklisted, [7], '不是好友应自动拉黑');
-    assert.ok(notFriend.logs.some(entry => entry.message.includes('已加入牧场拜访黑名单')), '自动拉黑要有日志');
+    assert.deepEqual(notFriend.blacklistRequests, [{ type: 'ranch_friend_blacklist_add', gid: 7, friendName: 'C' }],
+        '不是好友应请求主进程拉黑');
+    // 拉黑成功的日志由主进程统一记录，子进程不再重复记「暂不能拜访」。
+    assert.ok(!notFriend.logs.some(entry => entry.message.includes('暂不能拜访')), '请求拉黑成功后子进程不重复记跳过日志');
 
     // 其他网关错误（如临时不可达）不能误拉黑，只记一条跳过日志。
     const other = await runWith(500100);
-    assert.deepEqual(other.autoBlacklisted, [], '非「不是好友」错误不得拉黑');
+    assert.deepEqual(other.blacklistRequests, [], '非「不是好友」错误不得拉黑');
     assert.ok(other.logs.some(entry => entry.message.includes('暂不能拜访')), '其他错误按跳过记录');
+
+    // 错误码相同但文案不是「非好友」时也不拉黑：避免把临时拒绝永久拉黑。
+    const ambiguous = await runWith(1002002, '进不去牧场');
+    assert.deepEqual(ambiguous.blacklistRequests, [], '同码但文案不明确时不得拉黑');
 });
 
 test('名单为空时不拜访任何好友', async () => {

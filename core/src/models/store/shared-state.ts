@@ -289,7 +289,7 @@ function normalizeIntervals(intervals: Partial<IntervalConfig> | undefined): Int
 
 function cloneAccountConfig(base: Partial<AccountConfig> = DEFAULT_ACCOUNT_CONFIG): AccountConfig {
     const srcAutomation = (base && base.automation && typeof base.automation === 'object')
-        ? base.automation
+        ? migrateRanchMarketAutomation(base.automation)
         : {} as Partial<AutomationConfig>;
     const automation: AutomationConfig = { ...DEFAULT_ACCOUNT_CONFIG.automation };
     for (const key of Object.keys(automation) as Array<keyof AutomationConfig>) {
@@ -364,6 +364,10 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
     const cfg = cloneAccountConfig(fallback || DEFAULT_ACCOUNT_CONFIG);
 
     if (src.automation && typeof src.automation === 'object') {
+        // 老账号如果本来就没开补栏和金券升级，说明是纯手动玩家，一级棚激活保持关闭。
+        if (src.automation.ranch_activate_shed === undefined && src.automation.ranch_upgrade === false && src.automation.ranch_buy === false) {
+            cfg.automation.ranch_activate_shed = false;
+        }
         // 旧配置只有 ranch_market_organic，先迁移成便便/松果两个独立开关再逐项归一化。
         for (const [k, v] of Object.entries(migrateRanchMarketAutomation(src.automation))) {
             if (!ALLOWED_AUTOMATION_KEYS.has(k)) continue;

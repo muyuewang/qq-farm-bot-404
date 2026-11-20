@@ -17,6 +17,7 @@ import {
   RANCH_AUTOMATION_LIMITS,
   RANCH_AUTOMATION_SWITCHES,
   RANCH_BAG_FALLBACK_OPTIONS,
+  RANCH_FEED_NORMAL_STAGE_OPTIONS,
   RANCH_STRATEGY_OPTIONS,
   ranchUsesPreferredAnimal,
 } from '@/utils/ranch'
@@ -83,6 +84,9 @@ function applySettings() {
   // 服务端尚未下发阈值字段时补默认值，避免输入框空白、保存时提交 undefined 被后端校验拒绝。
   if (typeof next.ranch_grass_threshold_percent !== 'number')
     next.ranch_grass_threshold_percent = RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent
+  // 普通罐头阶段是后加的字符串枚举，旧账号没有这个键，补默认值避免选择器空白。
+  if (next.ranch_feed_normal_stage !== 'any' && next.ranch_feed_normal_stage !== 'longest')
+    next.ranch_feed_normal_stage = RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage
   // 幼崽优先顺序是数组，且旧账号配置里没有这两个键；补空数组避免子组件拿到 undefined。
   for (const key of ['ranch_coop_cub_priority', 'ranch_shed_cub_priority'] as const) {
     if (!Array.isArray(next[key]))
@@ -215,6 +219,26 @@ watch(settings, () => {
           </p>
         </section>
 
+        <!-- 普通罐头的使用阶段：桶内时长等价，喂最长阶段换到的进度最多，所以默认只喂最长阶段。 -->
+        <section v-if="automation.ranch_feed_normal === true" class="ui-card rounded-xl p-4">
+          <h2 class="text-sm text-gray-800 font-semibold dark:text-gray-200">
+            普通罐头策略
+          </h2>
+          <p class="mt-1 text-xs" :style="{ color: 'var(--muted-text)' }">
+            罐头桶里的时长在任意生长阶段都等价，但投给最长阶段能换到最多进度。
+          </p>
+          <div class="mt-3">
+            <BaseSelect
+              v-model="automation.ranch_feed_normal_stage"
+              label="普通罐头使用阶段"
+              :options="RANCH_FEED_NORMAL_STAGE_OPTIONS"
+            />
+          </div>
+          <p class="mt-2 text-xs" :style="{ color: 'var(--muted-text)' }">
+            选「仅最长生长阶段」时，没有动物处于最长阶段就整轮跳过并记录原因；选「任意阶段」则不筛选。
+          </p>
+        </section>
+
         <section v-for="group in switchGroups" :key="group.key" class="ui-card rounded-xl p-4">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0">
@@ -277,12 +301,31 @@ watch(settings, () => {
             />
           </div>
           <div v-if="needsPreferredAnimal" class="grid mt-3 gap-3 sm:grid-cols-2">
-            <BaseSelect v-model="automation.ranch_coop_animal" label="窝指定动物" :options="coopOptions" />
-            <BaseSelect v-model="automation.ranch_shed_animal" label="棚指定动物" :options="shedOptions" />
+            <BaseSelect
+              v-model="automation.ranch_coop_animal"
+              label="窝指定动物"
+              :options="coopOptions"
+              :disabled="ranchStore.animalOptionsLoading"
+            />
+            <BaseSelect
+              v-model="automation.ranch_shed_animal"
+              label="棚指定动物"
+              :options="shedOptions"
+              :disabled="ranchStore.animalOptionsLoading"
+            />
           </div>
-          <p v-if="needsPreferredAnimal && ranchStore.animalOptions.length === 0" class="mt-3 text-xs text-amber-600 dark:text-amber-400">
-            动物清单未加载成功，当前只能保留「不指定」；保存时后端仍会按官方配置校验窝与棚的适用范围。
+          <!-- 动物清单是整个设置页唯一依赖在线接口的选项，失败时必须能就地重试。 -->
+          <p v-if="needsPreferredAnimal && ranchStore.animalOptionsLoading" class="mt-3 text-xs" :style="{ color: 'var(--muted-text)' }">
+            正在读取可养动物清单…
           </p>
+          <div v-else-if="needsPreferredAnimal && ranchStore.animalOptionsError" class="mt-3 flex flex-wrap items-center gap-2">
+            <p class="text-xs text-amber-600 dark:text-amber-400">
+              动物清单未加载成功（{{ ranchStore.animalOptionsError }}），当前只能保留「不指定」；保存时后端仍会按官方配置校验窝与棚的适用范围。
+            </p>
+            <BaseButton variant="secondary" size="sm" @click="ranchStore.fetchAutomationOptions()">
+              重试
+            </BaseButton>
+          </div>
           <!-- 只在背包优先策略下有意义：此时放养顺序由这份清单决定，其它策略按等级或指定动物选品。 -->
           <div v-if="automation.ranch_strategy === 'bag_priority'" class="ui-subtle-panel mt-3 rounded-lg p-3">
             <RanchCubPriority v-model="automation" :account-id="String(currentAccountId || '')" :connected="connected" />

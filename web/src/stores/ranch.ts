@@ -51,6 +51,9 @@ export const useRanchStore = defineStore('ranch', () => {
   const acting = ref(false)
   const quoteHandle = ref<RanchQuoteHandle | null>(null)
   const animalOptions = ref<Array<{ value: number, label: string, kind: string }>>([])
+  /** 动物选项的加载态：设置页要区分「还没拉到」与「确实为空」，否则会误显示成没有可选动物。 */
+  const animalOptionsLoading = ref(false)
+  const animalOptionsError = ref('')
   /** 当前视图段落需要的查询参数（商店 id、好友 gid），写操作后按同一套参数重拉。 */
   const viewParams = ref<Record<string, any>>({})
 
@@ -308,15 +311,26 @@ export const useRanchStore = defineStore('ranch', () => {
   }
 
   async function fetchAutomationOptions() {
+    if (animalOptionsLoading.value)
+      return
+    animalOptionsLoading.value = true
+    animalOptionsError.value = ''
     try {
       const { data } = await api.get(RANCH_OPTIONS_ENDPOINT)
       animalOptions.value = data?.ok && Array.isArray(data.data)
         ? data.data.map((row: any) => ({ value: Number(row.value), label: String(row.label || ''), kind: String(row.kind || '') }))
         : []
+      // 接口成功但列表为空也要说明原因，避免设置页以为「就是没有动物可选」。
+      if (!animalOptions.value.length)
+        animalOptionsError.value = data?.ok ? '服务端未返回可养动物' : (data?.error || '动物选项读取失败')
     }
-    catch {
-      // 选项接口失败时设置页只保留「不指定」，不把动物列表冒充成空数组的成功结果。
+    catch (err: any) {
+      // 失败时清空列表并留下可重试的错误，不把空数组冒充成成功结果。
       animalOptions.value = []
+      animalOptionsError.value = err?.response?.data?.error || err?.message || '动物选项读取失败'
+    }
+    finally {
+      animalOptionsLoading.value = false
     }
   }
 
@@ -332,6 +346,8 @@ export const useRanchStore = defineStore('ranch', () => {
     acting,
     quoteHandle,
     animalOptions,
+    animalOptionsLoading,
+    animalOptionsError,
     viewParams,
     unlocked,
     facilities,

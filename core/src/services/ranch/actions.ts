@@ -1,11 +1,12 @@
 export {};
 
 const { rpc, inScene } = require('./transport');
-const { loadRaw, shedAwaitingActivation, snapshot, balance, taskList, catalog, market, canCatalog, resourceBalance, salePrices } = require('./state');
+const { loadRaw, snapshot, balance, taskList, catalog, market, canCatalog, resourceBalance, salePrices, shedAwaitingActivation } = require('./state');
 const { animalMap, cubMap, canMap, facilityMap, itemMap, taskMap, error, positiveId, positiveCount, quantity, itemDto, sumItems, signature } = require('./model');
 const reservations = require('./operation-state');
 const { getServerTimeSec } = require('../../utils/utils');
-const { getAmbientSendContext, runWithSendContext } = require('./context');
+// 生产确认与货架上架是两个时点，直投后要原地等一小段再读格子。
+const { setTimeout: wait } = require('node:timers/promises');
 
 const { ACTIONS } = require('./contract');
 // 这四个动作不改动资源交易，界面可以直接执行、不必先报价再确认（上游 #165）。
@@ -110,9 +111,19 @@ async function planAction(action: string, input: any, raw: any, produceTargets?:
         const bucketType = Number(input.bucketType);
         if (![1, 2].includes(bucketType)) throw error('INVALID_ARGUMENT', '请选择有机或普通罐头');
         const feedable = selectedAnimals(raw, input, () => true).filter(animal => animal.can_feed);
-        const animals = feedable.filter(animal => bucketType === 1 || !animal.limited_can_used);
+        const unused = feedable.filter(animal => bucketType === 1 || !animal.limited_can_used);
+        // 普通罐头可以只在最长生长阶段使用：桶内时长等价，优先投给收益最高的阶段。
+        const animals = bucketType === 2 && input.normalStage === 'longest' ? unused.filter((animal: any) => {
+            const config = animalMap.get(Number(animal.animal_id));
+            if (!config) return false;
+            const durations = [0, config.infant_sec, config.grow_sec, config.product_round_sec, config.mature_sec];
+            const current = durations[animal.stage];
+            return current > 0 && current === Math.max(...durations);
+        }) : unused;
         // 区分「没动物可喂」和「普通罐头本轮已用」：否则界面只能给一个笼统的跳过提示。
         if (!animals.length) plan.message = feedable.length ? '普通罐头本轮已使用' : '当前没有可喂养的动物';
+        // 有可喂动物但都不在最长阶段时，单独给一条更准确的提示。
+        if (unused.length && !animals.length) plan.message = '当前没有处于最长生长阶段的可喂养动物';
         plan.payload = { targets: animalRefs(animals), bucket_type: bucketType };
         const maxSeconds = animals.reduce((sum, animal) => {
             const config = animalMap.get(Number(animal.animal_id));
@@ -301,6 +312,12 @@ function cellsFromReceipt(cells: any, reply: any): any {
     return matched === ranches.size ? { ...cells, facilities } : undefined;
 }
 
+/** 从回包的 op_results 里挑出 kind=1（动物）的行，再回原始栏舍里取完整动物详情。 */
+function animalsInResults(ranches: any[], rows: any[]): any[] {
+    const ids = new Set(rows.filter(row => row.kind === 1).map(row => `${quantity(row.facility_inst_id)}:${quantity(row.target_id)}`));
+    return ranches.flatMap(ranch => ranch.animals.filter((animal: any) => ids.has(`${quantity(ranch.ranch_inst_id)}:${animal.animal_inst_id}`)));
+}
+
 async function operate(action: string, input: any = {}): Promise<any> {
     if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').interact(action, input);
     if (action === 'acknowledge') return inScene(async () => {
@@ -322,14 +339,20 @@ async function operate(action: string, input: any = {}): Promise<any> {
         if (plan.count === 0) return { status: 'skipped', snapshot: snapshot(before), costs: [], rewards: [], notice: plan.message };
         if (!direct && input.expected?.signature !== plan.signature) throw error('RANCH_OFFER_CHANGED', '牧场状态、商品或费用已变化，请重新确认');
         let after: any = null;
+        // 本次喂养回包里的动物行，供后面判断「哪些是刚被喂到可生产状态」。
+        let fedResults: any[] = [];
         const result = await reservations.forCurrentAccount().spend({ target: `ranch:${action}:${input.goodsId || input.facilityId || input.uid || input.taskId || input.ranchId || 'all'}`, label: plan.label, costs: plan.costs, balances: plan.balances }, async () => {
             let reply: any; let rewards: any[] = []; let actualCosts = plan.costItems;
+            // 图鉴领奖的「完成数」以回包确认的等级数为准，不能沿用 plan.count。
+            let completed = plan.count;
             if (action === 'claimDailyShare') {
                 const claimed = await require('./daily-share').claim();
                 rewards = claimed.rewards;
                 reply = { alreadyClaimed: claimed.skipped };
             } else if (action === 'claimIllustrated') {
-                rewards = await require('./book').claimBook(plan.bookClaim);
+                const claimed = await require('./book').claimBook(plan.bookClaim);
+                rewards = claimed.rewards;
+                completed = claimed.completed;
                 reply = {};
             } else if (action === 'reportEntry') {
                 for (const entry of plan.reportTasks) {
@@ -377,6 +400,12 @@ async function operate(action: string, input: any = {}): Promise<any> {
                     const cap = BigInt(plan.costItems[0].count);
                     if (used <= 0n || used > cap || BigInt(quantity(reply.bucket_remain_secs)) !== BigInt(balance(before.bag, plan.bucketId).total) - used) unknown(action, '罐头消耗或余量不匹配');
                     actualCosts = [itemDto({ id: plan.bucketId, count: used })];
+                    // 留下本次回包的动物行，喂养后自动生产只针对这几只。
+                    fedResults = reply.op_results;
+                } else if (action === 'activateShed') {
+                    const shed = reply.facility;
+                    if (quantity(shed?.instance_id) !== plan.payload.instance_id || shed.facility_id !== plan.marker
+                        || shed.module_type !== 7 || shed.state !== 1 || !shed.ranch) unknown(action, '棚的激活状态不匹配');
                 } else if (action === 'upgrade') {
                     if (quantity(reply.upgrade?.inst_id) !== plan.payload.inst_id || reply.upgrade.target_level !== plan.next.level || reply.upgrade.target_facility_id !== plan.next.facility_id) unknown(action, '建筑升级目标不匹配');
                 } else if (action === 'completeUpgrade') {
@@ -415,7 +444,16 @@ async function operate(action: string, input: any = {}): Promise<any> {
             }
             // 动物类动作的回包已含变动栏舍的完整详情，沿用同场景快照只补读背包；
             // 拼不上就退回完整读取，宁可慢一点也不要拿半份脏快照。
-            const receiptCells = direct ? cellsFromReceipt(before.cells, reply) : undefined;
+            let receiptCells = direct ? cellsFromReceipt(before.cells, reply) : undefined;
+            if (direct && action === 'produce') {
+                const produced = animalsInResults(reply.ranches, reply.op_results);
+                const deadline = Math.max(0, ...produced.map((animal: any) => Number(animal.delivering_until_ms)));
+                if (deadline > 0) {
+                    // TriggerProduce 只确认生产开始，产物上架要晚一点；原地等到交付截止再读格子。
+                    await wait(Math.min(2500, Math.max(0, deadline - getServerTimeSec() * 1000)));
+                    receiptCells = undefined;
+                }
+            }
             try { after = await loadRaw(receiptCells); } catch { /* Confirmed receipts remain useful if the view refresh fails. */ }
             if (plan.autoPlaceAnimalId) {
                 if (!after) unknown(action, '自动放养后的栏位状态未能读取');
@@ -431,13 +469,9 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 }
                 if (action === 'useCan' && BigInt(balance(after.bag, plan.bucketId).total) - BigInt(balance(before.bag, plan.bucketId).total) !== plan.expectedSeconds) unknown(action, '罐头桶增加时长不匹配');
             }
-            // 解锁棚的回包必须确认「同一个实例、同一 facility_id，且已变成可用的 state=1」。
-            if (action === 'activateShed') {
-                const shed = reply.facility;
-                if (quantity(shed?.instance_id) !== plan.payload.instance_id || shed.facility_id !== plan.marker
-                    || shed.module_type !== 7 || shed.state !== 1 || !shed.ranch) unknown(action, '棚的激活状态不匹配');
-            }
-            const completed = reply.op_results?.length ?? plan.count;
+            // 解锁棚的校验已在上面 activateShed 分支做过，这里不再重复。
+            // 回包没带 op_results 时（例如任务、图鉴这类接口）沿用计划里的份数。
+            completed = reply.op_results?.length ?? completed;
             // direct 模式下 op_results 可能为空但动作确已生效（例如没有可操作目标），
             // 这类情况按 skipped 回报，避免界面提示「完成」而实际什么都没做。
             const skipped = reply.alreadyClaimed || direct && plan.resultKeys && !completed;
@@ -449,34 +483,32 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 // 喂养直接执行时，界面要显示罐头桶剩余时长，否则用户不知道还能喂多久。
                 bucketRemainingSeconds: action === 'feed' ? quantity(reply.bucket_remain_secs) : undefined,
                 // 收获里 kind=1 是成熟动物：腾栏后可能达成新的图鉴奖励，交给自动化补领。
-                harvestedAnimals: action === 'harvest' ? (reply.op_results ?? []).filter((entry: any) => entry.kind === 1).length : 0 };
+                harvestedAnimals: action === 'harvest' ? (reply.op_results ?? []).filter((entry: any) => entry.kind === 1).length : 0,
+                // 本次收获里若含巨大动物，说明巨大图鉴可能新增条目，直接触发补领巡查。
+                harvestedGiant: action === 'harvest' && animalsInResults(before.cells.facilities.flatMap((f: any) => f.ranch ? [f.ranch] : []), reply.op_results ?? [])
+                    .some((animal: any) => animal.mutation?.mutation_type > 0) };
         });
 
-        // 喂养会让原本停在阶段的动物立刻进入可生产状态。用户既然开了自动生产，
-        // 就顺手把本次喂养后刚开始可生产的这几只催掉，不必再点一次。
-        if (!direct || action !== 'feed' || !after || result.status !== 'confirmed') return result;
-        const canAutoProduce = () => require('../../models/store').getAutomation().ranch_produce === true;
-        if (!canAutoProduce()) return result;
+        if (result.harvestedGiant) require('../../utils/network').networkEvents.emit('ranchBookReward', 'giant', true);
+        // 只有界面明确要求「喂养并生产」时才顺手催产，普通的喂养不会额外改动动物状态。
+        if (!direct || action !== 'feed' || input.produceAfterFeed !== true || result.status !== 'confirmed') return result;
+        if (!after) throw error('RANCH_STATE_CHANGED', '喂养已完成，未能读取栏舍状态，未发起生产');
         const fedTargets = new Set(plan.payload.targets.map((target: any) => `${target.ranch_inst_id}:${target.animal_inst_id}`));
-        const ready = after.cells.facilities.flatMap((facility: any) => facility.ranch?.animals || [])
+        const ready = animalsInResults(after.cells.facilities.flatMap((facility: any) => facility.ranch ? [facility.ranch] : []), fedResults)
             .filter((animal: any) => animal.can_deliver && fedTargets.has(`${quantity(animal.ranch_inst_id)}:${animal.animal_inst_id}`));
         if (!ready.length) return result;
 
-        // 喂养已独立确认，生产失败不能连累它：这里只补充提示，不把整体结果改成失败。
-        const parent = getAmbientSendContext();
+        // 喂养已独立确认。沿用当前场景，只为本次喂养后进入可生产状态的动物发起生产。
         try {
-            const production = await runWithSendContext({
-                ...parent,
-                // 自动生产在发送前再查一次开关，运行中被关掉就按「内置暂停」放弃。
-                check: (service: string, method: string) => parent?.check(service, method)
-                    || (method === 'TriggerProduce' && !canAutoProduce() ? error('BUILTIN_PAUSED', '自动生产已关闭') : null),
-                onSent: (service: string, method: string) => parent?.onSent(service, method),
-            }, () => run('produce', { direct: true }, after, ready));
+            const production = await run('produce', { direct: true }, after, ready);
             return { ...result, snapshot: production.snapshot || result.snapshot, refreshRequired: production.refreshRequired,
                 autoProduced: production.completed, autoProductionNotice: production.notice };
         } catch (cause: any) {
-            if (cause.code === 'BUILTIN_PAUSED') return result;
-            return { ...result, autoProductionNotice: `自动生产未能完成：${cause.message}`, refreshRequired: true };
+            // 喂养本身已经扣了罐头，这里必须明确告知「不要再喂」，避免重复消耗。
+            const status = cause.outcomeUnknown || cause.code === 'RANCH_RESULT_UNKNOWN' ? '生产结果未知' : '生产未完成';
+            const reason = cause.name === 'GatewayError' ? cause.errorMessage || '游戏服务拒绝生产' : cause.message;
+            const message = `喂养已完成，${status}：${reason}。请刷新核对，勿重复喂养`;
+            throw Object.assign(error(cause.code || 'RANCH_PRODUCTION_FAILED', message), { errorMessage: message, cause });
         }
     }
 

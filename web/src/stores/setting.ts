@@ -77,6 +77,10 @@ export interface AutomationConfig {
   ranch_market_organic_pinecone?: boolean
   // 动物腾栏后顺带补领普通与巨大图鉴奖励。
   ranch_illustrated?: boolean
+  // 普通罐头的使用阶段：'longest' 只喂最长生长阶段，'any' 不筛选。
+  ranch_feed_normal_stage?: 'any' | 'longest'
+  // 21 级后服务端下发的一级棚需要单独解锁；免费但会改动账号状态，默认关闭。
+  ranch_activate_shed?: boolean
   // 背包幼崽的放养优先顺序，只允许放对应设施能养的幼崽；空数组表示按等级从高到低。
   ranch_coop_cub_priority?: number[]
   ranch_shed_cub_priority?: number[]

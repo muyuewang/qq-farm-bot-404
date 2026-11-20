@@ -10,6 +10,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_harvest: false,
     ranch_produce: false,
     ranch_buy: false,
+    // 21 级一级棚的激活是免费操作，但仍会改动账号状态，按保守默认关闭。
+    ranch_activate_shed: false,
     ranch_upgrade: false,
     ranch_sell: false,
     // 仓鼠集市兑换有机化肥：便便优先 4 小时、其次 1 小时；松果优先 8 小时、4 小时、1 小时。
@@ -23,6 +25,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_grass_threshold_percent: 20,
     ranch_fill_cans: false,
     ranch_feed_normal: false,
+    // 普通罐头默认只在最长生长阶段使用，桶内时长等价换取更多进度。
+    ranch_feed_normal_stage: 'longest' as 'any' | 'longest',
     ranch_feed_organic: false,
     ranch_clean: false,
     ranch_stroke: false,
@@ -49,6 +53,10 @@ export const RANCH_SWITCH_KEYS = Object.keys(RANCH_AUTOMATION_DEFAULTS).filter(k
 export const RANCH_ANIMAL_OPTIONS = [...animalMap.values()].filter(animal => animal.enable_flag).map(animal => ({ value: animal.id, label: animal.name, kind: animal.husbandry_type }));
 
 export function normalizeRanchSetting(key: string, value: unknown): boolean | number | string | number[] {
+    if (key === 'ranch_feed_normal_stage') {
+        if (value === 'any' || value === 'longest') return value;
+        throw Object.assign(new Error('请选择有效的普通罐头使用阶段'), { code: 'INVALID_CONFIG' });
+    }
     if (key === 'ranch_strategy' || key === 'ranch_bag_fallback') {
         const allowed = key === 'ranch_strategy' ? ['level', 'preferred', 'bag_priority'] : ['level', 'preferred'];
         if (!allowed.includes(String(value))) throw Object.assign(new Error('请选择有效的养殖策略'), { code: 'INVALID_CONFIG' });
@@ -86,7 +94,11 @@ export function normalizeRanchSetting(key: string, value: unknown): boolean | nu
     return value;
 }
 
-export const RANCH_MARKET_SWITCH_KEYS = ['ranch_market_organic_poop', 'ranch_market_organic_pinecone'] as const;
+export const RANCH_MARKET_SWITCH_BY_CURRENCY = {
+    7002: 'ranch_market_organic_poop',
+    1008: 'ranch_market_organic_pinecone',
+} as const;
+export const RANCH_MARKET_SWITCH_KEYS = Object.values(RANCH_MARKET_SWITCH_BY_CURRENCY);
 
 /**
  * 旧配置只有总开关 ranch_market_organic，新配置拆成便便/松果两个独立开关。

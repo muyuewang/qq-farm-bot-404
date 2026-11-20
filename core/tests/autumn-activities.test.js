@@ -3,7 +3,7 @@ const test=require('node:test');
 const path=require('node:path');
 const protobuf=require('protobufjs');
 const root=new protobuf.Root().loadSync(path.resolve(__dirname,'../src/proto/activitypb.proto'),{keepCase:true});
-const types=Object.fromEntries(['GetGroupRequest','GetGroupReply','AutumnOperateRequest','ActivityOperateReply'].map(n=>[n,root.lookupType('gamepb.activitypb.'+n)]));
+const types=Object.fromEntries(['GetGroupRequest','GetGroupReply','AutumnOperateRequest','ActivityOperateReply'].map(n=>[n,root.lookupType(`gamepb.activitypb.${n}`)]));
 const encode=(t,v)=>Buffer.from(t.encode(t.fromObject(v)).finish());
 const object=(t,v)=>t.toObject(t.decode(v),{longs:String,bytes:String});
 

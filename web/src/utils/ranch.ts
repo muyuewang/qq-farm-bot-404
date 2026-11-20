@@ -60,6 +60,7 @@ export const RANCH_ACTIONS = [
   'harvest',
   'sell',
   'clean',
+  'activateShed',
   'upgrade',
   'completeUpgrade',
   'claimTasks',
@@ -87,11 +88,14 @@ export const RANCH_ACTION_FIELDS: Record<RanchAction, string[]> = {
   place: ['ranchId', 'itemId', 'count'],
   addGrass: ['facilityId', 'count'],
   useCan: ['uid', 'count'],
-  feed: ['bucketType', 'all', 'ranchId', 'animalId'],
+  // normalStage / produceAfterFeed 是喂养专用参数，后端只在这两个动作里读，缺省时按「任意阶段」处理。
+  feed: ['bucketType', 'all', 'ranchId', 'animalId', 'normalStage', 'produceAfterFeed'],
   produce: ['all', 'ranchId', 'animalId'],
   harvest: ['all', 'ranchId', 'animalId'],
   sell: ['all', 'uid', 'count'],
   clean: [],
+  /** 一级棚激活：后端只读 facilityId，指向 state=3 的 6002001 实例。 */
+  activateShed: ['facilityId'],
   upgrade: ['facilityId'],
   completeUpgrade: ['facilityId'],
   claimTasks: ['all', 'taskId', 'double'],
@@ -119,6 +123,7 @@ export const RANCH_ACTION_REQUIRED: Record<RanchAction, string[][]> = {
   harvest: [['all'], ['ranchId', 'animalId']],
   sell: [['all'], ['uid', 'count']],
   clean: [],
+  activateShed: [['facilityId']],
   upgrade: [['facilityId']],
   completeUpgrade: [['facilityId']],
   claimTasks: [['all'], ['taskId']],
@@ -148,6 +153,10 @@ export const RANCH_FIELD_LABELS: Record<string, string> = {
   animalId: '动物',
   uid: '物品批次',
   bucketType: '罐头类型',
+  /** 普通罐头的使用阶段：longest=仅最长生长阶段，any=任意阶段。 */
+  normalStage: '普通罐头阶段',
+  /** 喂养成功后是否顺带对刚喂过、已可生产的动物催产。 */
+  produceAfterFeed: '喂养后催产',
   taskId: '任务',
   double: '双倍领取',
   entry: '引导入口',
@@ -398,6 +407,8 @@ export interface RanchAnimal {
   mutation: Record<string, any> | null
   stroked: boolean
   canStroke: boolean
+  /** 后端 can_feed 原始位：批量喂养按所选桶类型重新判定，不能直接复用单个动作的 enabled。 */
+  canFeed: boolean
   bucketType: number
   /** 好友栏舍的动物只能抚摸，自家动作位不适用于它，因此不生成 actions。 */
   isFriend: boolean
@@ -478,6 +489,7 @@ function mapAnimal(raw: any, serverTimeMs: unknown, resources: RanchResource[], 
     mutation: animal.mutation && typeof animal.mutation === 'object' ? animal.mutation : null,
     stroked: animal.stroked === true,
     canStroke: animal.canStroke === true,
+    canFeed: animal.canFeed === true,
     bucketType: bucketTypeFor(animal),
     isFriend,
     actions: isFriend ? [] : animalActions(animal, resources),
@@ -510,6 +522,8 @@ export interface RanchFacility {
   capacity: number
   active: boolean
   state: number
+  /** 21 级一级棚 state=3 时为真：服务端已下发，需单独发激活请求才会变成可用设施。 */
+  canActivate: boolean
   upgradeState: number
   upgradeEndAtMs: number
   upgradeCountdown: number | null
@@ -541,6 +555,7 @@ function mapFacility(raw: any, serverTimeMs: unknown, resources: RanchResource[]
     capacity,
     active: facility.active === true,
     state: number(facility.state, 0) || 0,
+    canActivate: facility.canActivate === true,
     upgradeState: number(facility.upgradeState, 0) || 0,
     upgradeEndAtMs,
     upgradeCountdown: facility.upgradeState ? countdownSeconds(upgradeEndAtMs, serverTimeMs) : null,
@@ -1065,6 +1080,9 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_feed_normal', label: '自动普通罐头加速', desc: '用普通罐头桶加速非限制动物', group: 'own' },
   { key: 'ranch_feed_organic', label: '自动有机罐头加速', desc: '用有机罐头桶加速，含限制罐头动物', group: 'own' },
   { key: 'ranch_clean', label: '自动清理栏舍', desc: '清理自家栏舍的危险物', group: 'own' },
+  // 20 级升到 21 级时服务端下发 state=3 的一级棚，必须单独发激活请求。
+  // 激活本身免费，但会改动账号状态，所以和补栏、升级一样默认关闭。
+  { key: 'ranch_activate_shed', label: '自动解锁一级棚', desc: '牧场 21 级后服务端下发的一级棚需要单独解锁，解锁免费但会改动账号状态', group: 'own' },
   { key: 'ranch_stroke', label: '自动抚摸动物', desc: '在好友牧场抚摸可触发巨大变异的动物，受每日抚摸次数限制', group: 'friend' },
   { key: 'ranch_friend_steal', label: '自动偷取好友产物', desc: '逐位好友进入牧场偷取', group: 'friend' },
   { key: 'ranch_friend_clean', label: '自动清理好友栏舍', desc: '清理好友栏舍危险物', group: 'friend' },
@@ -1093,8 +1111,12 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_grass_threshold_percent: 20,
   ranch_fill_cans: false,
   ranch_feed_normal: false,
+  // 普通罐头默认只在最长生长阶段使用：桶内时长等价，投给最长阶段换取的进度最多。
+  ranch_feed_normal_stage: 'longest' as 'any' | 'longest',
   ranch_feed_organic: false,
   ranch_clean: false,
+  // 解锁一级棚免费，但仍会改动账号状态，按保守默认关闭；上游默认开启。
+  ranch_activate_shed: false,
   ranch_stroke: false,
   ranch_friend_steal: false,
   ranch_friend_clean: false,
@@ -1141,6 +1163,15 @@ export const RANCH_STRATEGY_OPTIONS: Array<{ value: string, label: string, desc:
 export const RANCH_BAG_FALLBACK_OPTIONS: Array<{ value: string, label: string, desc: string }> = [
   { value: 'level', label: '按等级优先', desc: '指定动物缺货时回退到等级优先' },
   { value: 'preferred', label: '按指定动物', desc: '指定动物缺货时不放养' },
+]
+
+/**
+ * 普通罐头的使用阶段。桶内时长在任意阶段都等价，
+ * 但投给最长生长阶段能换到最多进度，所以默认只喂最长阶段。
+ */
+export const RANCH_FEED_NORMAL_STAGE_OPTIONS: Array<{ value: 'any' | 'longest', label: string }> = [
+  { value: 'longest', label: '仅最长生长阶段' },
+  { value: 'any', label: '任意阶段' },
 ]
 
 export const RANCH_AUTOMATION_LIMITS = {

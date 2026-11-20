@@ -117,7 +117,7 @@ test('parallel QQ and WeChat workers select their own protocol, App ID and WASM'
         `, { eval: true, workerData: { root: path.resolve(__dirname, '../dist'), platform } });
         worker.once('message', resolve);
         worker.once('error', reject);
-        worker.once('exit', code => { if (code) reject(new Error('Worker failed: ' + code)); });
+        worker.once('exit', code => { if (code) reject(new Error(`Worker failed: ${  code}`)); });
     })));
     for (const item of result) {
         assert.equal(item.version, `1.15.0.2_${item.platform}`);

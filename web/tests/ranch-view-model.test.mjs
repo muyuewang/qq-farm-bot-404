@@ -267,6 +267,34 @@ test('设施视图区分栏舍、牧草机与升级中设施', () => {
   assert.ok(upgrading.upgradeCountdown > 0)
 })
 
+test('一级棚可激活只看后端下发的 canActivate，页面不自行按等级或 state 推断', () => {
+  // 后端 canActivateShed = level >= 21 && module_type === 7 && facility_id === 6002001 && state === 3，
+  // 前端只透传这个布尔位，等级不足或 state 不是 3 时后端不会给 true。
+  const pending = {
+    id: '1:900',
+    facilityId: 6002001,
+    name: '一级棚',
+    moduleType: 7,
+    level: 1,
+    active: false,
+    state: 3,
+    canActivate: true,
+    capacity: 4,
+  }
+  const state = mapRanchState(baseState({ facilities: [pending] }))
+  assert.equal(state.facilities[0].canActivate, true)
+  assert.equal(state.facilities[0].active, false)
+  // 未下发 canActivate 时一律按不可激活处理，避免老快照凭空长出解锁按钮。
+  const legacy = mapRanchState(baseState({ facilities: [{ ...pending, canActivate: undefined }] }))
+  assert.equal(legacy.facilities[0].canActivate, false)
+  // 非布尔值同样不算已下发，挡住后端序列化成字符串的情况。
+  const stringy = mapRanchState(baseState({ facilities: [{ ...pending, canActivate: 'true' }] }))
+  assert.equal(stringy.facilities[0].canActivate, false)
+  // 普通栏舍（module_type 1）不会是待激活棚。
+  const coop = mapRanchState(baseState()).facilities[0]
+  assert.equal(coop.canActivate, false)
+})
+
 test('一键操作只统计后端允许的目标，危险物按数量汇总', () => {
   const state = mapRanchState(baseState())
   assert.deepEqual(batchTargets(state, 'harvest'), { animals: 1, shelves: 1, hazards: 0, total: 2 })
@@ -299,6 +327,39 @@ test('请求体只带白名单字段，必填分支不满足时不发起请求',
   assert.equal(releaseAll.ok, false)
   assert.match(releaseAll.error, /一键放生/)
   assert.equal(buildRanchBody('unknownAction', {}).ok, false)
+})
+
+test('普通罐头阶段与喂养后催产随喂养请求下发，不再被白名单丢掉', () => {
+  // 这两个字段曾是新增协议里的字段，白名单没跟上就会被静默过滤，用户选了也不生效。
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 2, normalStage: 'longest', produceAfterFeed: true }),
+    { ok: true, body: { all: true, bucketType: 2, normalStage: 'longest', produceAfterFeed: true } },
+  )
+  // 有机罐头不筛阶段，只带桶类型也能正常通过。
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 1 }),
+    { ok: true, body: { all: true, bucketType: 1 } },
+  )
+  // 直投路径同样保留这两个字段，且仍然不带 expected。
+  assert.deepEqual(
+    buildRanchDirectBody('feed', { all: true, bucketType: 2, normalStage: 'any', produceAfterFeed: true }),
+    { ok: true, body: { all: true, bucketType: 2, normalStage: 'any', produceAfterFeed: true, direct: true } },
+  )
+  // 其它动作不认这两个字段，即便传了也不会被带出去。
+  assert.deepEqual(buildRanchBody('produce', { all: true, normalStage: 'longest' }), { ok: true, body: { all: true } })
+  // 每个入参都要有可读名称，否则错误提示会退化成英文键名。
+  assert.ok(RANCH_FIELD_LABELS.normalStage)
+  assert.ok(RANCH_FIELD_LABELS.produceAfterFeed)
+})
+
+test('一级棚解锁走报价确认而不是直投，缺少设施时直接拒绝', () => {
+  // 解锁免费但会改动账号状态，不能借 direct 绕开确认。
+  assert.equal(isRanchDirectAction('activateShed'), false)
+  assert.equal(buildRanchDirectBody('activateShed', { facilityId: '1:900' }).ok, false)
+  assert.deepEqual(buildRanchBody('activateShed', { facilityId: '1:900' }), { ok: true, body: { facilityId: '1:900' } })
+  const missing = buildRanchBody('activateShed', {})
+  assert.equal(missing.ok, false)
+  assert.match(missing.error, /设施/)
 })
 
 test('两阶段协议：execute 必须回传报价签名，skipped 报价不发起写请求', () => {

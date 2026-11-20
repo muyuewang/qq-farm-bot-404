@@ -58,6 +58,16 @@ function animalDto(animal: any): any {
     };
 }
 
+/** 一级棚（6002001）state=3 表示服务端已下发、等玩家发激活请求。 */
+function isPendingShed(facility: any): boolean {
+    return facility.module_type === 7 && facility.facility_id === 6002001 && facility.state === 3;
+}
+
+/** 21 级才开放一级棚，等级不足时即使服务端下发也不给激活入口。 */
+function canActivateShed(facility: any, level: number): boolean {
+    return level >= 21 && isPendingShed(facility);
+}
+
 function facilityDto(facility: any, level: number): any {
     const metadata = facilityMap.get(Number(facility.facility_id));
     const next = facilityMap.get(metadata?.next_facility_id);
@@ -69,7 +79,7 @@ function facilityDto(facility: any, level: number): any {
     return {
         id: quantity(facility.instance_id), facilityId: facility.facility_id,
         name: metadata?.name || `设施${facility.facility_id}`, moduleType: facility.module_type,
-        state: facility.state, active: facility.state === 1,
+        state: facility.state, active: facility.state === 1, canActivate: canActivateShed(facility, level),
         level: facility.level, capacity: facility.capacity, upgradeState: facility.upgrade_state,
         upgradeEndTime: Number(facility.upgrade_end_time),
         next: next ? { level: next.level, capacity: next.capacity, durationSec: next.upgrade_secs, requiredLevel: requirement ? Number(requirement[1]) : null, costs,
@@ -96,10 +106,11 @@ async function loadRaw(cells?: any): Promise<any> {
 }
 
 function shedAwaitingActivation(raw: any): any {
-    // 达到开放等级后，服务端下发一级棚（facility_id 6002001）且 state=3 表示待激活，
+    // 达到开放条件后，服务端下发一级棚（facility_id 6002001）且 state=3 表示待激活，
     // 需要单独发 ActivateFacility 才会变成正式可用设施，光靠 upgrade 不会自动解锁。
-    return raw.cells.facilities.find((facility: any) =>
-        facility.module_type === 7 && facility.facility_id === 6002001 && facility.state === 3);
+    // 等级不足时服务端也可能下发这条占位记录，必须先按 21 级门槛过滤，否则会白发一次激活请求。
+    const { level } = levelInfo(Number(balance(raw.bag, 1102).total));
+    return raw.cells.facilities.find((facility: any) => canActivateShed(facility, level));
 }
 
 function snapshot(raw: any): any {
@@ -254,7 +265,8 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
             // 拉黑的好友仍留在列表里，但带 blacklisted 标记，前端据此置灰并跳过拜访。
             else {
                 const blacklist = new Set(require('../../models/store').getRanchFriendBlacklist());
-                state.friends = (await getRanchFriendList()).map(friend => ({ ...friend, gid: String(friend.gid), blacklisted: blacklist.has(friend.gid) }));
+                // canSteal / canHelp / statusAtMs 是巡查用的内部字段，刷新后很快过期，不下发给界面。
+                state.friends = (await getRanchFriendList()).map(({ gid, name, avatarUrl }) => ({ gid: String(gid), name, avatarUrl, blacklisted: blacklist.has(gid) }));
             }
         }
         return state;
@@ -273,4 +285,4 @@ async function resourceBalances(keys: string[]): Promise<any[]> {
     });
 }
 
-module.exports = { getState, loadRaw, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, isPendingShed, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };

@@ -685,6 +685,14 @@ function handleNotify(msg: any): void {
             return;
         }
 
+        // 牧场设施变更通知：只处理自己牧场的推送，好友牧场由巡查自行拉取。
+        if (type === 'gamepb.homesteadpb.FacilitiesNotify') {
+            const notify = types.RanchFacilitiesNotify.decode(eventBody);
+            const hostGid = toNum(notify.host_gid);
+            if (hostGid > 0 && hostGid === userState.gid) networkEvents.emit('ranchFacilitiesChanged', notify.facilities);
+            return;
+        }
+
         // 物品变化通知
         if (type.includes('ItemNotify')) {
             try {
@@ -864,10 +872,12 @@ function handleNotify(msg: any): void {
             return;
         }
 
-        // 图鉴奖励红点通知
+        // 图鉴奖励红点通知：普通图鉴的可领状态单独透传，供牧场例程决定是否补领。
         if (type.includes('IllustratedRewardRedDotNotifyV2')) {
             try {
-                networkEvents.emit('illustratedRewardRedDot');
+                const notify = types.IllustratedRewardRedDotNotifyV2.decode(eventBody);
+                networkEvents.emit('illustratedRewardRedDot', notify);
+                networkEvents.emit('ranchBookReward', 'normal', notify.ranch_reward_available);
             } catch {}
             return;
         }

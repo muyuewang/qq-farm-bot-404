@@ -60,6 +60,19 @@ function requestComplete(facility: RanchFacility) {
   })
 }
 
+/**
+ * 一级棚不是升级出来的：服务端下发 state=3 的实例，必须单独发激活请求。
+ * 这一步免费但会改变账号状态，所以做成显式确认，不走自动流程。
+ */
+function requestActivate(facility: RanchFacility) {
+  emit('request', {
+    action: 'activateShed',
+    input: { facilityId: facility.id },
+    title: `解锁${facility.name}`,
+    note: '解锁本身不消耗资源，解锁后该棚才可放养动物、补充牧草与升级。',
+  })
+}
+
 /** 后端判据：upgrade_state 为 2 视为完成待领取，其余值只有到点后才允许完成。 */
 function completable(facility: RanchFacility) {
   if (!facility.upgradeState)
@@ -73,6 +86,11 @@ function completable(facility: RanchFacility) {
  */
 function lockedText(facility: RanchFacility) {
   return `该${facility.name}尚未开放（服务端状态码 ${facility.state}），开放后可补充牧草与升级。`
+}
+
+/** 待激活的一级棚单独说明，避免和「等级不足未开放」混为一谈。 */
+function pendingText(facility: RanchFacility) {
+  return `牧场已下发该${facility.name}，解锁后即可放养动物。`
 }
 </script>
 
@@ -98,8 +116,19 @@ function lockedText(facility: RanchFacility) {
         </div>
       </div>
 
+      <!-- 待解锁：一级棚由服务端下发后需要单独激活，给一个显式入口 -->
+      <div
+        v-if="!facility.active && facility.canActivate"
+        class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+      >
+        <span>{{ pendingText(facility) }}</span>
+        <BaseButton variant="primary" size="sm" @click="requestActivate(facility)">
+          解锁
+        </BaseButton>
+      </div>
+
       <!-- 未开放：只给状态说明，不渲染任何写操作入口 -->
-      <p v-if="!facility.active" class="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 leading-5 dark:bg-gray-900/40 dark:text-gray-400">
+      <p v-else-if="!facility.active" class="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 leading-5 dark:bg-gray-900/40 dark:text-gray-400">
         {{ lockedText(facility) }}
       </p>
 

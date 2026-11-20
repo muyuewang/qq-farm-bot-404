@@ -15,7 +15,7 @@
  *   node core/scripts/merge-upstream-iteminfo.mjs <上游仓库根目录> [--write]
  *   不带 --write 时只做 dry-run 报告，不落盘。
  */
-import { readFileSync, writeFileSync, copyFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const REL = 'core/src/gameConfig/ItemInfo.json';

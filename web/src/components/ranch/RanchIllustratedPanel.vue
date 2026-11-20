@@ -64,37 +64,44 @@ function claimGiant() {
 }
 
 /**
- * 巨大图鉴「全部已读」：把当前未读的 fruit_id 一次性交给后端清除。
- * 回包只带被服务端确认清除的 id，因此这里按 cleared 精确改本地标记，而不是整体清空。
+ * 巨大图鉴「全部已读」：交给后端按牧场图鉴列表自行收集未读项并逐条上报。
+ * 该接口不接受 fruitIds，且要等回读确认，所以单独放宽超时；
+ * 回包只带被服务端确认清除的 id，这里按 cleared 精确改本地标记，而不是整体清空。
  */
 async function clearGiantNew() {
   const accountId = String(currentAccountId.value || '')
-  const fruitIds = freshGiantIds.value
   if (clearing.value || !accountId)
     return
-  if (!fruitIds.length) {
+  if (!freshGiantIds.value.length) {
     toast.warning('没有未读的巨大图鉴')
     return
   }
   clearing.value = true
   try {
-    const { data } = await api.post('/api/illustrated/clear-new', { fruitIds }, {
+    const { data } = await api.post('/api/ranch/illustrated/clear-new', {}, {
       headers: { 'x-account-id': accountId },
       skipErrorToast: true,
+      // 后端要逐条上报再回读确认，比普通牧场请求慢得多。
+      timeout: 45_000,
     } as any)
     if (!data?.ok)
       throw new Error(data?.error || '清除巨大图鉴已读失败')
     const cleared: number[] = Array.isArray(data?.data?.cleared) ? data.data.cleared.map((id: any) => Number(id)) : []
+    const notice: string = String(data?.data?.notice || '')
     if (cleared.length) {
       const done = new Set(cleared)
       for (const animal of animals.value) {
         if (done.has(Number(animal.id)) && animal.giant)
           animal.giant.isNew = false
       }
-      toast.success(`已读 ${cleared.length} 条巨大图鉴`)
+      // 后端可能只确认了部分条目，此时它是 warning 性质的提示，不能一律当成功。
+      if (/未确认/.test(notice))
+        toast.warning(notice)
+      else
+        toast.success(notice || `已读 ${cleared.length} 条巨大图鉴`)
     }
     else {
-      toast.warning('没有未读的巨大图鉴')
+      toast.warning(notice || '没有未读的巨大图鉴')
     }
   }
   catch (cause: any) {

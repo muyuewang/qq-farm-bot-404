@@ -106,8 +106,12 @@ test('分组覆盖全部开关且不重复，好友组与后端 FRIEND_CONTROLS 
 })
 
 test('每个开关都对应后端一个真实自动动作', () => {
-  for (const item of RANCH_AUTOMATION_SWITCHES)
-    assert.ok(serviceSource.includes(`'${item.key}'`), `${item.key} 在后端巡查流程里没有被使用`)
+  // 集市兑换的两个开关改由配置层的 RANCH_MARKET_SWITCH_BY_CURRENCY 按货币映射取用，
+  // 巡查流程里不再出现字面量，所以两处都算「后端在用」。
+  for (const item of RANCH_AUTOMATION_SWITCHES) {
+    const used = serviceSource.includes(`'${item.key}'`) || configSource.includes(`'${item.key}'`)
+    assert.ok(used, `${item.key} 在后端巡查流程里没有被使用`)
+  }
 })
 
 test('策略选项与巡查区间边界取自后端校验规则', () => {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { RanchAnimal, RanchDirectRequest, RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, onBeforeUnmount, watch } from 'vue'
+import RanchFeedMenu from '@/components/ranch/RanchFeedMenu.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import { batchTargets, formatSeconds, isRanchDirectAction, sortFacilities } from '@/utils/ranch'
+import { batchTargets, formatSeconds, isRanchDirectAction, RANCH_AUTOMATION_DEFAULTS, sortFacilities } from '@/utils/ranch'
 
 const props = defineProps<{ state: RanchState | null }>()
 
@@ -11,6 +12,15 @@ const emit = defineEmits<{
   direct: [payload: RanchDirectRequest]
   refresh: []
 }>()
+
+/**
+ * 喂养菜单的阶段默认值取自动化默认值。
+ *
+ * 这里刻意不读 useSettingStore：设置只在策略页加载，个人页进牧场时那份 automation
+ * 是空对象，读出来同样会回落到默认值，却多了一层跨页面耦合。菜单里的选择也不回写
+ * 自动化配置——手动喂一次不该悄悄改掉自动策略。
+ */
+const normalStageDefault = computed<'any' | 'longest'>(() => RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage)
 
 /** 窝固定排在棚前面：服务器返回顺序不固定，直接渲染会让同一账号每次刷新位置都在变。 */
 const ranches = computed(() => sortFacilities((props.state?.facilities || []).filter((facility: RanchFacility) => facility.isRanch)))
@@ -160,6 +170,17 @@ const grassBlockedCount = computed(() => ranches.value
         一键清理 {{ cleanable.hazards }} 处危险物
       </BaseButton>
     </div>
+
+    <!--
+      喂养单独成一块：它按桶类型和阶段策略批量挑动物，与上面「一键收获/催产/清理」
+      那种「全部符合条件的都做」不是同一类判断，混在按钮行里会让人以为也是一键全喂。
+    -->
+    <RanchFeedMenu
+      v-if="state"
+      :state="state"
+      :default-normal-stage="normalStageDefault"
+      @direct="emit('direct', $event)"
+    />
 
     <div
       v-for="facility in ranches"
