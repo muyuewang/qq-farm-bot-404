@@ -389,6 +389,8 @@ export interface RanchAnimal {
   stageName: string
   nextAtMs: number | null
   countdown: number | null
+  /** 生产确认与货架上架是两个时点：到 deliveringUntilMs 才真正上架，页面据此安排刷新。 */
+  deliveringUntilMs: number | null
   grassBlocked: boolean
   produceCount: string
   maxProduceCount: number | null
@@ -457,6 +459,7 @@ function countEnabled(animals: RanchAnimal[], action: RanchAction) {
 function mapAnimal(raw: any, serverTimeMs: unknown, resources: RanchResource[], isFriend = false): RanchAnimal {
   const animal = raw || {}
   const nextAtMs = nullableNumber(animal.nextAtMs)
+  const deliveringUntilMs = nullableNumber(animal.deliveringUntilMs)
   return {
     id: number(animal.id, 0) || 0,
     ranchId: text(animal.ranchId),
@@ -467,6 +470,7 @@ function mapAnimal(raw: any, serverTimeMs: unknown, resources: RanchResource[], 
     stageName: text(animal.stageName) || '未知',
     nextAtMs: nextAtMs && nextAtMs > 0 ? nextAtMs : null,
     countdown: countdownSeconds(animal.nextAtMs, serverTimeMs),
+    deliveringUntilMs: deliveringUntilMs && deliveringUntilMs > 0 ? deliveringUntilMs : null,
     grassBlocked: animal.grassBlocked === true,
     produceCount: text(animal.produceCount) || '0',
     maxProduceCount: nullableNumber(animal.maxProduceCount),
@@ -962,6 +966,26 @@ export function buildRanchExecuteBody(action: RanchAction, input: Record<string,
   return { ok: true as const, body: { ...built.body, expected: { signature } } }
 }
 
+/**
+ * 直投协议：喂养 / 催产 / 收获 / 清理不改动资源交易，服务端允许免报价直接执行。
+ * 只在这四个动作上开放，其余动作仍必须走 quote → execute，避免绕开报价的成本确认。
+ */
+export const RANCH_DIRECT_ACTIONS: RanchAction[] = ['feed', 'produce', 'harvest', 'clean']
+
+export function isRanchDirectAction(action: RanchAction) {
+  return RANCH_DIRECT_ACTIONS.includes(action)
+}
+
+/** 直投请求体：字段仍按白名单过滤，但额外带上 direct 标记，且不带 expected。 */
+export function buildRanchDirectBody(action: RanchAction, input: Record<string, any> = {}): RanchBodyResult {
+  if (!isRanchDirectAction(action))
+    return { ok: false as const, error: '该操作需要先确认成本，未发起请求' }
+  const built = buildRanchBody(action, input)
+  if (!built.ok)
+    return built
+  return { ok: true as const, body: { ...built.body, direct: true } }
+}
+
 /** 后端写操作的统一结果归一；status 缺失按未知处理，不当成成功。 */
 export function describeOperateResult(data: Record<string, any> | null | undefined) {
   const status = text(data?.status)
@@ -981,6 +1005,13 @@ export interface RanchRequest {
   title: string
   note?: string
   danger?: boolean
+}
+
+/** 免报价的直投请求：只有喂养 / 催产 / 收获 / 清理走这条路。 */
+export interface RanchDirectRequest {
+  action: RanchAction
+  input: Record<string, any>
+  title: string
 }
 
 /** 报价文案：把 costs / rewards / count 汇总成一行，skipped 时给出后端 message。 */

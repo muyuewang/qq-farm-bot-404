@@ -6,10 +6,12 @@ import {
   affordability,
   batchTargets,
   buildRanchBody,
+  buildRanchDirectBody,
   buildRanchExecuteBody,
   describeOperateResult,
   describeQuote,
   grassRoom,
+  isRanchDirectAction,
   isRanchUnlocked,
   mapRanchState,
   RANCH_ACTION_FIELDS,
@@ -222,6 +224,31 @@ test('动物动作只看后端布尔位：限制罐头的动物走有机桶，�
   assert.equal(cowView.actions.find(item => item.action === 'release').enabled, false)
 })
 
+/** 只替换第一座栏舍里的动物列表，其余设施保持原样。 */
+function withAnimals(animals) {
+  const base = baseState()
+  return baseState({
+    facilities: [
+      { ...base.facilities[0], ranch: { ...base.facilities[0].ranch, animals } },
+      ...base.facilities.slice(1),
+    ],
+  })
+}
+
+test('生产到货时间单独透传：deliveringUntilMs 与 nextAtMs 不是同一个时点', () => {
+  // 未下发 delivering_until_ms 时为 null，页面就不会安排到货刷新。
+  assert.equal(mapRanchState(baseState()).facilities[0].ranch.animals[0].deliveringUntilMs, null)
+  // 0 与负数都不是有效时间点，按未下发处理。
+  assert.equal(mapRanchState(withAnimals([{ ...hen, deliveringUntilMs: 0 }])).facilities[0].ranch.animals[0].deliveringUntilMs, null)
+  assert.equal(mapRanchState(withAnimals([{ ...hen, deliveringUntilMs: -1 }])).facilities[0].ranch.animals[0].deliveringUntilMs, null)
+
+  const deliveringAt = SERVER_TIME + 600_000
+  const animal = mapRanchState(withAnimals([{ ...hen, deliveringUntilMs: deliveringAt }])).facilities[0].ranch.animals[0]
+  assert.equal(animal.deliveringUntilMs, deliveringAt)
+  // 两个时点各自独立：催产确认后 nextAtMs 可能已经推进，到货仍要等到 deliveringUntilMs。
+  assert.equal(animal.nextAtMs, hen.nextAtMs)
+})
+
 test('设施视图区分栏舍、牧草机与升级中设施', () => {
   const [coop, grassMachine, upgrading] = mapRanchState(baseState()).facilities
   assert.equal(coop.isRanch, true)
@@ -249,8 +276,10 @@ test('一键操作只统计后端允许的目标，危险物按数量汇总', ()
 })
 
 test('请求体只带白名单字段，必填分支不满足时不发起请求', () => {
-  assert.deepEqual(buildRanchBody('buy', { goodsId: 7101, count: 2, shopId: 5, autoPlace: true, uid: 'should-drop' }),
-    { ok: true, body: { goodsId: 7101, count: 2, shopId: 5, autoPlace: true } })
+  assert.deepEqual(
+    buildRanchBody('buy', { goodsId: 7101, count: 2, shopId: 5, autoPlace: true, uid: 'should-drop' }),
+    { ok: true, body: { goodsId: 7101, count: 2, shopId: 5, autoPlace: true } },
+  )
   const missingShop = buildRanchBody('buy', { goodsId: 7101, count: 2 })
   assert.equal(missingShop.ok, false)
   assert.match(missingShop.error, /商店/)
@@ -289,9 +318,31 @@ test('两阶段协议：execute 必须回传报价签名，skipped 报价不发�
   assert.equal(buildRanchExecuteBody('sell', { uid: '9527' }, { expected: { signature: 'sig-1' } }).ok, false)
 })
 
+test('直投协议：只有喂养 / 催产 / 收获 / 清理免报价，其余动作仍强制走报价', () => {
+  // 四个免报价动作：带上 direct 标记，且不带 expected。
+  for (const action of ['feed', 'produce', 'harvest', 'clean']) {
+    assert.equal(isRanchDirectAction(action), true, `${action} 应走直投`)
+  }
+  assert.deepEqual(buildRanchDirectBody('harvest', { all: true }), { ok: true, body: { all: true, direct: true } })
+  assert.deepEqual(buildRanchDirectBody('clean', {}), { ok: true, body: { direct: true } })
+  assert.deepEqual(buildRanchDirectBody('feed', { all: true, bucketType: 2 }), { ok: true, body: { all: true, bucketType: 2, direct: true } })
+
+  // 直投同样受白名单与必填约束，未知字段不会漏发。
+  assert.equal(buildRanchDirectBody('produce', { ranchId: '1:101', animalId: 5001 }).ok, true)
+  assert.equal(buildRanchDirectBody('feed', { animalId: 5001 }).ok, false)
+
+  // 交易类动作不能借 direct 绕开成本确认。
+  for (const action of ['sell', 'buy', 'release', 'upgrade', 'useCan']) {
+    assert.equal(isRanchDirectAction(action), false, `${action} 不应走直投`)
+    assert.equal(buildRanchDirectBody(action, { uid: '9527', count: 1, all: true }).ok, false)
+  }
+})
+
 test('写操作结果：未知状态不当成成功', () => {
-  assert.deepEqual(describeOperateResult({ status: 'confirmed', notice: '收获完成', refreshRequired: true }),
-    { status: 'confirmed', message: '收获完成', refreshRequired: true })
+  assert.deepEqual(
+    describeOperateResult({ status: 'confirmed', notice: '收获完成', refreshRequired: true }),
+    { status: 'confirmed', message: '收获完成', refreshRequired: true },
+  )
   const skipped = describeOperateResult({ status: 'skipped' })
   assert.equal(skipped.status, 'skipped')
   assert.match(skipped.message, /已跳过/)

@@ -5,8 +5,11 @@ const { loadRaw, shedAwaitingActivation, snapshot, balance, taskList, catalog, m
 const { animalMap, cubMap, canMap, facilityMap, itemMap, taskMap, error, positiveId, positiveCount, quantity, itemDto, sumItems, signature } = require('./model');
 const reservations = require('./operation-state');
 const { getServerTimeSec } = require('../../utils/utils');
+const { getAmbientSendContext, runWithSendContext } = require('./context');
 
 const { ACTIONS } = require('./contract');
+// 这四个动作不改动资源交易，界面可以直接执行、不必先报价再确认（上游 #165）。
+const DIRECT_ACTIONS = new Set(['feed', 'produce', 'harvest', 'clean']);
 const LABELS: Record<string, string> = {
     buy: '购买牧场商品', place: '放养幼崽', addGrass: '补充牧草', useCan: '添加罐头', feed: '喂养动物',
     produce: '牧场生产', harvest: '牧场收获', sell: '出售牧场产物', clean: '清理牧场', activateShed: '解锁牧场棚',
@@ -38,7 +41,7 @@ function isClientReportedTask(task: any): boolean {
     return taskMap.get(Number(task.id))?.condition === '客户端上报进度';
 }
 
-async function planAction(action: string, input: any, raw: any): Promise<any> {
+async function planAction(action: string, input: any, raw: any, produceTargets?: any[]): Promise<any> {
     if (!ACTIONS.includes(action)) throw error('INVALID_ARGUMENT', '不支持的牧场操作');
     const plan: any = { action, label: LABELS[action], route: action, payload: {}, costItems: [], marker: null, expectedRewards: [], count: 1 };
     if (action === 'buy') {
@@ -106,7 +109,10 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
     } else if (action === 'feed') {
         const bucketType = Number(input.bucketType);
         if (![1, 2].includes(bucketType)) throw error('INVALID_ARGUMENT', '请选择有机或普通罐头');
-        const animals = selectedAnimals(raw, input, animal => animal.can_feed && (bucketType === 1 || !animal.limited_can_used));
+        const feedable = selectedAnimals(raw, input, () => true).filter(animal => animal.can_feed);
+        const animals = feedable.filter(animal => bucketType === 1 || !animal.limited_can_used);
+        // 区分「没动物可喂」和「普通罐头本轮已用」：否则界面只能给一个笼统的跳过提示。
+        if (!animals.length) plan.message = feedable.length ? '普通罐头本轮已使用' : '当前没有可喂养的动物';
         plan.payload = { targets: animalRefs(animals), bucket_type: bucketType };
         const maxSeconds = animals.reduce((sum, animal) => {
             const config = animalMap.get(Number(animal.animal_id));
@@ -120,8 +126,10 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
         }, 0n);
         const bucketId = bucketType === 1 ? 7004 : 7003;
         const available = BigInt(balance(raw.bag, bucketId).total);
-        if (animals.length && available <= 0n) throw error('RANCH_BUCKET_EMPTY', '罐头桶为空，请先添加罐头');
-        plan.costItems = [itemDto({ id: bucketId, count: available < maxSeconds ? available : maxSeconds })];
+        // 罐头桶按类型分开报错，否则用户分不清是普通罐头还是有机罐头用完了。
+        if (animals.length && available <= 0n) throw error('RANCH_BUCKET_EMPTY', `${bucketType === 1 ? '有机罐头' : '普通罐头'}不足，请先添加罐头`);
+        // 没有可喂养动物时不挂费用，避免 skipping 分支还显示一堆待扣罐头。
+        if (animals.length) plan.costItems = [itemDto({ id: bucketId, count: available < maxSeconds ? available : maxSeconds })];
         plan.bucketId = bucketId;
         plan.marker = animals.map(animal => [quantity(animal.ranch_inst_id), animal.animal_inst_id, animal.stage, animal.limited_can_used, quantity(animal.grow_ready_at_ms), quantity(animal.mature_ready_at_ms)]);
         plan.count = animals.length;
@@ -137,7 +145,8 @@ async function planAction(action: string, input: any, raw: any): Promise<any> {
         plan.message = `确定放生「${name}」吗？放生后动物将离开栏舍，已产出的产物会保留。`;
         plan.resultKeys = [`${quantity(animal.ranch_inst_id)}:1:${animal.animal_inst_id}`];
     } else if (action === 'produce' || action === 'harvest') {
-        const animals = selectedAnimals(raw, input, animal => action === 'produce' ? animal.can_deliver : animal.can_harvest);
+        // 喂养后自动生产会传入只含刚进入可生产状态的动物，避免顺手把整栏都催产一遍。
+        const animals = produceTargets ?? selectedAnimals(raw, input, animal => action === 'produce' ? animal.can_deliver : animal.can_harvest);
         const shelves = action === 'harvest' && input.all === true ? raw.cells.facilities.flatMap((f: any) => (f.ranch?.shelves || []).filter((s: any) => s.can_collect).map((s: any) => ({ ranch_inst_id: quantity(f.instance_id), slot_index: s.slot_index }))) : [];
         plan.payload = action === 'produce' ? { targets: input.all === true ? [] : animalRefs(animals) }
             : input.all === true ? { op: 1 } : { op: 4, animals: animalRefs(animals) };
@@ -275,6 +284,23 @@ function unknown(action: string, reason: string): never {
     throw error('RANCH_RESULT_UNKNOWN', `${LABELS[action]}结果未能确认：${reason}，请刷新核对，勿重复提交`);
 }
 
+/**
+ * 动物类动作的回包已带变动栏舍的完整详情，可以直接拼回 cells 复用，省掉一次整场景重读。
+ * 只要有一个栏舍对不上就返回 undefined，让调用方退回完整 loadRaw，避免拿到半份脏快照。
+ */
+function cellsFromReceipt(cells: any, reply: any): any {
+    const ranches = new Map<string, any>(reply.ranches.map((ranch: any) => [quantity(ranch.ranch_inst_id), ranch]));
+    if (!ranches.size || reply.op_results.some((row: any) => !ranches.has(quantity(row.facility_inst_id)))) return undefined;
+    let matched = 0;
+    const facilities = cells.facilities.map((facility: any) => {
+        const ranch = ranches.get(quantity(facility.instance_id));
+        if (!ranch) return facility;
+        matched++;
+        return { ...facility, ranch };
+    });
+    return matched === ranches.size ? { ...cells, facilities } : undefined;
+}
+
 async function operate(action: string, input: any = {}): Promise<any> {
     if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').interact(action, input);
     if (action === 'acknowledge') return inScene(async () => {
@@ -283,12 +309,20 @@ async function operate(action: string, input: any = {}): Promise<any> {
         return { status: 'confirmed', refreshRequired: true, costs: [], rewards: [] };
     });
     if (action === 'steal') return require('./friends').steal(input);
-    return inScene((cells: any) => reservations.forCurrentAccount().withLock(async () => {
-        const before = await loadRaw(cells);
-        const plan = await planAction(action, input, before);
-        if (plan.count === 0) return { status: 'skipped', snapshot: snapshot(before), costs: [], rewards: [] };
-        if (input.expected?.signature !== plan.signature) throw error('RANCH_OFFER_CHANGED', '牧场状态、商品或费用已变化，请重新确认');
-        return reservations.forCurrentAccount().spend({ target: `ranch:${action}:${input.goodsId || input.facilityId || input.uid || input.taskId || input.ranchId || 'all'}`, label: plan.label, costs: plan.costs, balances: plan.balances }, async () => {
+
+    /**
+     * 执行体从 inScene 回调里抽出来：喂养后要沿用同一个场景再发一次生产，
+     * 复用同一个 before 快照，不必再次进出场景。
+     */
+    async function run(action: string, input: any, before: any, produceTargets?: any[]): Promise<any> {
+        // direct 只对不改动交易的四个动作开放，且不允许同时带 expected，
+        // 否则等于绕开报价校验，其它动作仍然必须走报价确认。
+        const direct = input.direct === true && input.expected === undefined && DIRECT_ACTIONS.has(action);
+        const plan = await planAction(action, input, before, produceTargets);
+        if (plan.count === 0) return { status: 'skipped', snapshot: snapshot(before), costs: [], rewards: [], notice: plan.message };
+        if (!direct && input.expected?.signature !== plan.signature) throw error('RANCH_OFFER_CHANGED', '牧场状态、商品或费用已变化，请重新确认');
+        let after: any = null;
+        const result = await reservations.forCurrentAccount().spend({ target: `ranch:${action}:${input.goodsId || input.facilityId || input.uid || input.taskId || input.ranchId || 'all'}`, label: plan.label, costs: plan.costs, balances: plan.balances }, async () => {
             let reply: any; let rewards: any[] = []; let actualCosts = plan.costItems;
             if (action === 'claimDailyShare') {
                 const claimed = await require('./daily-share').claim();
@@ -379,8 +413,10 @@ async function operate(action: string, input: any = {}): Promise<any> {
                     }
                 }
             }
-            let after: any = null;
-            try { after = await loadRaw(); } catch { /* Confirmed receipts remain useful if the view refresh fails. */ }
+            // 动物类动作的回包已含变动栏舍的完整详情，沿用同场景快照只补读背包；
+            // 拼不上就退回完整读取，宁可慢一点也不要拿半份脏快照。
+            const receiptCells = direct ? cellsFromReceipt(before.cells, reply) : undefined;
+            try { after = await loadRaw(receiptCells); } catch { /* Confirmed receipts remain useful if the view refresh fails. */ }
             if (plan.autoPlaceAnimalId) {
                 if (!after) unknown(action, '自动放养后的栏位状态未能读取');
                 const previous = new Set(before.cells.facilities.flatMap((f: any) => (f.ranch?.animals || []).map((animal: any) => `${quantity(f.instance_id)}:${animal.animal_inst_id}`)));
@@ -402,15 +438,49 @@ async function operate(action: string, input: any = {}): Promise<any> {
                     || shed.module_type !== 7 || shed.state !== 1 || !shed.ranch) unknown(action, '棚的激活状态不匹配');
             }
             const completed = reply.op_results?.length ?? plan.count;
+            // direct 模式下 op_results 可能为空但动作确已生效（例如没有可操作目标），
+            // 这类情况按 skipped 回报，避免界面提示「完成」而实际什么都没做。
+            const skipped = reply.alreadyClaimed || direct && plan.resultKeys && !completed;
             // 单批出售与放养一样给出具体收益，一键出售数量太多时仍沿用汇总提示。
             const notice = action === 'release' || action === 'sell' && input.all !== true ? `${plan.label}完成${rewards.length ? `，获得 ${sumItems(rewards).map((item: any) => `${item.name} ×${item.count}`).join('、')}` : ''}`
                 : plan.resultKeys && completed < plan.count ? `已完成 ${completed} / ${plan.count} 项，其余状态已变化，请刷新核对` : undefined;
-            return { status: reply.alreadyClaimed ? 'skipped' : 'confirmed', snapshot: after ? snapshot(after) : null, refreshRequired: !after, costs: actualCosts, notice,
+            return { status: skipped ? 'skipped' : 'confirmed', snapshot: after ? snapshot(after) : null, refreshRequired: !after, costs: actualCosts, notice,
                 rewards: sumItems(rewards), completed,
+                // 喂养直接执行时，界面要显示罐头桶剩余时长，否则用户不知道还能喂多久。
+                bucketRemainingSeconds: action === 'feed' ? quantity(reply.bucket_remain_secs) : undefined,
                 // 收获里 kind=1 是成熟动物：腾栏后可能达成新的图鉴奖励，交给自动化补领。
                 harvestedAnimals: action === 'harvest' ? (reply.op_results ?? []).filter((entry: any) => entry.kind === 1).length : 0 };
         });
-    }));
+
+        // 喂养会让原本停在阶段的动物立刻进入可生产状态。用户既然开了自动生产，
+        // 就顺手把本次喂养后刚开始可生产的这几只催掉，不必再点一次。
+        if (!direct || action !== 'feed' || !after || result.status !== 'confirmed') return result;
+        const canAutoProduce = () => require('../../models/store').getAutomation().ranch_produce === true;
+        if (!canAutoProduce()) return result;
+        const fedTargets = new Set(plan.payload.targets.map((target: any) => `${target.ranch_inst_id}:${target.animal_inst_id}`));
+        const ready = after.cells.facilities.flatMap((facility: any) => facility.ranch?.animals || [])
+            .filter((animal: any) => animal.can_deliver && fedTargets.has(`${quantity(animal.ranch_inst_id)}:${animal.animal_inst_id}`));
+        if (!ready.length) return result;
+
+        // 喂养已独立确认，生产失败不能连累它：这里只补充提示，不把整体结果改成失败。
+        const parent = getAmbientSendContext();
+        try {
+            const production = await runWithSendContext({
+                ...parent,
+                // 自动生产在发送前再查一次开关，运行中被关掉就按「内置暂停」放弃。
+                check: (service: string, method: string) => parent?.check(service, method)
+                    || (method === 'TriggerProduce' && !canAutoProduce() ? error('BUILTIN_PAUSED', '自动生产已关闭') : null),
+                onSent: (service: string, method: string) => parent?.onSent(service, method),
+            }, () => run('produce', { direct: true }, after, ready));
+            return { ...result, snapshot: production.snapshot || result.snapshot, refreshRequired: production.refreshRequired,
+                autoProduced: production.completed, autoProductionNotice: production.notice };
+        } catch (cause: any) {
+            if (cause.code === 'BUILTIN_PAUSED') return result;
+            return { ...result, autoProductionNotice: `自动生产未能完成：${cause.message}`, refreshRequired: true };
+        }
+    }
+
+    return inScene((cells: any) => reservations.forCurrentAccount().withLock(async () => run(action, input, await loadRaw(cells))));
 }
 
 module.exports = { prepareAction, operate, ACTIONS, planAction };

@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import api from '@/api'
 import {
   buildRanchBody,
+  buildRanchDirectBody,
   buildRanchExecuteBody,
   describeOperateResult,
   describeQuote,
@@ -165,6 +166,26 @@ export const useRanchStore = defineStore('ranch', () => {
     }
   }
 
+  /** 写请求返回后的统一收尾：采用回包快照、标记是否需要重拉，两阶段与直投共用。 */
+  function applyWriteResult(accountId: string, payload: any): RanchActionResult {
+    const outcome = describeOperateResult(payload)
+    // 后端回包里带最新基础快照时直接采用，避免操作完页面还停留在旧进度。
+    const snapshot = mapRanchState(payload?.snapshot)
+    if (snapshot) {
+      // 基础快照不含视图段落；animals / facilities 两段本身就在快照里，其余视图写完后必须重新拉取该段，
+      // 否则限购、库存这类刚变化的信息会一直停在操作前的值。
+      state.value = baseOnly(activeView.value) ? snapshot : { ...snapshot, ...sectionsOf(state.value) }
+      loaded.value = true
+      refreshRequired.value = payload?.refreshRequired === true
+      if (!baseOnly(activeView.value))
+        void fetchView(accountId, activeView.value, viewParams.value)
+    }
+    else {
+      refreshRequired.value = true
+    }
+    return { ok: true, status: outcome.status, message: outcome.message, data: payload }
+  }
+
   /** 执行报价过的动作；handle 缺失或被跳过时不发起写请求。 */
   async function execute(accountId: string, handle?: RanchQuoteHandle | null): Promise<RanchActionResult> {
     const target = handle || quoteHandle.value
@@ -186,23 +207,43 @@ export const useRanchStore = defineStore('ranch', () => {
         errorCode.value = failure.code
         return { ok: false, error: failure.message, errorCode: failure.code }
       }
-      const outcome = describeOperateResult(data.data)
-      // 后端回包里带最新基础快照时直接采用，避免操作完页面还停留在旧进度。
-      const snapshot = mapRanchState(data.data?.snapshot)
-      if (snapshot) {
-        // 基础快照不含视图段落；animals / facilities 两段本身就在快照里，其余视图写完后必须重新拉取该段，
-        // 否则限购、库存这类刚变化的信息会一直停在操作前的值。
-        state.value = baseOnly(activeView.value) ? snapshot : { ...snapshot, ...sectionsOf(state.value) }
-        loaded.value = true
-        refreshRequired.value = data.data?.refreshRequired === true
-        if (!baseOnly(activeView.value))
-          void fetchView(accountId, activeView.value, viewParams.value)
-      }
-      else {
-        refreshRequired.value = true
-      }
       quoteHandle.value = null
-      return { ok: true, status: outcome.status, message: outcome.message, data: data.data }
+      return applyWriteResult(accountId, data.data)
+    }
+    catch (err: any) {
+      const failure = readError(err?.response?.data, '牧场操作失败')
+      error.value = failure.message
+      errorCode.value = failure.code
+      refreshRequired.value = true
+      return { ok: false, error: failure.message, errorCode: failure.code }
+    }
+    finally {
+      acting.value = false
+    }
+  }
+
+  /**
+   * 直投：喂养 / 催产 / 收获 / 清理不改动资源交易，跳过报价弹窗直接执行。
+   * 只对这四个动作开放，其余动作仍必须走报价，避免绕开成本确认。
+   */
+  async function executeDirect(accountId: string, action: RanchAction, input: Record<string, any> = {}): Promise<RanchActionResult> {
+    if (!accountId)
+      return { ok: false, error: '请先选择账号' }
+    const built = buildRanchDirectBody(action, input)
+    if (!built.ok)
+      return { ok: false, error: built.error }
+    acting.value = true
+    try {
+      const { data } = await api.post(`${RANCH_ENDPOINT}/${action}`, built.body, {
+        headers: { 'x-account-id': accountId },
+      })
+      if (!data?.ok) {
+        const failure = readError(data, '牧场操作失败')
+        error.value = failure.message
+        errorCode.value = failure.code
+        return { ok: false, error: failure.message, errorCode: failure.code }
+      }
+      return applyWriteResult(accountId, data.data)
     }
     catch (err: any) {
       const failure = readError(err?.response?.data, '牧场操作失败')
@@ -300,6 +341,7 @@ export const useRanchStore = defineStore('ranch', () => {
     switchView,
     quote,
     execute,
+    executeDirect,
     acknowledge,
     fetchAutomationOptions,
   }

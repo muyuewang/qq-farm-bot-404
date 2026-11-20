@@ -91,8 +91,14 @@ function selectTab(value: string) {
           :title="ranchMeta.label"
           :icon="ranchMeta.icon"
         >
-          <template #default="{ state, onRequest, activeView }">
-            <RanchAnimalsPanel v-if="activeView === 'animals'" :state="state" @request="onRequest" />
+          <template #default="{ state, onRequest, onDirect, refresh, activeView }">
+            <RanchAnimalsPanel
+              v-if="activeView === 'animals'"
+              :state="state"
+              @request="onRequest"
+              @direct="onDirect"
+              @refresh="refresh()"
+            />
             <RanchFacilitiesPanel v-else-if="activeView === 'facilities'" :state="state" @request="onRequest" />
             <RanchBagPanel v-else-if="activeView === 'bag'" :state="state" @request="onRequest" />
             <RanchTasksPanel v-else-if="activeView === 'tasks'" :state="state" @request="onRequest" />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RanchRequest, RanchView } from '@/utils/ranch'
+import type { RanchDirectRequest, RanchRequest, RanchView } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import RanchQuoteDialog from '@/components/ranch/RanchQuoteDialog.vue'
@@ -61,6 +61,27 @@ function switchView(view: RanchView = props.view, params: Record<string, any> = 
 
 function onRequest(payload: RanchRequest) {
   request.value = payload
+}
+
+/**
+ * 直投：喂养 / 催产 / 收获 / 清理不改动资源交易，跳过报价弹窗直接执行。
+ * 其余动作仍必须走报价确认，避免绕开成本核对。
+ */
+async function onDirect(payload: RanchDirectRequest) {
+  if (!currentAccountId.value) {
+    toast.error('请先选择账号')
+    return
+  }
+  const result = await ranchStore.executeDirect(currentAccountId.value, payload.action, payload.input)
+  if (!result.ok) {
+    toast.error(result.error || `${payload.title}失败`)
+    return
+  }
+  // skipped 属正常分支（服务端判定无需执行），按信息提示，不当成失败。
+  if (result.status === 'skipped')
+    toast.info(result.message || `${payload.title}：无需执行`)
+  else
+    toast.success(result.message || `${payload.title}已完成`)
 }
 
 function onDialogDone(result: { ok: boolean, message?: string, error?: string }) {
@@ -236,6 +257,7 @@ defineExpose({ refresh, switchView })
             :state="state"
             :active-view="activeView"
             :on-request="onRequest"
+            :on-direct="onDirect"
             :refresh="refresh"
           />
         </div>
