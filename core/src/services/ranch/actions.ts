@@ -1,9 +1,10 @@
 export {};
 
 const { rpc, inScene } = require('./transport');
-const { loadRaw, snapshot, balance, taskList, catalog, market, canCatalog, resourceBalance, salePrices, shedAwaitingActivation } = require('./state');
+const { loadRaw, snapshot, balance, taskList, catalog, market, canCatalog, ranchMallCatalog, canLockRanchItem, resourceBalance, salePrices, shedAwaitingActivation } = require('./state');
 const { animalMap, cubMap, canMap, facilityMap, itemMap, taskMap, error, positiveId, positiveCount, quantity, itemDto, sumItems, signature } = require('./model');
 const reservations = require('./operation-state');
+const { recordOperation } = require('../stats');
 const { getServerTimeSec } = require('../../utils/utils');
 // 生产确认与货架上架是两个时点，直投后要原地等一小段再读格子。
 const { setTimeout: wait } = require('node:timers/promises');
@@ -15,10 +16,11 @@ const LABELS: Record<string, string> = {
     buy: '购买牧场商品', place: '放养幼崽', addGrass: '补充牧草', useCan: '添加罐头', feed: '喂养动物',
     produce: '牧场生产', harvest: '牧场收获', sell: '出售牧场产物', clean: '清理牧场', activateShed: '解锁牧场棚',
     upgrade: '升级牧场设施',
+    speedUpUpgrade: '沙漏加速升级',
     completeUpgrade: '完成牧场升级', claimTasks: '领取牧场任务', reportEntry: '完成牧场引导', exchange: '集市兑换',
     claimIllustrated: '领取牧场图鉴奖励',
     claimDailyShare: '领取每日首次分享礼包',
-    buyCan: '购买牧场罐头',
+    buyCan: '购买牧场罐头', buyMall: '购买牧场商城商品', setItemLock: '设置物品锁定',
     release: '放生动物',
 };
 
@@ -40,6 +42,16 @@ function isClientReportedTask(task: any): boolean {
     if (!task?.unlocked || task.claimed) return false;
     if (BigInt(task.total) <= 0n || BigInt(task.progress) >= BigInt(task.total)) return false;
     return taskMap.get(Number(task.id))?.condition === '客户端上报进度';
+}
+
+/** 服务端的升级结束时间有秒和毫秒两种口径，按量级区分，避免把秒当毫秒算出几十年的剩余时间。 */
+function upgradeEndMs(value: unknown): number {
+    const end = Number(value);
+    return end < 100_000_000_000 ? end * 1000 : end;
+}
+
+function remainingUpgradeSeconds(endMs: number): number {
+    return Math.max(0, Math.ceil(endMs / 1000) - getServerTimeSec());
 }
 
 async function planAction(action: string, input: any, raw: any, produceTargets?: any[]): Promise<any> {
@@ -64,17 +76,43 @@ async function planAction(action: string, input: any, raw: any, produceTargets?:
         plan.expectedRewards = [itemDto({ id: good.reward.id, count: BigInt(good.reward.count) * BigInt(count) })];
         plan.label = `购买${plan.expectedRewards[0].name} ×${plan.expectedRewards[0].count}`;
         plan.marker = shop.shopId;
-    } else if (action === 'buyCan') {
-        const current = await canCatalog(raw, Number(input.slotType ?? 6));
-        const id = positiveId(input.goodsId, '罐头商品');
+    } else if (action === 'buyCan' || action === 'buyMall') {
+        // 两个商城走同一个购买协议，只是目录判据不同：罐头商城只认罐头配置表里的奖励，
+        // 礼包商城额外放行沙漏（1006）。route 统一落到 buyCan，避免多一条重复路由。
+        const catalogFn = action === 'buyCan' ? canCatalog : ranchMallCatalog;
+        const current = await catalogFn(raw, Number(input.slotType ?? 6));
+        plan.route = 'buyCan';
+        const id = positiveId(input.goodsId, '商城商品');
         const count = positiveCount(input.count);
         const good = current.goods.find((row: any) => row.id === id);
-        if (!good?.available || count > good.maxCount || good.remaining !== null && count > good.remaining) throw error('GOODS_UNAVAILABLE', '罐头商品不可购买或超过限购数量');
+        if (!good?.available || count > good.maxCount || good.remaining !== null && count > good.remaining) throw error('GOODS_UNAVAILABLE', '商城商品不可购买或超过限购数量');
         plan.payload = { goods_id: id, count };
         plan.costItems = good.free ? [] : [itemDto({ id: good.price.id, count: BigInt(good.price.count) * BigInt(count) })];
         plan.expectedRewards = good.rewards.map((item: any) => itemDto({ id: item.id, count: BigInt(item.count) * BigInt(count) }));
         plan.marker = { slotType: current.slotType, free: good.free };
         plan.label = `${good.free ? '领取' : '购买'}${good.name} ×${count}`;
+    } else if (action === 'setItemLock') {
+        // 上锁/解锁共用一条动作：方向由 locked 决定，实际发的 RPC 也不同。
+        const locked = input.locked;
+        if (typeof locked !== 'boolean') throw error('INVALID_ARGUMENT', '请选择上锁或解锁');
+        const requested = Array.isArray(input.itemUids) ? input.itemUids : [input.uid];
+        if (!requested.length) throw error('INVALID_ARGUMENT', '请选择物品');
+        const uids = [...new Set<string>(requested.map((uid: unknown) => positiveId(uid, '物品批次')))].sort();
+        const byUid = new Map<string, any>(raw.bag.physical_items.map((item: any) => [quantity(item.uid), item]));
+        const items = uids.map(uid => {
+            const item = byUid.get(uid);
+            if (!item || !canLockRanchItem(item)) throw error('RANCH_ITEM_NOT_LOCKABLE', '所选物品不支持锁定或已变化');
+            return item;
+        });
+        // 已经是目标状态的物品不再发请求，否则服务端会按「无变化」回空包让结果无法确认。
+        const changed = items.filter(item => item.is_locked !== locked);
+        plan.route = locked ? 'lockItems' : 'unlockItems';
+        plan.payload = { item_uids: changed.map(item => quantity(item.uid)) };
+        plan.marker = { items: changed.map(item => ({ uid: quantity(item.uid), id: quantity(item.id) })), locked };
+        plan.count = changed.length;
+        if (!changed.length) plan.message = `所选物品已经${locked ? '上锁' : '解锁'}`;
+        const target = changed.length === 1 ? itemDto(changed[0]).name : `${changed.length} 格物品`;
+        plan.label = `${locked ? '锁定' : '解锁'}${target}`;
     } else if (action === 'place') {
         const ranchId = positiveId(input.ranchId, '牧场设施');
         const itemId = Number(positiveId(input.itemId, '幼崽'));
@@ -199,7 +237,7 @@ async function planAction(action: string, input: any, raw: any, produceTargets?:
         plan.count = Number(quantity(shed?.instance_id) === id);
         plan.payload = { instance_id: id };
         plan.marker = shed?.facility_id;
-    } else if (action === 'upgrade' || action === 'completeUpgrade') {
+    } else if (action === 'upgrade' || action === 'speedUpUpgrade' || action === 'completeUpgrade') {
         const id = positiveId(input.facilityId, '牧场设施');
         const facility = raw.cells.facilities.find((row: any) => quantity(row.instance_id) === id && [6, 7, 8].includes(row.module_type));
         if (!facility || facility.state !== 1) throw error('RANCH_FACILITY_NOT_FOUND', '牧场设施尚未建造或未就绪');
@@ -215,11 +253,28 @@ async function planAction(action: string, input: any, raw: any, produceTargets?:
             if (!plan.costItems.length) throw error('RANCH_PRICE_UNKNOWN', '升级费用尚未确认');
             plan.next = next;
             plan.label = `升级${current.name}至${next.level}级（${next.upgrade_secs}秒）`;
+        } else if (action === 'speedUpUpgrade') {
+            // 加速只能用沙漏（1006），扣的秒数不能超过本次升级总时长，也不该超过剩余时间；
+            // 剩余时间为 0 时直接给 skipped，让界面提示「已到时间，刷新完成升级」。
+            const endMs = upgradeEndMs(facility.upgrade_end_time);
+            if (facility.upgrade_state !== 1 || remainingUpgradeSeconds(endMs) <= 0) {
+                plan.count = 0;
+                plan.message = '当前没有进行中的升级';
+            } else {
+                const current = facilityMap.get(facility.facility_id);
+                const next = facilityMap.get(current?.next_facility_id);
+                if (!next) throw error('RANCH_CONFIG_UNKNOWN', '建筑目标等级配置尚未同步');
+                const seconds = Math.min(positiveCount(input.seconds), next.upgrade_secs);
+                plan.payload = { inst_id: id, count: seconds, item_id: 1006 };
+                plan.marker.endMs = endMs;
+                plan.next = next;
+                plan.costItems = [itemDto({ id: 1006, count: seconds })];
+                plan.label = `加速${current.name}升至${next.level}级`;
+            }
         } else if (!facility.upgrade_state) {
             plan.count = 0;
         } else {
-            const end = Number(facility.upgrade_end_time);
-            const endMs = end < 100_000_000_000 ? end * 1000 : end;
+            const endMs = upgradeEndMs(facility.upgrade_end_time);
             if (facility.upgrade_state !== 2 && endMs > getServerTimeSec() * 1000) throw error('RANCH_UPGRADE_PENDING', '设施仍在升级中');
             plan.next = facilityMap.get(facilityMap.get(facility.facility_id)?.next_facility_id);
             if (!plan.next) throw error('RANCH_CONFIG_UNKNOWN', '建筑目标等级配置尚未同步');
@@ -379,8 +434,19 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 }
                 if (signature(rewards) !== signature(plan.expectedRewards)) unknown(action, '任务奖励不匹配');
             } else {
-                reply = await rpc(plan.route, plan.payload, true);
-                if (action === 'buyCan') {
+                let payload = plan.payload;
+                if (action === 'speedUpUpgrade') {
+                    // 报价到执行之间升级可能已经推进，按真实剩余时间截断，避免多扣沙漏。
+                    const count = Math.min(payload.count, remainingUpgradeSeconds(plan.marker.endMs));
+                    if (count <= 0) return { status: 'skipped', snapshot: null, refreshRequired: true, costs: [], rewards: [], notice: '已到升级时间，请刷新完成升级' };
+                    payload = { ...payload, count };
+                }
+                reply = await rpc(plan.route, payload, true);
+                if (action === 'setItemLock') {
+                    // 服务端只回真正变更的批次；和计划不一致说明期间状态被改动，按结果未知处理。
+                    const confirmed = reply.item_uids.map(quantity).sort();
+                    if (JSON.stringify(confirmed) !== JSON.stringify(plan.payload.item_uids)) unknown(action, '锁定回包与物品不符');
+                } else if (action === 'buyCan' || action === 'buyMall') {
                     if (!reply.success || quantity(reply.goods_id) !== plan.payload.goods_id || signature(reply.reward_items) !== signature(plan.expectedRewards)) unknown(action, '商品或奖励不匹配');
                     rewards = reply.reward_items;
                 } else if (action === 'buy') {
@@ -408,6 +474,18 @@ async function operate(action: string, input: any = {}): Promise<any> {
                         || shed.module_type !== 7 || shed.state !== 1 || !shed.ranch) unknown(action, '棚的激活状态不匹配');
                 } else if (action === 'upgrade') {
                     if (quantity(reply.upgrade?.inst_id) !== plan.payload.inst_id || reply.upgrade.target_level !== plan.next.level || reply.upgrade.target_facility_id !== plan.next.facility_id) unknown(action, '建筑升级目标不匹配');
+                } else if (action === 'speedUpUpgrade') {
+                    // 三重核对：目标一致、只扣了一种且是沙漏、升级结束时间正好前移了扣掉的秒数。
+                    const upgrade = reply.upgrade;
+                    const consumed = sumItems(reply.consumed);
+                    const seconds = BigInt(quantity(consumed[0]?.count));
+                    if (quantity(upgrade?.inst_id) !== payload.inst_id || upgrade.target_facility_id !== plan.next.facility_id
+                        || upgrade.target_level !== plan.next.level || consumed.length !== 1 || consumed[0].id !== 1006
+                        || seconds <= 0n || seconds > BigInt(payload.count)
+                        || plan.marker.endMs - upgradeEndMs(upgrade.end_time) !== Number(seconds) * 1000) {
+                        unknown(action, '设施计时或沙漏消耗不匹配');
+                    }
+                    actualCosts = consumed;
                 } else if (action === 'completeUpgrade') {
                     if (quantity(reply.facility?.instance_id) !== plan.payload.inst_id || reply.facility.level !== plan.next.level || reply.facility.facility_id !== plan.next.facility_id) unknown(action, '建筑等级不匹配');
                 } else if (action === 'release') {
@@ -461,13 +539,35 @@ async function operate(action: string, input: any = {}): Promise<any> {
                 const placed = after.cells.facilities.flatMap((f: any) => (f.ranch?.animals || []).filter((animal: any) => !previous.has(`${quantity(f.instance_id)}:${animal.animal_inst_id}`)));
                 if (placed.length !== plan.payload.num || placed.some((animal: any) => Number(animal.animal_id) !== plan.autoPlaceAnimalId)) unknown(action, '自动放养的动物或数量不匹配');
             }
-            if (['place', 'addGrass', 'useCan', 'exchange', 'buyCan'].includes(action)) {
+            // 沙漏加速扣的是沙漏库存，独立核对，和其它动作的「费用 → 库存减少」口径不同。
+            if (action === 'speedUpUpgrade' && (!after || BigInt(balance(before.bag, 1006).total) - BigInt(balance(after.bag, 1006).total) !== BigInt(actualCosts[0].count))) {
+                unknown(action, '沙漏库存扣减未能确认');
+            }
+            if (action === 'setItemLock') {
+                // 上锁状态只认回读结果：回包成功不代表真的写进去了。
+                if (!after) unknown(action, '未能读取背包的锁定状态');
+                const byUid = new Map<string, any>(after.bag.physical_items.map((item: any) => [quantity(item.uid), item]));
+                for (const target of plan.marker.items) {
+                    const item = byUid.get(target.uid);
+                    if (!item || quantity(item.id) !== target.id || item.is_locked !== plan.marker.locked) {
+                        unknown(action, '未能确认所选物品的锁定状态');
+                    }
+                }
+            }
+            if (['place', 'addGrass', 'useCan', 'exchange', 'buyCan', 'buyMall'].includes(action)) {
                 if (!after) unknown(action, '操作后的库存未能读取');
                 for (const cost of plan.costItems) {
                     const actual = BigInt((await resourceBalance(before, cost.id)).total) - BigInt((await resourceBalance(after, cost.id)).total);
                     if (actual !== BigInt(cost.count)) unknown(action, '库存扣减与费用不匹配');
                 }
                 if (action === 'useCan' && BigInt(balance(after.bag, plan.bucketId).total) - BigInt(balance(before.bag, plan.bucketId).total) !== plan.expectedSeconds) unknown(action, '罐头桶增加时长不匹配');
+                if (action === 'buyMall') {
+                    // 礼包商城才卖沙漏，买到就核对秒数是否真的加上去了。
+                    const hourglass = plan.expectedRewards.find((item: any) => item.id === 1006);
+                    if (hourglass && BigInt(balance(after.bag, 1006).total) - BigInt(balance(before.bag, 1006).total) !== BigInt(hourglass.count)) {
+                        unknown(action, '沙漏增加时长不匹配');
+                    }
+                }
             }
             // 解锁棚的校验已在上面 activateShed 分支做过，这里不再重复。
             // 回包没带 op_results 时（例如任务、图鉴这类接口）沿用计划里的份数。
@@ -475,6 +575,10 @@ async function operate(action: string, input: any = {}): Promise<any> {
             // direct 模式下 op_results 可能为空但动作确已生效（例如没有可操作目标），
             // 这类情况按 skipped 回报，避免界面提示「完成」而实际什么都没做。
             const skipped = reply.alreadyClaimed || direct && plan.resultKeys && !completed;
+            // 牧场侧的收获/生产单独计数，跳过的一律不计，避免统计把空跑也算进去。
+            if (!skipped && completed > 0 && (action === 'harvest' || action === 'produce')) {
+                recordOperation(action, completed, 'ranch');
+            }
             // 单批出售与放养一样给出具体收益，一键出售数量太多时仍沿用汇总提示。
             const notice = action === 'release' || action === 'sell' && input.all !== true ? `${plan.label}完成${rewards.length ? `，获得 ${sumItems(rewards).map((item: any) => `${item.name} ×${item.count}`).join('、')}` : ''}`
                 : plan.resultKeys && completed < plan.count ? `已完成 ${completed} / ${plan.count} 项，其余状态已变化，请刷新核对` : undefined;

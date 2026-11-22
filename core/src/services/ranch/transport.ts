@@ -14,6 +14,8 @@ const ROUTES: Record<string, [string, string, string, string?]> = {
     // 21 级开放的棚需要单独激活（state=3 → 1），光靠 upgrade 不会自动解锁。
     activateShed: ['homesteadpb.HomesteadService', 'ActivateFacility', 'RanchActivateFacility'],
     upgrade: ['homesteadpb.HomesteadService', 'UpgradeBuilding', 'RanchUpgradeBuilding'],
+    // 沙漏（1006）加速：扣的是沙漏秒数，减的是建筑升级剩余时间。
+    speedUpUpgrade: ['homesteadpb.HomesteadService', 'SpeedUpBuildingUpgrade', 'RanchSpeedUpBuildingUpgrade'],
     completeUpgrade: ['homesteadpb.HomesteadService', 'CompleteBuildingUpgrade', 'RanchCompleteBuildingUpgrade'],
     addGrass: ['homesteadpb.FeedMachineService', 'AddFeed', 'RanchAddFeed'],
     animals: ['animalpb.AnimalService', 'GetRanchDetail', 'RanchGetRanchDetail'],
@@ -31,6 +33,11 @@ const ROUTES: Record<string, [string, string, string, string?]> = {
     putMosquito: ['animalpb.RanchService', 'PutHazard', 'RanchPutHazard'],
     bag: ['itempb.ItemService', 'GetBag', 'RanchGetBag'],
     bagTabs: ['itempb.ItemService', 'GetBagTab', 'RanchGetBagTab'],
+    // 上锁/解锁走同一对 RPC，方向由动作名决定。第 4 段必须显式给回包类型，
+    // 否则 rpc 会按 `${type}Reply` 找不到消息（LockItems 的回复叫 LockItemsReply，
+    // 但 type 本身不是消息名），解码直接抛错。
+    lockItems: ['itempb.ItemService', 'LockItems', 'LockItems', 'LockItemsReply'],
+    unlockItems: ['itempb.ItemService', 'UnlockItems', 'UnlockItems', 'UnlockItemsReply'],
     sell: ['itempb.ItemService', 'Sell', 'RanchSell'],
     useCan: ['itempb.ItemService', 'Use', 'RanchUse'],
     // 读取集市轮次状态：RotationShopNotify 只推送到访，具体场次/时间要从 ShopProfiles 拉。

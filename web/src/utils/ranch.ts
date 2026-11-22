@@ -22,12 +22,14 @@ export const RANCH_ENDPOINT = '/api/ranch'
 export const RANCH_OPTIONS_ENDPOINT = '/api/ranch/automation-options'
 
 export const RANCH_VIEWS = [
+  'overview',
   'animals',
   'facilities',
   'bag',
   'shop',
   'market',
   'cans',
+  'mall',
   'tasks',
   'illustrated',
   'friends',
@@ -37,12 +39,14 @@ export const RANCH_VIEWS = [
 export type RanchView = (typeof RANCH_VIEWS)[number]
 
 export const RANCH_VIEW_LABELS: Record<RanchView, string> = {
+  overview: '牧场概览',
   animals: '栏舍',
   facilities: '设施',
   bag: '背包',
   shop: '牧场商店',
   market: '交易市场',
   cans: '罐头商城',
+  mall: '礼包商城',
   tasks: '牧场任务',
   illustrated: '牧场图鉴',
   friends: '好友牧场',
@@ -62,6 +66,7 @@ export const RANCH_ACTIONS = [
   'clean',
   'activateShed',
   'upgrade',
+  'speedUpUpgrade',
   'completeUpgrade',
   'claimTasks',
   'reportEntry',
@@ -69,6 +74,8 @@ export const RANCH_ACTIONS = [
   'claimIllustrated',
   'claimDailyShare',
   'buyCan',
+  'buyMall',
+  'setItemLock',
   'steal',
   'stroke',
   'release',
@@ -97,12 +104,18 @@ export const RANCH_ACTION_FIELDS: Record<RanchAction, string[]> = {
   /** 一级棚激活：后端只读 facilityId，指向 state=3 的 6002001 实例。 */
   activateShed: ['facilityId'],
   upgrade: ['facilityId'],
+  /** 沙漏加速：seconds 是要扣掉的沙漏秒数，后端会按升级剩余时间再截断一次。 */
+  speedUpUpgrade: ['facilityId', 'seconds'],
   completeUpgrade: ['facilityId'],
   claimTasks: ['all', 'taskId', 'double'],
   reportEntry: ['entry'],
   exchange: ['goodsId', 'count'],
   claimIllustrated: ['kind'],
   claimDailyShare: [],
+  /** 礼包商城与罐头商城走同一套购买协议，只是目录判据不同。 */
+  buyMall: ['goodsId', 'count', 'slotType'],
+  /** 上锁/解锁：locked 决定方向，uid 单条、itemUids 批量。 */
+  setItemLock: ['uid', 'itemUids', 'locked'],
   steal: ['hostGid'],
   stroke: ['hostGid', 'ranchId', 'animalId'],
   release: ['ranchId', 'animalId'],
@@ -125,12 +138,15 @@ export const RANCH_ACTION_REQUIRED: Record<RanchAction, string[][]> = {
   clean: [],
   activateShed: [['facilityId']],
   upgrade: [['facilityId']],
+  speedUpUpgrade: [['facilityId', 'seconds']],
   completeUpgrade: [['facilityId']],
   claimTasks: [['all'], ['taskId']],
   reportEntry: [['entry']],
   exchange: [['goodsId', 'count']],
   claimIllustrated: [['kind']],
   claimDailyShare: [],
+  buyMall: [['goodsId', 'count']],
+  setItemLock: [['locked', 'uid'], ['locked', 'itemUids']],
   steal: [['hostGid']],
   stroke: [['hostGid', 'ranchId', 'animalId']],
   release: [['ranchId', 'animalId']],
@@ -152,6 +168,12 @@ export const RANCH_FIELD_LABELS: Record<string, string> = {
   itemId: '幼崽',
   animalId: '动物',
   uid: '物品批次',
+  /** 批量锁定时的多批次列表。 */
+  itemUids: '物品批次列表',
+  /** setItemLock 的方向：true 上锁、false 解锁。 */
+  locked: '锁定状态',
+  /** 沙漏加速要扣掉的秒数。 */
+  seconds: '加速秒数',
   bucketType: '罐头类型',
   /** 普通罐头的使用阶段：longest=仅最长生长阶段，any=任意阶段。 */
   normalStage: '普通罐头阶段',
@@ -605,6 +627,8 @@ function mapBagItem(raw: any) {
     ...toItem(item),
     uid: text(item.uid),
     locked: item.locked === true,
+    /** 后端 canLockRanchItem 的结果：已锁定的可解锁，未锁定的只有保护类型可上锁。 */
+    lockable: item.lockable === true,
     tabId: number(item.tabId, 0) || 0,
     type: number(item.type, 0) || 0,
     sellPrices: toItems(item.sellPrices),
@@ -654,6 +678,26 @@ function mapCanGood(raw: any, slotType: number) {
     remaining: nullableNumber(good.remaining),
     maxCount: number(good.maxCount, 1) || 1,
     available: good.available === true,
+  }
+}
+
+/** 牧场生涯：累计收获 / 成熟 / 偷取次数，以及按产物聚合的数量。 */
+export interface RanchCareer {
+  harvest: number
+  mature: number
+  steal: number
+  /** type 来自物品配置：106 主产物、107 副产物，未配置时为 null。 */
+  products: (RanchItem & { type: number | null })[]
+}
+
+function mapRanchCareer(raw: any): RanchCareer | null {
+  if (!raw || typeof raw !== 'object')
+    return null
+  return {
+    harvest: number(raw.harvest, 0) || 0,
+    mature: number(raw.mature, 0) || 0,
+    steal: number(raw.steal, 0) || 0,
+    products: list(raw.products).map((product: any) => ({ ...toItem(product), type: nullableNumber(product.type) })),
   }
 }
 
@@ -798,6 +842,8 @@ function mapFriendRanch(raw: any, serverTimeMs: unknown) {
     cleanableHazards: number(raw.cleanableHazards, 0) || 0,
     strokeRemaining: nullableNumber(raw.strokeRemaining),
     mosquitoRemaining: nullableNumber(raw.mosquitoRemaining),
+    /** 好友的牧场生涯统计，取不到时为 null。 */
+    career: mapRanchCareer(raw.career),
     ranches: list(raw.ranches).map((ranch: any) => ({
       id: text(ranch.id),
       name: text(ranch.name) || '栏舍',
@@ -832,6 +878,12 @@ export interface RanchState {
   shop: { shopId: number, goods: ReturnType<typeof mapShopGood>[] } | null
   market: { opened: boolean, present: boolean, periodDay: string, roundIndex: string, shelves: any[], goods: ReturnType<typeof mapMarketGood>[] } | null
   canShop: { slotType: number, goods: ReturnType<typeof mapCanGood>[] } | null
+  /** 礼包商城：和罐头商城同一套商品结构，额外含沙漏。 */
+  mall: { slotType: number, goods: ReturnType<typeof mapCanGood>[] } | null
+  /** 沙漏秒数：未下发时为 null，页面据此决定要不要显示加速入口。 */
+  hourglassSeconds: number | null
+  /** 牧场生涯统计，只有 overview 视图会带。 */
+  career: RanchCareer | null
   tasks: ReturnType<typeof mapTask>[] | null
   book: ReturnType<typeof mapBook>
   activities: { id: string, name: string, startTime: number, endTime: number, status: ReturnType<typeof activityStatus> }[] | null
@@ -900,6 +952,14 @@ export function mapRanchState(state?: Record<string, any> | null): RanchState | 
     canShop: state.canShop && typeof state.canShop === 'object'
       ? { slotType: number(state.canShop.slotType, 6) || 6, goods: list(state.canShop.goods).map((good: any) => mapCanGood(good, number(state.canShop.slotType, 6) || 6)) }
       : null,
+    mall: state.mall && typeof state.mall === 'object'
+      ? { slotType: number(state.mall.slotType, 6) || 6, goods: list(state.mall.goods).map((good: any) => mapCanGood(good, number(state.mall.slotType, 6) || 6)) }
+      : null,
+    // 未下发与「确实是 0 秒」要分开：前者不显示沙漏，后者显示 0 并禁用加速。
+    hourglassSeconds: state.hourglassSeconds === undefined || state.hourglassSeconds === null
+      ? null
+      : (number(state.hourglassSeconds, 0) || 0),
+    career: mapRanchCareer(state.career),
     tasks: state.tasks === undefined ? null : list(state.tasks).map(mapTask),
     book: state.book === undefined ? null : mapBook(state.book),
     activities: state.activities === undefined
@@ -911,7 +971,19 @@ export function mapRanchState(state?: Record<string, any> | null): RanchState | 
           endTime: number(activity.endTime, 0) || 0,
           status: activityStatus(activity, serverTime),
         })),
-    friends: state.friends === undefined ? null : list(state.friends).map((friend: any) => ({ gid: text(friend.gid), name: text(friend.name) || text(friend.gid), avatarUrl: text(friend.avatarUrl), blacklisted: friend.blacklisted === true })),
+    friends: state.friends === undefined
+      ? null
+      : list(state.friends).map((friend: any) => ({
+          gid: text(friend.gid),
+          name: text(friend.name) || text(friend.gid),
+          avatarUrl: text(friend.avatarUrl),
+          blacklisted: friend.blacklisted === true,
+          // 巡查判据：后端在好友名单里整条下发，界面据此标「可偷取 / 可清理」。
+          canSteal: friend.canSteal === true,
+          canHelp: friend.canHelp === true,
+          stealLotCount: number(friend.stealLotCount, 0) || 0,
+          helpCount: number(friend.helpCount, 0) || 0,
+        })),
     friendRanch: state.friendRanch === undefined ? null : mapFriendRanch(state.friendRanch, serverTime),
     dailyShare: state.dailyShare === undefined ? null : mapDailyShare(state.dailyShare),
     dailyBenefit: state.dailyBenefit === undefined ? null : mapDailyBenefit(state.dailyBenefit),

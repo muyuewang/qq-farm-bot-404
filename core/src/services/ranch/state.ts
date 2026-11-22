@@ -6,6 +6,8 @@ const { rpc, inScene, isUnlocked } = require('./transport');
 const { animalMap, mutationMap, cubMap, canMap, facilityMap, itemMap, taskMap, itemDto, pendingOperationView, quantity, levelInfo, error } = require('./model');
 const { getServerTimeSec } = require('../../utils/utils');
 const { types } = require('../../utils/proto');
+const { getUserState } = require('../../utils/network');
+const { getCareerInfoOrNull } = require('../career');
 
 function bagItems(bag: any): any[] {
     return [...bag.physical_items, ...bag.virtual_items];
@@ -120,8 +122,19 @@ function snapshot(raw: any): any {
         currencies: [1007, 1002, 1005, 1008, 7002].map(id => ({ ...itemDto({ id, count: balance(raw.bag, id).total }), locked: balance(raw.bag, id).locked })),
         buckets: [7003, 7004].map(id => ({ id, seconds: balance(raw.bag, id).total })),
         grass: balance(raw.bag, 7001).total,
+        // 沙漏（1006）用于加速建筑升级，顶部资源条要显示剩余秒数。
+        hourglassSeconds: balance(raw.bag, 1006).total,
         facilities: raw.cells.facilities.filter((facility: any) => [6, 7, 8].includes(facility.module_type)).map((facility: any) => facilityDto(facility, info.level)),
     };
+}
+
+/**
+ * 可锁定判定：已锁定的物品要能解锁，未锁定的只允许 106/107 这类保护类型上锁。
+ * uid 为 0 表示服务端没给批次号，这种记录发上去只会被拒，直接排除。
+ */
+function canLockRanchItem(item: any): boolean {
+    const type = itemMap.get(Number(item.id))?.type;
+    return BigInt(quantity(item.uid)) > 0n && (item.is_locked || type === 106 || type === 107);
 }
 
 function inventory(raw: any): any[] {
@@ -129,7 +142,7 @@ function inventory(raw: any): any[] {
         const metadata = itemMap.get(Number(item.id));
         const animal = cubMap.get(Number(item.id));
         return {
-            ...itemDto(item), uid: quantity(item.uid), locked: item.is_locked, tabId: Number(item.tab_id) || Number(metadata?.show_tab_ids) || 0,
+            ...itemDto(item), uid: quantity(item.uid), locked: item.is_locked, lockable: canLockRanchItem(item), tabId: Number(item.tab_id) || Number(metadata?.show_tab_ids) || 0,
             type: metadata?.type || 0, sellPrices: item.show?.sells?.map(itemDto) || [],
             // 是否可卖统一走 salePrices：锁定、有出售条件、数量为 0 或多货币报价不完整都会返回空。
             canSell: salePrices(item).length > 0,
@@ -213,13 +226,19 @@ async function market(raw: any): Promise<any> {
     };
 }
 
-async function canCatalog(raw: any, slotType = 6): Promise<any> {
-    if (![6, 7].includes(slotType)) throw error('INVALID_ARGUMENT', '未知牧场罐头商城');
+/**
+ * 牧场商城目录。罐头商城（cans）与礼包商城（mall）走同一个协议分页：
+ * cansOnly 为真时只保留 all 罐头都能识别的商品；礼包商城额外放行沙漏（1006），
+ * 它不在罐头配置表里，但确实是商城正在卖的加速道具。
+ */
+async function ranchMallCatalog(raw: any, slotType = 6, cansOnly = false): Promise<any> {
+    if (![6, 7].includes(slotType)) throw error('INVALID_ARGUMENT', '未知牧场商城');
     const reply = await rpc('canShop', { slot_type: slotType, is_manual_open: true, global_scene_id: 2 });
     const now = getServerTimeSec();
     const goods: any[] = [];
     for (const good of reply.goods_list) {
-        if (!good.reward_items.length || good.reward_items.some((item: any) => !canMap.has(Number(item.id)))) continue;
+        if (!good.reward_items.length || good.reward_items.some((item: any) =>
+            !canMap.has(Number(item.id)) && (cansOnly || Number(item.id) !== 1006))) continue;
         const promotion = Number(good.discount_price) > 0 && Number(good.promotion_start_time) <= now && now < Number(good.promotion_end_time);
         const price = itemDto({ id: good.price.id, count: promotion ? good.discount_price : good.price.count });
         const free = good.is_free && BigInt(price.count) === 0n;
@@ -235,17 +254,40 @@ async function canCatalog(raw: any, slotType = 6): Promise<any> {
     return { slotType, goods };
 }
 
+/** 罐头商城是礼包商城去掉沙漏后的子集，判据只有 cansOnly 一个开关。 */
+function canCatalog(raw: any, slotType = 6): Promise<any> {
+    return ranchMallCatalog(raw, slotType, true);
+}
+
+/**
+ * 牧场生涯统计。生涯接口本身也带农场数据，这里只取 ranch 段；
+ * products 过滤掉 0 数量，避免页面渲染一堆空产物行。
+ */
+async function ranchCareer(gid: number): Promise<any> {
+    const career = (await getCareerInfoOrNull(gid))?.ranch;
+    if (!career) return null;
+    return {
+        ...career,
+        products: career.products.filter((item: any) => item.count > 0).map((item: any) => ({
+            ...itemDto(item), type: itemMap.get(item.id)?.type,
+        })),
+    };
+}
+
 async function getState(view = 'animals', shopId?: number, hostGid?: string): Promise<any> {
-    if (!['animals', 'facilities', 'bag', 'shop', 'market', 'tasks', 'friends', 'illustrated', 'activities', 'cans'].includes(view)) throw error('INVALID_ARGUMENT', '未知牧场页面');
+    if (!['animals', 'facilities', 'bag', 'shop', 'market', 'tasks', 'friends', 'illustrated', 'activities', 'cans', 'overview', 'mall'].includes(view)) throw error('INVALID_ARGUMENT', '未知牧场页面');
     if (!isUnlocked()) return { unlocked: false, sceneId: 2, reason: '牧场尚未解锁，请先在游戏中完成开启条件' };
     return inScene(async (cells: any) => {
         const raw = await loadRaw(cells);
         const state = snapshot(raw);
         state.pendingOperations = require('./operation-state').forCurrentAccount().pending().map(pendingOperationView);
         if (view === 'bag') state.bag = inventory(raw);
+        // 生涯统计只随概览返回：它在协议上是独立的路由，其它视图不需要多打一次。
+        if (view === 'overview') state.career = await ranchCareer(getUserState().gid);
         if (view === 'shop') state.shop = await catalog(raw, Number(shopId ?? 5));
         if (view === 'market') state.market = await market(raw);
         if (view === 'cans') state.canShop = await canCatalog(raw, Number(shopId ?? 6));
+        if (view === 'mall') state.mall = await ranchMallCatalog(raw, Number(shopId ?? 6));
         if (view === 'tasks') {
             state.tasks = taskList(await rpc('tasks', { global_scene_id: 2 }));
             // 每日首次分享状态随任务和活动页面返回。
@@ -265,8 +307,9 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
             // 拉黑的好友仍留在列表里，但带 blacklisted 标记，前端据此置灰并跳过拜访。
             else {
                 const blacklist = new Set(require('../../models/store').getRanchFriendBlacklist());
-                // canSteal / canHelp / statusAtMs 是巡查用的内部字段，刷新后很快过期，不下发给界面。
-                state.friends = (await getRanchFriendList()).map(({ gid, name, avatarUrl }) => ({ gid: String(gid), name, avatarUrl, blacklisted: blacklist.has(gid) }));
+                // 偷取/帮忙剩余次数要显示给用户，整条透传；canSteal / canHelp / statusAtMs
+                // 是巡查判据，界面不读，但留着不影响展示。好友状态强制 fresh，避免拿缓存名单下发给界面。
+                state.friends = (await getRanchFriendList(undefined, true)).map(friend => ({ ...friend, gid: String(friend.gid), blacklisted: blacklist.has(friend.gid) }));
             }
         }
         return state;
@@ -285,4 +328,4 @@ async function resourceBalances(keys: string[]): Promise<any[]> {
     });
 }
 
-module.exports = { getState, loadRaw, isPendingShed, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, resourceBalance, isRanchResource, resourceBalances, animalDto };
+module.exports = { getState, loadRaw, isPendingShed, shedAwaitingActivation, snapshot, balance, bagItems, inventory, salePrices, taskList, catalog, market, readMarketRotation, canCatalog, ranchMallCatalog, canLockRanchItem, ranchCareer, resourceBalance, isRanchResource, resourceBalances, animalDto };

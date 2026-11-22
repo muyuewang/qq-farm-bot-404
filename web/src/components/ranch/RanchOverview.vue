@@ -3,6 +3,7 @@ import type { RanchFacility } from '@/utils/ranch'
 import type { RuntimeLogEntry } from '@/utils/runtime-log'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import RanchCareerPanel from '@/components/ranch/RanchCareerPanel.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAccountStore } from '@/stores/account'
 import { useRanchStore } from '@/stores/ranch'
@@ -155,8 +156,9 @@ const ranchLogs = computed(() => {
 function refresh() {
   if (!currentAccountId.value)
     return
-  // animals 与 facilities 两段都在基础快照里，读设施分区即可拿到总览要的全部字段。
-  void ranchStore.fetchView(currentAccountId.value, 'facilities')
+  // overview 视图在基础快照之外多带一份牧场生涯统计；animals / facilities 两段本来就在
+  // 基础快照里，所以总览要的字段一个不少，不必再多读一次设施分区。
+  void ranchStore.fetchView(currentAccountId.value, 'overview')
 }
 
 async function loadLogs() {
@@ -429,7 +431,22 @@ onBeforeUnmount(() => {
                 {{ organicBucket?.value ?? '—' }}
               </div>
             </div>
+            <!-- 沙漏只在服务端下发了该项时才出现：未下发与「确实是 0 秒」不是一回事。 -->
+            <div v-if="state.hourglassSeconds !== null" class="min-w-0">
+              <div class="flex items-center gap-1.5 text-xs text-gray-500">
+                <div class="i-carbon-hourglass shrink-0 text-base text-purple-500" />
+                沙漏
+              </div>
+              <div class="truncate text-sm font-bold" :title="formatSeconds(state.hourglassSeconds)">
+                {{ formatSeconds(state.hourglassSeconds) }}
+              </div>
+            </div>
           </div>
+        </div>
+
+        <!-- 生涯是四张卡里唯一带列表的，占满整行才不会把产物名挤成省略号。 -->
+        <div v-if="state.career" class="lg:col-span-3 sm:col-span-2">
+          <RanchCareerPanel :career="state.career" />
         </div>
       </div>
 

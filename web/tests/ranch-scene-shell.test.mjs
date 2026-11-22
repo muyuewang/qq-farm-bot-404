@@ -20,6 +20,8 @@ const shopPage = read('../src/views/Shop.vue')
 const illustratedPage = read('../src/views/Illustrated.vue')
 const friendsPage = read('../src/views/Friends.vue')
 const activityPage = read('../src/views/Activity.vue')
+/** 概览分区不走 RanchSceneHost：它直接读 store 拿基础快照，页面归属在 Dashboard 的概览卡片里。 */
+const overviewPanel = read('../src/components/ranch/RanchOverview.vue')
 
 const SCENE_PAGES = [
   ['Personal.vue', personalPage],
@@ -46,9 +48,17 @@ function hostView(name, source) {
   return matched[1]
 }
 
+/** 概览分区不是页签，只能从它自己的取数调用里确认归属。 */
+function requestedView(name, source) {
+  const matched = source.match(/fetchView\([^,]+,\s*'([^']+)'/)
+  assert.ok(matched, `${name} 没有静态声明请求的牧场分区`)
+  return matched[1]
+}
+
 const placed = [
   ...viewsIn('RANCH_TABS', personalPage),
   ...viewsIn('RANCH_SHOP_VIEWS', shopPage),
+  requestedView('RanchOverview.vue', overviewPanel),
   hostView('Illustrated.vue', illustratedPage),
   hostView('Friends.vue', friendsPage),
   hostView('Activity.vue', activityPage),

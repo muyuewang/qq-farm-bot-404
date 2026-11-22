@@ -185,6 +185,10 @@ function shelfText(shelf: any) {
           <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
             GID {{ ranch.gid }} · 可偷货架 {{ ranch.stealableShelves }} 个 · 可清理危险物 {{ ranch.cleanableHazards }} 个
           </p>
+          <!-- 生涯统计是服务端长期累计值；对方没开放或查询失败时整行不出现。 -->
+          <p v-if="ranch.career" class="mt-0.5 truncate text-[11px] text-gray-400">
+            生涯：累计收获 {{ ranch.career.harvest }} · 培养成熟 {{ ranch.career.mature }} · 累计偷取 {{ ranch.career.steal }}
+          </p>
         </div>
         <span class="rounded-lg bg-gray-50 px-2 py-1 text-[11px] text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
           今日抚摸剩余 {{ ranch.strokeRemaining ?? '未下发' }} 次
@@ -359,6 +363,21 @@ function shelfText(shelf: any) {
               <p class="truncate text-[11px] text-gray-500">
                 {{ friend.gid }}
               </p>
+              <!-- 巡查判据由后端整条下发，这里只做展示，不自行推断可偷/可帮。 -->
+              <div v-if="friend.stealLotCount || friend.helpCount" class="mt-1 flex flex-wrap gap-1">
+                <span
+                  v-if="friend.stealLotCount"
+                  class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                >
+                  可偷 {{ friend.stealLotCount }} 批
+                </span>
+                <span
+                  v-if="friend.helpCount"
+                  class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                >
+                  可帮 {{ friend.helpCount }} 次
+                </span>
+              </div>
             </div>
             <span
               v-if="blacklistedSet.has(Number(friend.gid))"

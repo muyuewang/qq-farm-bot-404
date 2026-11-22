@@ -63,7 +63,7 @@ const sortedSeeds = computed(() => {
  * game_scene_id=2 的牧场快照上，购买还要经过 quote → execute。场景由顶部栏全局切换，
  * 两套请求与限购校验都由各自的 store 负责，不互相兜底。
  */
-const RANCH_SHOP_VIEWS = (['shop', 'cans', 'market'] as const).map(value => ({ value, label: RANCH_VIEW_LABELS[value] }))
+const RANCH_SHOP_VIEWS = (['shop', 'cans', 'mall', 'market'] as const).map(value => ({ value, label: RANCH_VIEW_LABELS[value] }))
 const ranchView = ref<RanchView>('shop')
 const ranchShopId = ref<number | null>(null)
 const ranchCansSlot = ref<number | null>(null)
@@ -71,7 +71,8 @@ const ranchCansSlot = ref<number | null>(null)
 const ranchParams = computed(() => {
   if (ranchView.value === 'shop' && ranchShopId.value !== null)
     return { shopId: ranchShopId.value }
-  if (ranchView.value === 'cans' && ranchCansSlot.value !== null)
+  // 罐头商城与礼包商城后端是同一协议分页，都用 shopId 选 slot_type。
+  if ((ranchView.value === 'cans' || ranchView.value === 'mall') && ranchCansSlot.value !== null)
     return { shopId: ranchCansSlot.value }
   return {}
 })
@@ -481,6 +482,7 @@ onMounted(() => {
       <template #default="{ state, onRequest, activeView }">
         <RanchShopPanel v-if="activeView === 'shop'" :state="state" @request="onRequest" @shop-id="onRanchShopId" />
         <RanchCansPanel v-else-if="activeView === 'cans'" :state="state" @request="onRequest" @slot-type="onRanchCansSlot" />
+        <RanchCansPanel v-else-if="activeView === 'mall'" catalog="mall" :state="state" @request="onRequest" @slot-type="onRanchCansSlot" />
         <RanchMarketPanel v-else-if="activeView === 'market'" :state="state" @request="onRequest" />
       </template>
     </RanchSceneHost>

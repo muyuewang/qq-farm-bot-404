@@ -139,7 +139,7 @@ function baseState(overrides = {}) {
 }
 
 test('RANCH_VIEWS、动作表与必填分支表一一对应，页面无法拼出后端不认识的动作', () => {
-  assert.equal(RANCH_VIEWS.length, 10)
+  assert.equal(RANCH_VIEWS.length, 12)
   const actions = [...RANCH_ACTIONS, 'acknowledge']
   assert.deepEqual([...actions].sort(), Object.keys(RANCH_ACTION_FIELDS).sort())
   assert.deepEqual([...actions].sort(), Object.keys(RANCH_ACTION_REQUIRED).sort())
@@ -478,4 +478,80 @@ test('未解锁的牧场只给出后端原因，不渲染零值快照', () => {
   assert.equal(state.unlocked, false)
   assert.equal(state.reason, '农场等级不足')
   assert.equal(mapRanchState(null), null)
+})
+
+test('概览分区：生涯数据只取后端下发的累计值，产物数量保留 int64 原文', () => {
+  const state = mapRanchState(baseState({
+    career: {
+      harvest: 128,
+      mature: 41,
+      steal: 7,
+      products: [
+        { id: 7101, count: '18446744073709551615', name: '金鸡蛋', image: '' },
+        { id: 7102, count: '12', name: '牛奶', image: '' },
+      ],
+    },
+  }))
+  assert.equal(state.career.harvest, 128)
+  assert.equal(state.career.mature, 41)
+  assert.equal(state.career.steal, 7)
+  // int64 上限必须原样保留，换算成 Number 会丢精度。
+  assert.equal(state.career.products[0].count, '18446744073709551615')
+  assert.equal(state.career.products[1].name, '牛奶')
+  // 后端没带 career 段时保持 null，页面据此不渲染零值生涯。
+  assert.equal(mapRanchState(baseState()).career, null)
+})
+
+test('礼包商城与罐头商城各读各的段落，互不兜底', () => {
+  const goods = [{
+    id: '9001',
+    name: '沙漏礼包',
+    rewards: [{ id: 1006, count: '3600', name: '沙漏', image: '' }],
+    free: false,
+    price: { id: 1002, count: '50', name: '点券', image: '', balance: '50' },
+    remaining: 2,
+    maxCount: 999,
+    available: true,
+  }]
+
+  const mallOnly = mapRanchState(baseState({ mall: { slotType: 6, goods } }))
+  assert.equal(mallOnly.mall.slotType, 6)
+  assert.equal(mallOnly.mall.goods[0].rewards[0].id, '1006')
+  // 余额挂在商品上（后端 price.balance），不在 price 物品里。
+  assert.equal(mallOnly.mall.goods[0].balance, '50')
+  assert.equal(mallOnly.mall.goods[0].remaining, 2)
+  // 只读 mall 时不能顺手把 canShop 也填上，否则页面会拿错目录。
+  assert.equal(mallOnly.canShop, null)
+
+  const cansOnly = mapRanchState(baseState({ canShop: { slotType: 7, goods } }))
+  assert.equal(cansOnly.canShop.slotType, 7)
+  assert.equal(cansOnly.mall, null)
+})
+
+test('沙漏加速与道具锁定各自要求必填参数，缺项不发请求', () => {
+  const speedUp = buildRanchBody('speedUpUpgrade', { facilityId: '1:101', seconds: 120 })
+  assert.equal(speedUp.ok, true)
+  assert.deepEqual(speedUp.body, { facilityId: '1:101', seconds: 120 })
+  const noSeconds = buildRanchBody('speedUpUpgrade', { facilityId: '1:101' })
+  assert.equal(noSeconds.ok, false)
+  assert.match(noSeconds.error, /加速秒数/)
+
+  const single = buildRanchBody('setItemLock', { uid: '88001', locked: true })
+  assert.equal(single.ok, true)
+  assert.deepEqual(single.body, { uid: '88001', locked: true })
+  const batch = buildRanchBody('setItemLock', { itemUids: ['88001', '88002'], locked: false })
+  assert.equal(batch.ok, true)
+  assert.deepEqual(batch.body, { itemUids: ['88001', '88002'], locked: false })
+  // 只有 locked 没有目标批次时必须拒绝，否则会变成一次无目标写入。
+  assert.equal(buildRanchBody('setItemLock', { locked: true }).ok, false)
+  assert.equal(buildRanchBody('setItemLock', { uid: '88001' }).ok, false)
+})
+
+test('礼包商城购买与罐头购买走同一套校验，但动作名不能混用', () => {
+  const mall = buildRanchBody('buyMall', { goodsId: '9001', count: 1, slotType: 6 })
+  assert.equal(mall.ok, true)
+  assert.deepEqual(mall.body, { goodsId: '9001', count: 1, slotType: 6 })
+  assert.equal(buildRanchBody('buyMall', { goodsId: '9001' }).ok, false)
+  // buyCan 的入参形态一致，但动作名不同，不能互相顶替。
+  assert.equal(buildRanchBody('buyCan', { goodsId: '9001', count: 1 }).ok, true)
 })

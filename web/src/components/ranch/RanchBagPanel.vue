@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RanchRequest, RanchState } from '@/utils/ranch'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -34,7 +34,8 @@ const items = computed(() => props.state?.bag || [])
  * 幼崽与罐头同样可能有报价，直接用 canSell 会把它们一起卖掉。
  */
 const PRODUCT_TYPES = [106, 107]
-const sellable = computed(() => items.value.filter(item => item.canSell && PRODUCT_TYPES.includes(Number(item.type))))
+// 锁定批次数不进「一键出售」的份数：服务端本来就会跳过它们，界面上报多了会让人以为能卖。
+const sellable = computed(() => items.value.filter(item => item.canSell && !item.locked && PRODUCT_TYPES.includes(Number(item.type))))
 const ranches = computed(() => sortFacilities((props.state?.facilities || []).filter(facility => facility.isRanch)))
 const ranchOptions = computed(() => ranches.value.map(facility => ({
   value: facility.id,
@@ -104,6 +105,48 @@ function requestSellAll() {
     note: '服务端按当前背包重新筛选可出售产物，已锁定或有出售条件的批次不会被卖出。',
   })
 }
+
+/**
+ * 道具锁定。
+ *
+ * 后端只对「已锁定」或保护类型（106/107）的物品放行，判定结果通过 lockable 下发，
+ * 页面不自己按 type 数字猜。批量模式只在当前分类内选，切分类要清空选择，
+ * 否则会把看不见的批次一起提交。
+ */
+const batchLockMode = ref(false)
+const selectedUids = ref<string[]>([])
+
+const hasLockable = computed(() => items.value.some((item: any) => item.lockable === true))
+const selectedLockables = computed(() => visible.value.filter((item: any) => item.lockable === true && selectedUids.value.includes(item.uid)))
+
+function toggleBatchLockMode() {
+  batchLockMode.value = !batchLockMode.value
+  selectedUids.value = []
+}
+
+function requestLock(item: any) {
+  emit('request', {
+    action: 'setItemLock',
+    input: { uid: item.uid, locked: !item.locked },
+    title: `${item.locked ? '解锁' : '上锁'}：${item.name}`,
+    note: item.locked ? undefined : '上锁后这批物品不会被一键出售带走，需要时可以再解锁。',
+  })
+}
+
+function submitBatchLock(locked: boolean) {
+  const itemUids = selectedLockables.value.filter((item: any) => item.locked !== locked).map((item: any) => item.uid)
+  if (!itemUids.length)
+    return
+  emit('request', {
+    action: 'setItemLock',
+    input: { itemUids, locked },
+    title: `${locked ? '批量上锁' : '批量解锁'} ${itemUids.length} 批物品`,
+  })
+}
+
+watch(filter, () => {
+  selectedUids.value = []
+})
 
 /**
  * 同一批物品可以同时有多个动作：幼崽既能放养也能卖，罐头既能入桶也能卖。
@@ -192,8 +235,21 @@ function unitPrice(item: any) {
         <span class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
           共 {{ items.length }} 批物品
         </span>
-        <BaseButton variant="primary" size="sm" :disabled="!sellable.length" @click="requestSellAll">
+        <BaseButton v-if="hasLockable" variant="secondary" size="sm" :aria-pressed="batchLockMode" @click="toggleBatchLockMode">
+          {{ batchLockMode ? '退出批量' : '批量锁定' }}
+        </BaseButton>
+        <BaseButton v-if="!batchLockMode" variant="primary" size="sm" :disabled="!sellable.length" @click="requestSellAll">
           一键出售产物
+        </BaseButton>
+      </div>
+
+      <div v-if="batchLockMode" class="flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
+        <span class="text-xs text-gray-600 dark:text-gray-300">已选 {{ selectedLockables.length }} 批</span>
+        <BaseButton variant="secondary" size="sm" :disabled="!selectedLockables.some((item: any) => !item.locked)" @click="submitBatchLock(true)">
+          批量上锁
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="!selectedLockables.some((item: any) => item.locked)" @click="submitBatchLock(false)">
+          批量解锁
         </BaseButton>
       </div>
 
@@ -245,7 +301,24 @@ function unitPrice(item: any) {
             <span v-if="item.canSell && !PRODUCT_TYPES.includes(Number(item.type))" class="rounded bg-sky-50 px-1.5 py-0.5 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300">可单卖</span>
           </div>
 
-          <div v-if="actionsFor(item).length" class="mt-3 flex flex-wrap items-end gap-2">
+          <!-- 锁定独立于业务动作：已锁定的物品本来就没有其它动作，混在一个 v-if 里会互相挡住 -->
+          <div v-if="item.lockable" class="mt-3 flex flex-wrap items-center gap-2">
+            <label v-if="batchLockMode" class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+              <input
+                v-model="selectedUids"
+                type="checkbox"
+                :value="item.uid"
+                :aria-label="`选择${item.name}`"
+                class="h-4 w-4"
+              >
+              选择此项
+            </label>
+            <BaseButton v-else variant="secondary" size="sm" @click="requestLock(item)">
+              {{ item.locked ? '解锁' : '上锁' }}
+            </BaseButton>
+          </div>
+
+          <div v-if="!batchLockMode && actionsFor(item).length" class="mt-3 flex flex-wrap items-end gap-2">
             <BaseSelect
               v-if="item.animalId"
               v-model="ranchTargets[item.uid]"

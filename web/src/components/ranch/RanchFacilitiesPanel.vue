@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import { formatQuantity, formatSeconds, grassRoom, itemListLine } from '@/utils/ranch'
@@ -10,6 +10,9 @@ const props = defineProps<{ state: RanchState | null }>()
 const emit = defineEmits<{ request: [payload: RanchRequest] }>()
 
 const grassInputs = ref<Record<string, string>>({})
+
+/** 沙漏（1006）剩余秒数；未下发时为 null，此时不显示加速入口。 */
+const hourglass = computed(() => props.state?.hourglassSeconds ?? null)
 
 function facilities() {
   return props.state?.facilities || []
@@ -57,6 +60,25 @@ function requestComplete(facility: RanchFacility) {
     action: 'completeUpgrade',
     input: { facilityId: facility.id },
     title: `完成升级：${facility.name}`,
+  })
+}
+
+/**
+ * 沙漏加速：扣的是沙漏秒数，减的是升级剩余时间。
+ *
+ * 取「沙漏存量」与「升级剩余」的较小值：超过剩余时间的那部分服务端会拒绝或截断，
+ * 让用户自己填一个更小的值没有意义。加速不走直投，仍要经过报价确认。
+ */
+function requestSpeedUp(facility: RanchFacility) {
+  const remaining = facility.upgradeCountdown ?? 0
+  const seconds = Math.min(hourglass.value ?? 0, remaining)
+  if (seconds <= 0)
+    return
+  emit('request', {
+    action: 'speedUpUpgrade',
+    input: { facilityId: facility.id, seconds },
+    title: `沙漏加速：${facility.name}`,
+    note: `将消耗 ${formatSeconds(seconds)}沙漏，把升级剩余时间直接缩短同样时长。`,
   })
 }
 
@@ -201,10 +223,24 @@ function pendingText(facility: RanchFacility) {
       <div v-if="facility.active && facility.upgradeState" class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
         <span>
           {{ completable(facility) ? '升级已完成，等待领取' : `升级中，约 ${formatSeconds(facility.upgradeCountdown)} 后完成` }}
+          <span v-if="!completable(facility) && hourglass !== null"> · 沙漏 {{ formatSeconds(hourglass) }}</span>
         </span>
-        <BaseButton variant="primary" size="sm" :disabled="!completable(facility)" @click="requestComplete(facility)">
-          完成升级
-        </BaseButton>
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- 升级还在跑的时候才给加速；已经到点就直接完成，不必再花沙漏。 -->
+          <BaseButton
+            v-if="!completable(facility) && hourglass !== null"
+            variant="secondary"
+            size="sm"
+            :disabled="hourglass <= 0"
+            :title="hourglass > 0 ? '用沙漏缩短本次升级剩余时间' : '沙漏不足'"
+            @click="requestSpeedUp(facility)"
+          >
+            沙漏加速
+          </BaseButton>
+          <BaseButton variant="primary" size="sm" :disabled="!completable(facility)" @click="requestComplete(facility)">
+            完成升级
+          </BaseButton>
+        </div>
       </div>
     </div>
   </div>
