@@ -22,6 +22,14 @@
 const express = require('express');
 const { resolveAdvertiseAddresses } = require('./ip-utils');
 
+/**
+ * @returns {{
+ *   app: import('express').Express,
+ *   start: () => Promise<any>,
+ *   handleApiRequest: Function,
+ *   getCaCertDer: () => Buffer
+ * }}
+ */
 function createCaptureApi({ config, ca, sessionStore, proxyManager, log = () => {} } = {}) {
   const startedAt = Date.now();
 
