@@ -248,7 +248,7 @@ test('农场到期时牧场巡查让路，按重进场间隔而不是巡查周�
     assert.deepEqual(logs.filter(row => row.tag === '牧场'), [], '让路不是失败，不该记成巡查失败日志');
 });
 
-test('牧草按容量阈值补满：达到阈值不补，低于阈值才补，且一次补足缺额', async () => {
+test('牧草余量不超过阈值就补满：等于阈值也补，超过阈值才不动', async () => {
     const mkFacility = (instanceId, feedCount) => ({
         instance_id: instanceId, state: 1, capacity: 100,
         feed_machine: { feed_count: feedCount },
@@ -270,8 +270,12 @@ test('牧草按容量阈值补满：达到阈值不补，低于阈值才补，�
         return calls.filter(call => call.action === 'addGrass');
     };
 
-    // 存量 30% >= 阈值 20%：不补。
-    assert.deepEqual(await runCase(30, 20, 100), [], '存量达到阈值不应补牧草');
+    // 存量 30% > 阈值 20%：不补。
+    assert.deepEqual(await runCase(30, 20, 100), [], '存量超过阈值不应补牧草');
+    // 存量正好 20% = 阈值：上游 PR#179 把判据从 >= 改成 >，等于阈值时按「不超过」补满。
+    const boundary = await runCase(20, 20, 100);
+    assert.equal(boundary.length, 1, '余量正好等于阈值时应当补草');
+    assert.equal(boundary[0].input.count, 80, '补到容量上限而不是按百分比补');
     // 存量 10% < 阈值 20%：补满缺口 90，库存充裕。
     const added = await runCase(10, 20, 100);
     assert.equal(added.length, 1, '低于阈值应补一次');

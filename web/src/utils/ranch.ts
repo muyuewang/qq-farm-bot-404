@@ -93,7 +93,8 @@ export const RANCH_ACTION_FIELDS: Record<RanchAction, string[]> = {
   buy: ['goodsId', 'count', 'shopId', 'autoPlace'],
   buyCan: ['goodsId', 'count', 'slotType'],
   place: ['ranchId', 'itemId', 'count'],
-  addGrass: ['facilityId', 'count'],
+  /** 好友赠送牧草：带 hostGid 时后端会进入好友牧场，对对方牧草机执行 AddFeed。 */
+  addGrass: ['facilityId', 'count', 'hostGid'],
   useCan: ['uid', 'count'],
   // normalStage / organicStage / produceAfterFeed 是喂养专用参数，后端只在这两个动作里读；
   // 按桶类型分别对应普通罐头与有机罐头的使用时机，缺省时按「任意阶段」处理。
@@ -624,6 +625,26 @@ export function grassRoom(facility: RanchFacility) {
   return capacity - current > 0n ? capacity - current : 0n
 }
 
+/** 好友牧草机剩余容量：与自家同一套判据，未建造或未激活时为 0。 */
+export function friendGrassRoom(feedMachine: { count: string, capacity: string } | null | undefined) {
+  if (!feedMachine)
+    return 0
+  const remaining = bigint(feedMachine.capacity) - bigint(feedMachine.count)
+  return remaining > 0n ? Number(remaining) : 0
+}
+
+/**
+ * 赠送牧草的上限：背包可用量与对方牧草机余量取小。
+ * 任一侧为 0 表示这次赠送不成立，界面据此禁用按钮并给出原因。
+ */
+export function friendGrassLimit(ranch: { feedMachine: { count: string, capacity: string } | null, grassAvailable?: string } | null | undefined) {
+  if (!ranch?.feedMachine)
+    return 0
+  const available = bigint(ranch.grassAvailable ?? '0')
+  const room = BigInt(friendGrassRoom(ranch.feedMachine))
+  return Number(available < room ? available : room)
+}
+
 function mapBagItem(raw: any) {
   const item = raw || {}
   return {
@@ -845,6 +866,19 @@ function mapFriendRanch(raw: any, serverTimeMs: unknown) {
     cleanableHazards: number(raw.cleanableHazards, 0) || 0,
     strokeRemaining: nullableNumber(raw.strokeRemaining),
     mosquitoRemaining: nullableNumber(raw.mosquitoRemaining),
+    /** 当前账号背包里可赠送的牧草数量，由后端按 total - locked 算好下发。 */
+    grassAvailable: text(raw.grassAvailable) || '0',
+    /**
+     * 好友牧草机：未建造或未激活时为 null。
+     * count / capacity 都是十进制字符串，容量判断必须走 BigInt。
+     */
+    feedMachine: raw.feedMachine && typeof raw.feedMachine === 'object'
+      ? {
+          id: text(raw.feedMachine.id),
+          count: text(raw.feedMachine.count) || '0',
+          capacity: text(raw.feedMachine.capacity) || '0',
+        }
+      : null,
     /** 好友的牧场生涯统计，取不到时为 null。 */
     career: mapRanchCareer(raw.career),
     ranches: list(raw.ranches).map((ranch: any) => ({
@@ -1183,7 +1217,7 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_market_organic_pinecone: false,
   ranch_grass: false,
   ranch_grass_buy: false,
-  // 与后端 ranch_grass_threshold_percent 默认值一致；牧草机余量低于该百分比才自动补满。
+  // 与后端 ranch_grass_threshold_percent 默认值一致；牧草机余量不超过该百分比就自动补满。
   ranch_grass_threshold_percent: 20,
   ranch_fill_cans: false,
   ranch_feed_normal: false,

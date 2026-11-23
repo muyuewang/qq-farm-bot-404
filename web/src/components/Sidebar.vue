@@ -5,12 +5,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 
+import UpdateModal from '@/components/UpdateModal.vue'
 import { menuRoutes } from '@/router/menu'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { SCENE_BRAND, useSceneStore } from '@/stores/scene'
 import { useShopStore } from '@/stores/shop'
 import { useStatusStore } from '@/stores/status'
+import { useUpdateStore } from '@/stores/update'
 import { useUserStore } from '@/stores/user'
 
 const accountStore = useAccountStore()
@@ -18,6 +20,7 @@ const statusStore = useStatusStore()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const shopStore = useShopStore()
+const updateStore = useUpdateStore()
 const sceneStore = useSceneStore()
 const route = useRoute()
 const router = useRouter()
@@ -68,6 +71,8 @@ async function refreshStatusFallback() {
 onMounted(() => {
   accountStore.fetchAccounts()
   checkConnection()
+  // 上游新版本只在装了宿主机更新器时才有值，未安装时这里读到的就是 null，界面不显示徽标。
+  updateStore.fetchStatus()
   // 获取当前用户信息
   userStore.fetchUserInfo()
 })
@@ -284,7 +289,20 @@ async function handleLogout() {
       </div>
 
       <div class="mt-1 flex items-center justify-between text-xs font-mono opacity-70" style="color: var(--theme-text);">
-        <span>v{{ version }}</span>
+        <span class="flex items-center gap-1.5">
+          v{{ version }}
+          <button
+            v-if="updateStore.status?.hasUpdate || updateStore.status?.state === 'running'"
+            type="button"
+            class="rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-colors"
+            :class="updateStore.status?.state === 'running' ? 'animate-pulse' : ''"
+            :style="{ background: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)', color: 'var(--theme-primary)' }"
+            :title="updateStore.status?.state === 'running' ? '正在更新' : `新版本 ${updateStore.status?.latestShort || ''}`"
+            @click="updateStore.modalOpen = true"
+          >
+            {{ updateStore.status?.state === 'running' ? '更新中' : '新版本' }}
+          </button>
+        </span>
         <div class="flex items-center gap-2">
           <a
             href="https://github.com/xxxscarlxrd404/qq-farm-bot"
@@ -338,6 +356,8 @@ async function handleLogout() {
       </div>
     </div>
   </aside>
+
+  <UpdateModal />
 </template>
 
 <style scoped>

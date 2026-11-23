@@ -132,6 +132,34 @@ export const useRanchStore = defineStore('ranch', () => {
     return fetchView(accountId, view, params)
   }
 
+  /**
+   * 读取单个好友牧场详情。
+   *
+   * 刻意不写回 state：好友页要同时保留整份好友列表和多张已展开的卡片，
+   * 若像 fetchView 那样整份覆盖，列表就会被单个好友的详情顶掉。
+   * 结果由调用方按 gid 自行缓存，失败时返回原因供卡片内部重试。
+   */
+  async function fetchFriendRanch(accountId: string, hostGid: string): Promise<{ ok: boolean, ranch: RanchState['friendRanch'], error: string }> {
+    if (!accountId || !hostGid)
+      return { ok: false, ranch: null, error: '缺少账号或好友标识' }
+    try {
+      const { data } = await api.get(RANCH_ENDPOINT, {
+        params: { view: 'friends', hostGid },
+        headers: { 'x-account-id': accountId },
+        skipErrorToast: true,
+      } as any)
+      if (!data?.ok) {
+        const failure = readError(data, '读取好友牧场失败')
+        return { ok: false, ranch: null, error: failure.message }
+      }
+      return { ok: true, ranch: mapRanchState(data.data)?.friendRanch ?? null, error: '' }
+    }
+    catch (err: any) {
+      const failure = readError(err?.response?.data, '读取好友牧场失败')
+      return { ok: false, ranch: null, error: failure.message }
+    }
+  }
+
   /** 报价：只读预览，不产生任何写操作，好友动作会真实进出好友牧场，因此按钮文案不能写成「试算免费」。 */
   async function quote(accountId: string, action: RanchAction, input: Record<string, any> = {}): Promise<RanchQuoteHandle | null> {
     if (!accountId)
@@ -355,6 +383,7 @@ export const useRanchStore = defineStore('ranch', () => {
     clearRanchData,
     fetchView,
     switchView,
+    fetchFriendRanch,
     quote,
     execute,
     executeDirect,

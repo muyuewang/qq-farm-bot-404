@@ -10,6 +10,8 @@ import {
   buildRanchExecuteBody,
   describeOperateResult,
   describeQuote,
+  friendGrassLimit,
+  friendGrassRoom,
   grassRoom,
   isRanchDirectAction,
   isRanchFeedStage,
@@ -475,6 +477,58 @@ test('好友栏舍的动物没有自家动作位', () => {
   assert.equal(animals[0].isFriend, true)
   assert.deepEqual(animals[0].actions, [])
   assert.equal(state.friendRanch.ranches[0].shelves[0].canSteal, true)
+})
+
+test('好友牧草机：余量、库存上限都按字符串大数换算，缺字段时不猜可送数量', () => {
+  // 上限取「背包可用」与「对方机器剩余」的较小值，两边都是十进制字符串。
+  assert.equal(friendGrassRoom({ count: '90', capacity: '100' }), 10)
+  assert.equal(friendGrassRoom({ count: '100', capacity: '100' }), 0, '装满时余量为 0，不能算出负数')
+  assert.equal(friendGrassRoom(null), 0, '没有牧草机的对象不能当成可送')
+
+  assert.equal(friendGrassLimit({ feedMachine: { count: '0', capacity: '100' }, grassAvailable: '35' }), 35)
+  assert.equal(friendGrassLimit({ feedMachine: { count: '95', capacity: '100' }, grassAvailable: '35' }), 5)
+  assert.equal(friendGrassLimit({ feedMachine: { count: '0', capacity: '100' }, grassAvailable: '0' }), 0)
+  // 未下发 grassAvailable 时按 0 处理：宁可按钮禁用，也不能让用户提交一个后端必然拒绝的数量。
+  assert.equal(friendGrassLimit({ feedMachine: { count: '0', capacity: '100' } }), 0)
+  assert.equal(friendGrassLimit(null), 0)
+})
+
+test('好友赠送牧草带 hostGid 下发，自家补草仍然只有设施与数量', () => {
+  assert.deepEqual(buildRanchBody('addGrass', { hostGid: '88001', facilityId: '1:9', count: 12 }), {
+    ok: true,
+    body: { hostGid: '88001', facilityId: '1:9', count: 12 },
+  })
+  assert.deepEqual(buildRanchBody('addGrass', { facilityId: '1:9', count: 5 }), {
+    ok: true,
+    body: { facilityId: '1:9', count: 5 },
+  })
+  // hostGid 是可选字段：空串不能当成「送给空好友」，直接丢弃即可。
+  assert.deepEqual(buildRanchBody('addGrass', { hostGid: '', facilityId: '1:9', count: 5 }), {
+    ok: true,
+    body: { facilityId: '1:9', count: 5 },
+  })
+  assert.equal(buildRanchBody('addGrass', { hostGid: '88001', count: 5 }).ok, false)
+})
+
+test('好友详情带出牧草机与可送牧草，未下发时保持 null 而不是零值对象', () => {
+  const withMachine = mapRanchState(baseState({
+    friendRanch: {
+      gid: '88001',
+      name: '小明',
+      level: 20,
+      feedMachine: { id: '1:9', count: '40', capacity: '100' },
+      grassAvailable: '25',
+      ranches: [],
+    },
+  }))
+  assert.deepEqual(withMachine.friendRanch.feedMachine, { id: '1:9', count: '40', capacity: '100' })
+  assert.equal(withMachine.friendRanch.grassAvailable, '25')
+
+  const withoutMachine = mapRanchState(baseState({
+    friendRanch: { gid: '88002', name: '小红', level: 12, ranches: [] },
+  }))
+  assert.equal(withoutMachine.friendRanch.feedMachine, null, '对方没建牧草机时不能拼出零容量对象')
+  assert.equal(withoutMachine.friendRanch.grassAvailable, '0')
 })
 
 test('未解锁的牧场只给出后端原因，不渲染零值快照', () => {

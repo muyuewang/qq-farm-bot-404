@@ -56,9 +56,10 @@ const activeTab = ref<FriendTabKey>('friends')
  * 好友同样分属两个场景：农场好友走 /api/friends/*，牧场的「好友牧场」挂在
  * game_scene_id=2 的快照上，串门与牧场互动要先进场景再 quote → execute。
  * 黑名单、访客记录这些只有农场才有的概念在牧场场景下不展示。
+ *
+ * 牧场好友的详情由面板自己按 gid 单独读取，这里只负责整份好友列表，
+ * 因此不再把单个好友的 hostGid 提到页面参数上。
  */
-const ranchHostGid = ref('')
-const ranchParams = computed(() => (ranchHostGid.value ? { hostGid: ranchHostGid.value } : {}))
 const showConfirm = ref(false)
 const confirmMessage = ref('')
 const confirmLoading = ref(false)
@@ -998,9 +999,9 @@ async function handleBatchAddKnownFriendGids() {
       </template>
     </template>
 
-    <RanchSceneHost v-else view="friends" :params="ranchParams" title="好友牧场" icon="i-carbon-user-multiple">
+    <RanchSceneHost v-else view="friends" title="好友牧场" icon="i-carbon-user-multiple">
       <template #default="{ state, onRequest }">
-        <RanchFriendsPanel :state="state" @request="onRequest" @host-gid="ranchHostGid = $event" />
+        <RanchFriendsPanel :state="state" @request="onRequest" />
       </template>
     </RanchSceneHost>
 

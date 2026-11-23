@@ -21,6 +21,7 @@ const { mountFriendRoutes } = require('./friend-routes');
 const { mountActivityCenterRoutes } = require('./activity-center-routes');
 const { mountCommerceRoutes } = require('./commerce-routes');
 const { mountDebugRoutes } = require('./debug-routes');
+const { mountUpdateRoutes } = require('./update-routes');
 const { mountWxLoginRoutes } = require('./wx-login-routes');
 const { mountQqLoginRoutes } = require('./qq-login-routes');
 const {
@@ -83,6 +84,7 @@ function startAdminServer(dataProvider: any): void {
     mountActivityCenterRoutes(app, ctx);
     mountCommerceRoutes(app, ctx);
     mountDebugRoutes(app, ctx);
+    mountUpdateRoutes(app, ctx);
 
     // SPA fallback
     app.get('*', (req: any, res: any) => {

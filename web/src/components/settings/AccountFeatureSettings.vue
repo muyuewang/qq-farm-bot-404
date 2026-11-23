@@ -672,7 +672,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
                   />
                   <BaseInput
                     v-model.number="automation.automation.ranch_grass_threshold_percent"
-                    label="牧草余量低于（%）时补满"
+                    label="牧草余量不超过（%）时补充"
                     type="number"
                     :min="RANCH_AUTOMATION_LIMITS.grassThresholdPercent.min"
                     :max="RANCH_AUTOMATION_LIMITS.grassThresholdPercent.max"
