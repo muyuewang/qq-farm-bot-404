@@ -315,8 +315,8 @@ async function getState(view = 'animals', shopId?: number, hostGid?: string): Pr
             // 拉黑的好友仍留在列表里，但带 blacklisted 标记，前端据此置灰并跳过拜访。
             else {
                 const blacklist = new Set(require('../../models/store').getRanchFriendBlacklist());
-                // 偷取/帮忙剩余次数要显示给用户，整条透传；canSteal / canHelp / statusAtMs
-                // 是巡查判据，界面不读，但留着不影响展示。好友状态强制 fresh，避免拿缓存名单下发给界面。
+                // 偷取/帮生产/清理的剩余次数要显示给用户，整条透传；布尔判据与 statusAtMs
+                // 是巡查依据，界面不自行推断。好友状态强制 fresh，避免拿缓存名单下发给界面。
                 state.friends = (await getRanchFriendList(undefined, true)).map(friend => ({ ...friend, gid: String(friend.gid), blacklisted: blacklist.has(friend.gid) }));
             }
         }

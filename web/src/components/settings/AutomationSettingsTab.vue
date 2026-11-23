@@ -14,6 +14,7 @@ interface AutomationSettings {
     friend: boolean
     friend_auto_accept: boolean
     farm_push: boolean
+    farm_illustrated: boolean
     land_upgrade: boolean
     friend_steal: boolean
     friend_help: boolean
@@ -194,6 +195,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
         <BaseSwitch v-model="settings.automation.sell" label="自动卖果实" />
         <BaseSwitch v-model="settings.automation.friend" label="自动好友互动" />
         <BaseSwitch v-model="settings.automation.farm_push" label="推送触发巡田" />
+        <BaseSwitch v-model="settings.automation.farm_illustrated" label="自动领取图鉴奖励（普通/超变）" />
         <BaseSwitch v-model="settings.automation.land_upgrade" label="自动升级土地" />
         <BaseSwitch v-model="settings.automation.fertilizer_gift" label="自动填充化肥" />
         <section v-if="isWithinActivityWindowMs(MILK_TEA_ACTIVITY_WINDOW, nowMs)" class="space-y-3">

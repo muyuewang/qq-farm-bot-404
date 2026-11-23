@@ -17,6 +17,7 @@ const { performDailyMonthCardGift, getMonthCardDailyState } = require('../servic
 const { performDailyVipGift, getVipDailyState } = require('../services/qqvip');
 const { runExclusiveAutomationTask } = require('../services/automation-lock');
 const ranchAutomation = require('../services/ranch/automation');
+const illustratedAutomation = require('../services/illustrated-automation');
 const { isRanchMarketEnabled, RANCH_MARKET_SWITCH_BY_CURRENCY } = require('../config/ranch-automation');
 const { createScheduler, getSchedulerRegistrySnapshot } = require('../services/scheduler');
 const { checkDailyShareStatus, getShareDailyState } = require('../services/share');
@@ -196,6 +197,21 @@ function runRanchRoutine(detached = false): Promise<void> {
     });
 }
 const workerScheduler = createScheduler('worker');
+let illustratedRoutineQueued = false;
+
+// 农场图鉴没有可靠的奖励推送：挂在 30 秒例程里按账号节流，每五分钟核对一次。
+function queueIllustratedRoutine(): void {
+    if (illustratedRoutineQueued || !illustratedAutomation.isDue()) return;
+    const generation = runtimeGeneration;
+    illustratedRoutineQueued = true;
+    runExclusiveAutomationTask('illustrated_rewards', async () => {
+        if (!loginReady || generation !== runtimeGeneration || !isGatewayIdleForLowPriority(getGatewayLoad())) return;
+        await runWithRequestClass('friend', () => illustratedAutomation.run({
+            canContinue: () => loginReady && generation === runtimeGeneration,
+        }));
+    }).catch((cause: any) => logWarn('图鉴', `自动领奖检查失败：${cause.message}`))
+        .finally(() => { illustratedRoutineQueued = false; });
+}
 
 async function runDailyRoutines(force: boolean = false): Promise<void> {
     if (!loginReady) return;
@@ -222,6 +238,8 @@ function startDailyRoutineTimer(runImmediately: boolean = true): void {
     if (runImmediately) runExclusiveAutomationTask('daily_routines', () => runDailyRoutines(true)).catch(() => null);
     workerScheduler.setIntervalTask('daily_routine_interval', 30 * 1000, () => {
         if (!loginReady) return;
+        // 图鉴按自己的五分钟节流，不受「今天日常已跑过」影响。
+        queueIllustratedRoutine();
         const today = getSystemDateKey();
         if (today === lastDailyRunDate) {
             const email = getEmailDailyState();

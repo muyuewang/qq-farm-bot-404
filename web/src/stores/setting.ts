@@ -7,6 +7,7 @@ import { useAccountStore } from '@/stores/account'
 export interface AutomationConfig {
   farm?: boolean
   farm_push?: boolean
+  farm_illustrated?: boolean
   land_upgrade?: boolean
   friend?: boolean
   friend_auto_accept?: boolean

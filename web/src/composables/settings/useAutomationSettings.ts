@@ -21,6 +21,7 @@ const defaultAutomation = {
   friend: false,
   friend_auto_accept: true,
   farm_push: false,
+  farm_illustrated: true,
   land_upgrade: false,
   friend_steal: false,
   friend_help: false,

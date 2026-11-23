@@ -394,7 +394,7 @@ watch(currentAccountId, () => {
                     {{ friend.gid }}
                   </p>
                 </div>
-                <!-- 巡查判据由后端整条下发，这里只做展示，不自行推断可偷/可帮。 -->
+                <!-- 巡查判据由后端整条下发，这里只做展示，不自行推断可偷/可帮生产/可清理。 -->
                 <div class="mt-1 flex flex-wrap gap-1">
                   <span
                     v-if="blacklistedSet.has(Number(friend.gid))"
@@ -406,10 +406,13 @@ watch(currentAccountId, () => {
                     <span v-if="friend.stealLotCount" class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                       可偷 {{ friend.stealLotCount }} 批
                     </span>
+                    <span v-if="friend.canMidwife" class="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                      可帮生产{{ friend.midwifeCount ? ` ${friend.midwifeCount} 次` : '' }}
+                    </span>
                     <span v-if="friend.helpCount" class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                       可帮 {{ friend.helpCount }} 次
                     </span>
-                    <span v-if="!friend.stealLotCount && !friend.helpCount" class="rounded bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+                    <span v-if="!friend.stealLotCount && !friend.canMidwife && !friend.helpCount" class="rounded bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
                       暂无互动
                     </span>
                   </template>

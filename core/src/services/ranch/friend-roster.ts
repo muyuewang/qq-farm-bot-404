@@ -6,8 +6,12 @@ export interface RanchFriend {
     avatarUrl: string;
     canSteal: boolean;
     canHelp: boolean;
+    /** 服务端按当前账号给出的可帮生产标记，与可偷/可清理是彼此独立的判据。 */
+    canMidwife: boolean;
     /** 今日还能偷几批产物；0 表示偷取次数已用完。 */
     stealLotCount: number;
+    /** 今日可帮生产的次数；0 表示次数已用完。 */
+    midwifeCount: number;
     /** 今日已帮忙次数（清理蚊子等），用于界面上说明还能帮几次。 */
     helpCount: number;
     statusAtMs: number;
@@ -28,8 +32,13 @@ let cache: (RosterScope & { friends: RanchFriend[]; expiresAt: number }) | null 
 let sync: (RosterScope & { offset: number; friends: Map<number, RanchFriend> }) | null = null;
 
 // 实包核对：can_steal 按当前账号计算，偷过后变为 false；can_help 排除当前账号自己投放的蚊子。
-function farmStatus(status: any, statusAtMs: number): Pick<RanchFriend, 'canSteal' | 'canHelp' | 'stealLotCount' | 'helpCount' | 'statusAtMs'> {
-    return { canSteal: status.can_steal, canHelp: status.can_help, stealLotCount: status.steal_lot_count, helpCount: status.help_count, statusAtMs };
+function farmStatus(status: any, statusAtMs: number): Omit<RanchFriend, 'gid' | 'name' | 'avatarUrl'> {
+    return {
+        canSteal: status.can_steal, stealLotCount: status.steal_lot_count,
+        canHelp: status.can_help, helpCount: status.help_count,
+        canMidwife: status.can_midwife, midwifeCount: status.midwife_count,
+        statusAtMs,
+    };
 }
 
 function assertRanchSession(socket: unknown): void {

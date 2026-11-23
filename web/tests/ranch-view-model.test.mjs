@@ -456,6 +456,18 @@ test('任务进度不伪造分母', () => {
   assert.equal(taskRatio({ progress: '20', total: '10' }).percent, 100)
 })
 
+test('好友名单的可帮生产与次数只取后端显式字段，缺字段时按 false/0 处理', () => {
+  const state = mapRanchState(baseState({
+    friends: [
+      { gid: '88001', name: '小明', canSteal: true, canHelp: false, canMidwife: true, stealLotCount: 2, midwifeCount: 3, helpCount: 0 },
+      { gid: '88002', name: '小红' },
+    ],
+  }))
+  assert.deepEqual(state.friends.map(friend => [friend.canMidwife, friend.midwifeCount]), [[true, 3], [false, 0]])
+  assert.equal(state.friends[0].canSteal, true)
+  assert.equal(state.friends[1].helpCount, 0, '没下发的次数不能猜成可互动')
+})
+
 test('好友栏舍的动物没有自家动作位', () => {
   const state = mapRanchState(baseState({
     friendRanch: {

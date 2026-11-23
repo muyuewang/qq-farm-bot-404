@@ -925,7 +925,7 @@ export interface RanchState {
   book: ReturnType<typeof mapBook>
   activities: { id: string, name: string, startTime: number, endTime: number, status: ReturnType<typeof activityStatus> }[] | null
   /** 好友列表项：巡查判据（可偷/可帮）由后端整条下发，前端只负责展示。 */
-  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean, canSteal: boolean, canHelp: boolean, stealLotCount: number, helpCount: number }[] | null
+  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean, canSteal: boolean, canHelp: boolean, canMidwife: boolean, stealLotCount: number, midwifeCount: number, helpCount: number }[] | null
   friendRanch: ReturnType<typeof mapFriendRanch>
   dailyShare: ReturnType<typeof mapDailyShare>
   dailyBenefit: ReturnType<typeof mapDailyBenefit>
@@ -1016,10 +1016,12 @@ export function mapRanchState(state?: Record<string, any> | null): RanchState | 
           name: text(friend.name) || text(friend.gid),
           avatarUrl: text(friend.avatarUrl),
           blacklisted: friend.blacklisted === true,
-          // 巡查判据：后端在好友名单里整条下发，界面据此标「可偷取 / 可清理」。
+          // 巡查判据：后端在好友名单里整条下发，界面据此标「可偷 / 可帮生产 / 可清理」。
           canSteal: friend.canSteal === true,
           canHelp: friend.canHelp === true,
+          canMidwife: friend.canMidwife === true,
           stealLotCount: number(friend.stealLotCount, 0) || 0,
+          midwifeCount: number(friend.midwifeCount, 0) || 0,
           helpCount: number(friend.helpCount, 0) || 0,
         })),
     friendRanch: state.friendRanch === undefined ? null : mapFriendRanch(state.friendRanch, serverTime),

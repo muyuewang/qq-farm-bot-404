@@ -219,6 +219,7 @@ test('上游 Worker 的登录与跨日强制任务遵守邮箱时刻，同日整
         '../services/mall': { buyFreeGifts: noop },
         '../services/qqvip': { performDailyVipGift: noop },
         '../services/ranch/automation': { getRoutineState: () => ({ doneToday: true, nextCheckAt: 0 }), run: async () => {} },
+        '../services/illustrated-automation': { isDue: () => false, run: async () => {} },
         '../utils/utils': { ...h.utils, setLogHook: noop },
     };
     const worker = vm.runInNewContext(`${fs.readFileSync(filename, 'utf8')}\n;({

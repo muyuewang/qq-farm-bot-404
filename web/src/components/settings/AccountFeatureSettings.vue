@@ -505,6 +505,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
                   <BaseSwitch v-model="automation.automation.sell" label="卖果实" />
                   <BaseSwitch v-model="automation.automation.golden_bug_clear" label="祛除黄金虫" />
                   <BaseSwitch v-model="automation.automation.farm_push" label="推送触发巡田" />
+                  <BaseSwitch v-model="automation.automation.farm_illustrated" label="图鉴自动领奖（普通/超变）" />
                   <BaseSwitch v-model="automation.automation.skip_own_weed_bug" label="保留自己农场的草虫" />
                 </div>
               </section>
