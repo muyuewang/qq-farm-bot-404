@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RanchFeedStage } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import RanchCubPriority from '@/components/settings/RanchCubPriority.vue'
@@ -12,12 +13,14 @@ import { useSettingStore } from '@/stores/setting'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import {
+  isRanchFeedStage,
   RANCH_AUTOMATION_DEFAULTS,
   RANCH_AUTOMATION_GROUPS,
   RANCH_AUTOMATION_LIMITS,
   RANCH_AUTOMATION_SWITCHES,
   RANCH_BAG_FALLBACK_OPTIONS,
-  RANCH_FEED_NORMAL_STAGE_OPTIONS,
+  RANCH_FEED_STAGE_HINTS,
+  RANCH_FEED_STAGE_OPTIONS,
   RANCH_STRATEGY_OPTIONS,
   ranchUsesPreferredAnimal,
 } from '@/utils/ranch'
@@ -47,6 +50,17 @@ const automation = ref<Record<string, any>>({})
 const saving = ref(false)
 const error = ref('')
 let loadGeneration = 0
+
+/** 时机说明随选择变化：只给选项名，用户没法判断哪种更省罐头。 */
+const feedStageHints = computed(() => {
+  const hint = (value: unknown, fallback: RanchFeedStage) => (isRanchFeedStage(value) ? RANCH_FEED_STAGE_HINTS[value] : RANCH_FEED_STAGE_HINTS[fallback])
+  return {
+    normal: hint(automation.value.ranch_feed_normal_stage, 'longest'),
+    organic: hint(automation.value.ranch_feed_organic_stage, 'near_harvest'),
+  }
+})
+
+const feedStageVisible = computed(() => automation.value.ranch_feed_normal === true || automation.value.ranch_feed_organic === true)
 
 const ready = computed(() => !!currentAccountId.value && !!automation.value && Object.keys(automation.value).length > 0)
 
@@ -84,9 +98,11 @@ function applySettings() {
   // 服务端尚未下发阈值字段时补默认值，避免输入框空白、保存时提交 undefined 被后端校验拒绝。
   if (typeof next.ranch_grass_threshold_percent !== 'number')
     next.ranch_grass_threshold_percent = RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent
-  // 普通罐头阶段是后加的字符串枚举，旧账号没有这个键，补默认值避免选择器空白。
-  if (next.ranch_feed_normal_stage !== 'any' && next.ranch_feed_normal_stage !== 'longest')
-    next.ranch_feed_normal_stage = RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage
+  // 罐头时机是后加的字符串枚举，旧账号没有这两个键，补默认值避免选择器空白。
+  for (const key of ['ranch_feed_normal_stage', 'ranch_feed_organic_stage'] as const) {
+    if (!isRanchFeedStage(next[key]))
+      next[key] = RANCH_AUTOMATION_DEFAULTS[key]
+  }
   // 幼崽优先顺序是数组，且旧账号配置里没有这两个键；补空数组避免子组件拿到 undefined。
   for (const key of ['ranch_coop_cub_priority', 'ranch_shed_cub_priority'] as const) {
     if (!Array.isArray(next[key]))
@@ -219,24 +235,36 @@ watch(settings, () => {
           </p>
         </section>
 
-        <!-- 普通罐头的使用阶段：桶内时长等价，喂最长阶段换到的进度最多，所以默认只喂最长阶段。 -->
-        <section v-if="automation.ranch_feed_normal === true" class="ui-card rounded-xl p-4">
+        <!-- 罐头使用时机：桶内时长等价，挑对阶段才不会把时长浪费在会被重置的窗口上。 -->
+        <section v-if="feedStageVisible" class="ui-card rounded-xl p-4">
           <h2 class="text-sm text-gray-800 font-semibold dark:text-gray-200">
-            普通罐头策略
+            罐头使用时机
           </h2>
           <p class="mt-1 text-xs" :style="{ color: 'var(--muted-text)' }">
-            罐头桶里的时长在任意生长阶段都等价，但投给最长阶段能换到最多进度。
+            两种罐头各自按自己的时机筛动物，互不影响；没有动物符合条件时整轮跳过并记录原因。
           </p>
-          <div class="mt-3">
-            <BaseSelect
-              v-model="automation.ranch_feed_normal_stage"
-              label="普通罐头使用阶段"
-              :options="RANCH_FEED_NORMAL_STAGE_OPTIONS"
-            />
+          <div class="grid mt-3 gap-4 sm:grid-cols-2">
+            <div v-if="automation.ranch_feed_normal === true">
+              <BaseSelect
+                v-model="automation.ranch_feed_normal_stage"
+                label="普通罐头使用时机"
+                :options="RANCH_FEED_STAGE_OPTIONS"
+              />
+              <p class="mt-1 text-xs" :style="{ color: 'var(--muted-text)' }">
+                {{ feedStageHints.normal }}
+              </p>
+            </div>
+            <div v-if="automation.ranch_feed_organic === true">
+              <BaseSelect
+                v-model="automation.ranch_feed_organic_stage"
+                label="有机罐头使用时机"
+                :options="RANCH_FEED_STAGE_OPTIONS"
+              />
+              <p class="mt-1 text-xs" :style="{ color: 'var(--muted-text)' }">
+                {{ feedStageHints.organic }}
+              </p>
+            </div>
           </div>
-          <p class="mt-2 text-xs" :style="{ color: 'var(--muted-text)' }">
-            选「仅最长生长阶段」时，没有动物处于最长阶段就整轮跳过并记录原因；选「任意阶段」则不筛选。
-          </p>
         </section>
 
         <section v-for="group in switchGroups" :key="group.key" class="ui-card rounded-xl p-4">

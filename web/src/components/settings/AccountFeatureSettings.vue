@@ -11,7 +11,7 @@ import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useRanchStore } from '@/stores/ranch'
 import { useSceneStore } from '@/stores/scene'
-import { isRanchSwitchDefaultOn, RANCH_AUTOMATION_DEFAULTS, RANCH_AUTOMATION_GROUPS, RANCH_AUTOMATION_LIMITS, RANCH_AUTOMATION_SWITCHES, RANCH_BAG_FALLBACK_OPTIONS, RANCH_FEED_NORMAL_STAGE_OPTIONS, RANCH_STRATEGY_OPTIONS, ranchUsesPreferredAnimal } from '@/utils/ranch'
+import { isRanchFeedStage, isRanchSwitchDefaultOn, RANCH_AUTOMATION_DEFAULTS, RANCH_AUTOMATION_GROUPS, RANCH_AUTOMATION_LIMITS, RANCH_AUTOMATION_SWITCHES, RANCH_BAG_FALLBACK_OPTIONS, RANCH_FEED_STAGE_HINTS, RANCH_FEED_STAGE_OPTIONS, RANCH_STRATEGY_OPTIONS, ranchUsesPreferredAnimal } from '@/utils/ranch'
 
 type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity' | 'ranch'
 
@@ -78,6 +78,14 @@ const ranchSwitchGroups = computed(() => RANCH_AUTOMATION_GROUPS.map((group) => 
     allOn: items.length > 0 && items.every(item => automation.value.automation[item.key] === true),
   }
 }))
+/** 时机说明随选择变化：只给选项名，用户没法判断哪种更省罐头。 */
+const feedStageHints = computed(() => {
+  const hint = (value: unknown, fallback: 'longest' | 'near_harvest') => (isRanchFeedStage(value) ? RANCH_FEED_STAGE_HINTS[value] : RANCH_FEED_STAGE_HINTS[fallback])
+  return {
+    normal: hint(automation.value.automation.ranch_feed_normal_stage, 'longest'),
+    organic: hint(automation.value.automation.ranch_feed_organic_stage, 'near_harvest'),
+  }
+})
 function setRanchGroup(group: { items: ReadonlyArray<{ key: string }> }, enabled: boolean) {
   group.items.forEach((item) => {
     automation.value.automation[item.key] = enabled
@@ -343,11 +351,12 @@ function openModule(key: ModuleKey) {
   // 模板编辑的是 automation model 本身，editSnapshot 仅用于取消回滚，因此补在 model 上。
   if (key === 'ranch' && typeof automation.value.automation?.ranch_grass_threshold_percent !== 'number')
     automation.value.automation.ranch_grass_threshold_percent = RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent
-  // 普通罐头阶段同样是后加的枚举字段，旧账号缺这个键时补默认值，避免选择器空白。
-  if (key === 'ranch' && automation.value.automation
-    && automation.value.automation.ranch_feed_normal_stage !== 'any'
-    && automation.value.automation.ranch_feed_normal_stage !== 'longest') {
-    automation.value.automation.ranch_feed_normal_stage = RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage
+  // 罐头时机同样是后加的枚举字段，旧账号缺这两个键时补默认值，避免选择器空白。
+  if (key === 'ranch' && automation.value.automation) {
+    for (const stageKey of ['ranch_feed_normal_stage', 'ranch_feed_organic_stage'] as const) {
+      if (!isRanchFeedStage(automation.value.automation[stageKey]))
+        automation.value.automation[stageKey] = RANCH_AUTOMATION_DEFAULTS[stageKey]
+    }
   }
   editSnapshot.value = {
     strategy: JSON.parse(JSON.stringify(strategy.value)),
@@ -675,18 +684,35 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 </p>
               </section>
 
-              <!-- 普通罐头使用阶段：桶内时长等价，喂最长阶段换到的进度最多。 -->
-              <section v-if="automation.automation.ranch_feed_normal === true" class="border border-gray-100 rounded-lg bg-gray-50/70 p-4 space-y-3 dark:border-gray-700 dark:bg-gray-900/25">
+              <!-- 罐头使用时机：两种罐头各自筛动物，桶内时长等价，挑对阶段才不会浪费。 -->
+              <section v-if="automation.automation.ranch_feed_normal === true || automation.automation.ranch_feed_organic === true" class="border border-gray-100 rounded-lg bg-gray-50/70 p-4 space-y-3 dark:border-gray-700 dark:bg-gray-900/25">
                 <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
-                  普通罐头策略
+                  罐头使用时机
                 </div>
-                <BaseSelect
-                  v-model="automation.automation.ranch_feed_normal_stage"
-                  label="普通罐头使用阶段"
-                  :options="RANCH_FEED_NORMAL_STAGE_OPTIONS"
-                />
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <div v-if="automation.automation.ranch_feed_normal === true" class="space-y-1">
+                    <BaseSelect
+                      v-model="automation.automation.ranch_feed_normal_stage"
+                      label="普通罐头使用时机"
+                      :options="RANCH_FEED_STAGE_OPTIONS"
+                    />
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ feedStageHints.normal }}
+                    </p>
+                  </div>
+                  <div v-if="automation.automation.ranch_feed_organic === true" class="space-y-1">
+                    <BaseSelect
+                      v-model="automation.automation.ranch_feed_organic_stage"
+                      label="有机罐头使用时机"
+                      :options="RANCH_FEED_STAGE_OPTIONS"
+                    />
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ feedStageHints.organic }}
+                    </p>
+                  </div>
+                </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  选「仅最长生长阶段」时，没有动物处于最长阶段就整轮跳过并记录原因；选「任意阶段」则不筛选。
+                  没有动物符合所选时机时整轮跳过并记录原因，不会退回到「随便喂一只」。
                 </p>
               </section>
 

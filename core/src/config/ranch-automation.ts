@@ -1,6 +1,17 @@
 import { animalMap, cubMap } from './ranch-animals';
 
 /**
+ * 罐头使用时机。四种取值分别表示：
+ * - any：只要动物能喂就喂
+ * - longest：只喂当前阶段时长最长的动物，桶内时长能换到最多进度
+ * - to_production：只喂成长期（stage 2），把动物推进到生产期
+ * - near_harvest：只喂成熟期且距收获不足 10 分钟的动物，避免罐头时长被收获重置浪费
+ */
+export const RANCH_FEED_STAGES = ['any', 'longest', 'to_production', 'near_harvest'] as const;
+export type RanchFeedStage = typeof RANCH_FEED_STAGES[number];
+export const RANCH_NEAR_HARVEST_MS = 10 * 60_000;
+
+/**
  * 默认只开「不改账号状态」的领取类动作（任务/分享/每日福利）；
  * 自动购买、出售、好友互动等会真实改动账号或好友状态的动作一律默认关闭。
  * 上游把这里全部改成 true，但本项目坚持保守默认：详见
@@ -26,8 +37,10 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_fill_cans: false,
     ranch_feed_normal: false,
     // 普通罐头默认只在最长生长阶段使用，桶内时长等价换取更多进度。
-    ranch_feed_normal_stage: 'longest' as 'any' | 'longest',
+    ranch_feed_normal_stage: 'longest' as RanchFeedStage,
     ranch_feed_organic: false,
+    // 有机罐头默认留到快收获时再用：成熟期离收获不足 10 分钟才投，长度不会被收获重置。
+    ranch_feed_organic_stage: 'near_harvest' as RanchFeedStage,
     ranch_clean: false,
     ranch_stroke: false,
     ranch_friend_steal: false,
@@ -53,9 +66,11 @@ export const RANCH_SWITCH_KEYS = Object.keys(RANCH_AUTOMATION_DEFAULTS).filter(k
 export const RANCH_ANIMAL_OPTIONS = [...animalMap.values()].filter(animal => animal.enable_flag).map(animal => ({ value: animal.id, label: animal.name, kind: animal.husbandry_type }));
 
 export function normalizeRanchSetting(key: string, value: unknown): boolean | number | string | number[] {
-    if (key === 'ranch_feed_normal_stage') {
-        if (value === 'any' || value === 'longest') return value;
-        throw Object.assign(new Error('请选择有效的普通罐头使用阶段'), { code: 'INVALID_CONFIG' });
+    if (key === 'ranch_feed_normal_stage' || key === 'ranch_feed_organic_stage') {
+        if (typeof value !== 'string' || !RANCH_FEED_STAGES.includes(value as RanchFeedStage)) {
+            throw Object.assign(new Error('请选择有效的罐头使用时机'), { code: 'INVALID_CONFIG' });
+        }
+        return value;
     }
     if (key === 'ranch_strategy' || key === 'ranch_bag_fallback') {
         const allowed = key === 'ranch_strategy' ? ['level', 'preferred', 'bag_priority'] : ['level', 'preferred'];

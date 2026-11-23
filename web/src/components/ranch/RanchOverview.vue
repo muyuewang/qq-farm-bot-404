@@ -272,7 +272,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-else-if="!loaded" class="ui-card min-h-40 flex flex-col items-center justify-center gap-2 rounded-lg p-6 text-center">
+    <!-- 把 state 为空也归到这一支：模板后段按非空快照渲染，缺了判空会到处 `?` 反而更易漏。 -->
+    <div v-else-if="!loaded || !state" class="ui-card min-h-40 flex flex-col items-center justify-center gap-2 rounded-lg p-6 text-center">
       <div class="i-carbon-document-blank text-3xl text-gray-300" />
       <div class="text-sm text-gray-500">
         暂无牧场数据，点击刷新重新读取。

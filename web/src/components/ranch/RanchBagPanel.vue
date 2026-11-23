@@ -339,7 +339,7 @@ function unitPrice(item: any) {
               :key="row.key"
               size="sm"
               :variant="row.primary ? 'primary' : 'secondary'"
-              :disabled="item.animalId && row.key === 'place' && !targetOptions(item).length"
+              :disabled="!!item.animalId && row.key === 'place' && !targetOptions(item).length"
               @click="onAction(item, row.key)"
             >
               {{ row.label }}

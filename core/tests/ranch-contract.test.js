@@ -51,3 +51,25 @@ test('礼包商城放行沙漏，罐头商城不放行', () => {
     assert.match(state, /function canCatalog\(raw: any, slotType = 6\): Promise<any> \{\s*return ranchMallCatalog\(raw, slotType, true\);/);
     assert.match(state, /!canMap\.has\(Number\(item\.id\)\) && \(cansOnly \|\| Number\(item\.id\) !== 1006\)/);
 });
+
+/**
+ * 罐头使用时机（PR#177）：普通与有机各一套配置，喂养时按桶类型读对应字段。
+ * 这条链路有三处必须同时成立，缺一处就表现为「设置里改了、喂养行为不变」：
+ * 配置项存在 → automation 按桶类型取到 → actions 真的用它筛动物。
+ */
+test('罐头使用时机按桶类型分别下发给喂养', () => {
+    const actions = read('services/ranch/actions.ts');
+    const automation = read('services/ranch/automation.ts');
+    const config = read('config/ranch-automation.ts');
+
+    for (const stage of ['any', 'longest', 'to_production', 'near_harvest'])
+        assert.ok(config.includes(`'${stage}'`), `配置缺少 ${stage} 时机`);
+
+    // 直接喂养按桶类型读不同入参：有机桶读 organicStage，普通桶读 normalStage。
+    assert.match(actions, /bucketType === 1 \? input\.organicStage : input\.normalStage/);
+    assert.match(actions, /matchesFeedStage\(animal, strategy, nowMs\)/);
+    // automation 必须按桶类型选配置键，写死成普通罐头会让有机勾选失效。
+    assert.match(automation, /input\.bucketType === 2 \? 'ranch_feed_normal_stage' : 'ranch_feed_organic_stage'/);
+    // 快收获时机要参与唤醒，否则巡查按原定收获时间跑，等到点已经错过窗口。
+    assert.match(automation, /harvestAt - RANCH_NEAR_HARVEST_MS/);
+});

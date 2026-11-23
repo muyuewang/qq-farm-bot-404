@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { RANCH_AUTOMATION_DEFAULTS, RANCH_SWITCH_KEYS, RANCH_ANIMAL_OPTIONS, normalizeRanchSetting } = require('../dist/config/ranch-automation');
+const { RANCH_AUTOMATION_DEFAULTS, RANCH_FEED_STAGES, RANCH_NEAR_HARVEST_MS, RANCH_SWITCH_KEYS, RANCH_ANIMAL_OPTIONS, normalizeRanchSetting } = require('../dist/config/ranch-automation');
 
 // 桩件只覆盖 automation 模块在 require 期绑定的依赖，全部使用固定数据，不连服务端。
 function loadAutomation({ automation = {}, unlocked = true, taskState = { doneToday: true, nextCheckAt: 0 }, shareState = { doneToday: true, nextCheckAt: 0 }, goods = {}, raw = { cells: { facilities: [] } }, prepareAction = async () => ({ skipped: true }), operate = async () => ({ status: 'skipped' }), stateDeps = {}, friendDeps = {}, cubs = null, logs = [] } = {}) {
@@ -104,6 +104,24 @@ test('牧场自动化默认只开领取类动作，会改状态的动作全部�
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_illustrated, true, '补领图鉴奖励属于领取类，默认开启');
     // 上游把动作默认值全改成 true，本项目坚持保守默认，不受其影响。
     assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_grass_threshold_percent, 20, '牧草补满阈值默认 20%');
+});
+
+test('罐头使用时机：两种罐头各一套开关，四种取值都写入配置', () => {
+    assert.deepEqual([...RANCH_FEED_STAGES], ['any', 'longest', 'to_production', 'near_harvest']);
+    // 快收获窗口固定 10 分钟，前端提示与唤醒计算都按这个常量走，不能各写一份。
+    assert.equal(RANCH_NEAR_HARVEST_MS, 10 * 60_000);
+    assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage, 'longest');
+    // 有机罐头更贵，默认留到快收获时用，避免时长被收获重置。
+    assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_feed_organic_stage, 'near_harvest');
+    for (const key of ['ranch_feed_normal_stage', 'ranch_feed_organic_stage']) {
+        for (const stage of RANCH_FEED_STAGES) assert.equal(normalizeRanchSetting(key, stage), stage);
+        // 旧的两态取值之外一律拒绝，否则后端会存进一个 matchesFeedStage 认不出的字符串。
+        for (const bad of ['', 'near_harvest ', 'to_production_x', null, 1]) {
+            assert.throws(() => normalizeRanchSetting(key, bad), /罐头使用时机/, `${key} 应拒绝 ${JSON.stringify(bad)}`);
+        }
+    }
+    // 时机是字符串枚举，不能混进布尔开关清单里，否则会被当成可切换的动作。
+    assert.ok(!RANCH_SWITCH_KEYS.includes('ranch_feed_organic_stage'));
 });
 
 test('牧场设置只接受已登记开关与范围内的取值', () => {

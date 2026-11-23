@@ -1,11 +1,11 @@
-import type { RanchAutomationConfig } from '../../config/ranch-automation';
+import type { RanchAutomationConfig, RanchFeedStage } from '../../config/ranch-automation';
 import type { RanchFriend } from './friend-roster';
 import type { FriendPatrolProgress } from './friends';
 import { getRanchFriendList, refreshRanchFriendStatus } from './friend-roster';
 import { postToMaster } from '../friend/gid-manager';
 export {};
 
-const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, RANCH_MARKET_SWITCH_BY_CURRENCY, isRanchMarketEnabled } = require('../../config/ranch-automation');
+const { RANCH_SWITCH_KEYS, RANCH_MARKET_SWITCH_KEYS, RANCH_MARKET_SWITCH_BY_CURRENCY, RANCH_NEAR_HARVEST_MS, isRanchMarketEnabled } = require('../../config/ranch-automation');
 // 牧场黑名单的落盘改由主进程负责（子进程通过 postToMaster 请求），这里不再直接写库。
 const { getAutomation, getRanchFriendBlacklist } = require('../../models/store');
 const { inScene, isUnlocked } = require('./transport');
@@ -224,15 +224,35 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             checkpoint();
             let raw = await loadRaw(cells);
             let nextActionAt = Infinity;
+            const available = (id: number) => {
+                const funds = balance(raw.bag, id);
+                return BigInt(funds.total) - BigInt(funds.locked) - BigInt(reservations.forCurrentAccount().reserved(`item:${id}`));
+            };
             const updateDeadline = (reopenOwn = false) => {
                 const state = snapshot(raw);
+                // 罐头有量、开关开着、时机不是「随时」，就说明喂养本身需要等到点，要参与唤醒计算。
+                const normalStage = auto.ranch_feed_normal && available(7003) > 0n && auto.ranch_feed_normal_stage;
+                const organicStage = auto.ranch_feed_organic && available(7004) > 0n && auto.ranch_feed_organic_stage;
+                const timedFeed = normalStage && normalStage !== 'any' || organicStage && organicStage !== 'any';
                 const upcoming = state.facilities.flatMap((f: any) => [
                     // 收获还要盯产物真正上架的时点：deliveringUntilMs 晚于 nextAtMs。
-                    ...(auto.ranch_harvest || auto.ranch_produce ? (f.ranch?.animals || []).flatMap((a: any) =>
+                    ...(auto.ranch_harvest || auto.ranch_produce || timedFeed ? (f.ranch?.animals || []).flatMap((a: any) =>
                         [a.nextAtMs, auto.ranch_harvest ? a.deliveringUntilMs : 0]) : []),
                     auto.ranch_upgrade && f.upgradeState ? (f.upgradeEndTime < 100_000_000_000 ? f.upgradeEndTime * 1000 : f.upgradeEndTime) : 0,
-                ]).filter((at: any) => at > state.serverTime);
-                nextActionAt = upcoming.length ? Date.now() + Math.min(...upcoming) - state.serverTime : Infinity;
+                ]);
+                // 「快收获时再喂」只在收获窗口内才有意义，所以单独把窗口起点排进唤醒时间，
+                // 否则巡查会按动物原定收获时间跑，等到点已经来不及喂了。
+                if (normalStage === 'near_harvest' || organicStage === 'near_harvest') {
+                    for (const facility of raw.cells.facilities) {
+                        for (const animal of facility.ranch?.animals || []) {
+                            if (animal.stage !== 4 || !animal.can_feed || (organicStage !== 'near_harvest' && animal.limited_can_used)) continue;
+                            const harvestAt = Number(animal.mature_ready_at_ms);
+                            if (harvestAt > state.serverTime) upcoming.push(Math.max(state.serverTime + 1000, harvestAt - RANCH_NEAR_HARVEST_MS));
+                        }
+                    }
+                }
+                const future = upcoming.filter((at: any) => at > state.serverTime);
+                nextActionAt = future.length ? Date.now() + Math.min(...future) - state.serverTime : Infinity;
                 // 续跑期间出现新成熟动物时，先处理自家产出，再接着原来的进度。
                 // reopenOwn 只允许用一次，否则每轮都重开会把长巡查拖住。
                 for (const [action, flag] of [['harvest', 'can_harvest'], ['produce', 'can_deliver']]) {
@@ -249,27 +269,30 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
             };
             // 已完成的产出可以提前复查，随后先给本轮其他待办一次执行机会。
             updateDeadline(!ownRecheckUsed);
-            const available = (id: number) => {
-                const funds = balance(raw.bag, id);
-                return BigInt(funds.total) - BigInt(funds.locked) - BigInt(reservations.forCurrentAccount().reserved(`item:${id}`));
-            };
             const affordable = (good: any, wanted: number) => {
                 const money = available(good.price.id);
                 const count = money > 0n ? money / BigInt(good.price.count) : 0n;
                 return Number(count < BigInt(wanted) ? count : BigInt(wanted));
             };
             async function act(key: string, action: string, input: any = {}, currency?: number, progress?: string, expectedRewardId?: number): Promise<boolean> {
-                // 喂养的日志要能看出用的是哪种罐头、按什么阶段筛的目标。
+                // 桶类型决定读哪个时机配置：普通罐头与有机罐头各有一套。
+                const feedStageKey = action === 'feed'
+                    ? input.bucketType === 2 ? 'ranch_feed_normal_stage' : 'ranch_feed_organic_stage'
+                    : undefined;
+                const feedStage: RanchFeedStage | undefined = feedStageKey ? getAutomation()[feedStageKey] : undefined;
+                // 喂养的日志要能看出用的是哪种罐头、按什么时机筛的目标。
                 const canLabel = key === 'ranch_feed_organic' ? '有机罐头'
-                    : key === 'ranch_feed_normal' ? (input.normalStage === 'longest' ? '普通罐头（仅最长阶段）' : '普通罐头') : '';
-                const isEnabled = () => enabled(key) && (key !== 'ranch_grass_buy' || enabled('ranch_grass'));
+                    : key === 'ranch_feed_normal' ? (feedStage === 'longest' ? '普通罐头（仅最长阶段）' : '普通罐头') : '';
+                // 时机配置在请求过程中可能被改掉，那就让本次写入直接放弃，而不是按旧策略落库。
+                const isEnabled = () => enabled(key) && (key !== 'ranch_grass_buy' || enabled('ranch_grass'))
+                    && (!feedStageKey || getAutomation()[feedStageKey] === feedStage);
                 if (!isEnabled()) return false;
                 const step = `${action}:${JSON.stringify(input)}${progress === undefined ? '' : `:${progress}`}`;
                 if (completedSteps.has(step)) return false;
                 checkpoint(action === 'exchange');
                 let label = action;
                 try {
-                    const quote = await prepareAction(action, input);
+                    const quote = await prepareAction(action, input, feedStage);
                     label = quote.label;
                     // 兑换要同时校验货币与奖励条目：集市有同名商品但货币不同，只看货币会兑错货。
                     if (quote.skipped || currency && quote.costItems.some((cost: any) => cost.id !== currency)
@@ -285,9 +308,9 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     const parent = getAmbientSendContext();
                     const result = await runWithSendContext({
                         check: (service: string, method: string) => parent?.check(service, method) || (isEnabled() ? null
-                            : Object.assign(new Error('牧场操作开关已关闭'), { code: 'RANCH_AUTOMATION_DISABLED' })),
+                            : Object.assign(new Error('牧场操作设置已变化'), { code: 'RANCH_AUTOMATION_DISABLED' })),
                         onSent: (service: string, method: string) => parent?.onSent(service, method),
-                    }, () => operate(action, { ...input, expected: quote.expected }));
+                    }, () => operate(action, { ...input, expected: quote.expected }, feedStage));
                     completedSteps.add(step);
                     markStep(action);
                     if (result.status === 'skipped') {
@@ -512,13 +535,13 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
 
             await phase('feed-normal', async () => {
                 if (!enabled('ranch_feed_normal')) return;
-                // 普通罐头的使用阶段由设置决定：'longest' 只喂最长生长阶段，'any' 不筛。
+                // 普通罐头的使用时机由设置决定，act() 会按桶类型自己读取对应配置。
                 const normalStage = getAutomation().ranch_feed_normal_stage;
                 if (available(7003) <= 0n) {
                     logCanFeed(normalStage === 'longest' ? '普通罐头（仅最长阶段）' : '普通罐头', '罐头桶没有可用时长，本轮未喂养', 'skipped');
                     return;
                 }
-                await act('ranch_feed_normal', 'feed', { all: true, bucketType: 2, normalStage });
+                await act('ranch_feed_normal', 'feed', { all: true, bucketType: 2 });
             });
             await phase('feed-organic', async () => {
                 if (!enabled('ranch_feed_organic')) return;

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { RanchAnimal, RanchDirectRequest, RanchResource, RanchState } from '@/utils/ranch'
+import type { RanchAnimal, RanchDirectRequest, RanchFeedStage, RanchResource, RanchState } from '@/utils/ranch'
 import { computed, ref } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { bucketSeconds, formatSeconds, RANCH_BUCKET_IDS, RANCH_BUCKET_TYPES, RANCH_FEED_NORMAL_STAGE_OPTIONS } from '@/utils/ranch'
+import { bucketSeconds, formatSeconds, RANCH_BUCKET_IDS, RANCH_BUCKET_TYPES, RANCH_FEED_STAGE_HINTS, RANCH_FEED_STAGE_LABELS, RANCH_FEED_STAGE_OPTIONS } from '@/utils/ranch'
 
 /**
  * 牧场喂养菜单。
@@ -19,8 +19,9 @@ import { bucketSeconds, formatSeconds, RANCH_BUCKET_IDS, RANCH_BUCKET_TYPES, RAN
  */
 const props = defineProps<{
   state: RanchState | null
-  /** 自动化配置里的普通罐头阶段默认值，进来时同步一次，用户改这里不回写配置。 */
-  defaultNormalStage?: 'any' | 'longest'
+  /** 自动化配置里的罐头时机默认值，进来时同步一次，用户改这里不回写配置。 */
+  defaultNormalStage?: RanchFeedStage
+  defaultOrganicStage?: RanchFeedStage
 }>()
 
 const emit = defineEmits<{
@@ -30,7 +31,18 @@ const emit = defineEmits<{
 type BucketKind = 'normal' | 'organic'
 
 const bucketKind = ref<BucketKind>('normal')
-const normalStage = ref<'any' | 'longest'>(props.defaultNormalStage ?? 'longest')
+// 两种罐头各自记自己的时机，切换类型不会把已选的值冲掉。
+const normalStage = ref<RanchFeedStage>(props.defaultNormalStage ?? 'longest')
+const organicStage = ref<RanchFeedStage>(props.defaultOrganicStage ?? 'near_harvest')
+const feedStage = computed<RanchFeedStage>({
+  get: () => bucketKind.value === 'organic' ? organicStage.value : normalStage.value,
+  set: (value) => {
+    if (bucketKind.value === 'organic')
+      organicStage.value = value
+    else
+      normalStage.value = value
+  },
+})
 const produceAfterFeed = ref(false)
 
 const BUCKET_OPTIONS: Array<{ value: BucketKind, label: string }> = [
@@ -74,8 +86,8 @@ const bucketLabel = computed(() => bucketKind.value === 'organic' ? '有机' : '
  * （bucketType === 1 || !limited_can_used），前端必须复现一遍，否则「喂养 N 只」
  * 的数字会和后端实际喂的对不上。
  *
- * 普通罐头的「仅最长生长阶段」不做前端筛选：阶段时长不在前端 DTO 里，
- * 猜测出来的最长阶段只会和真实结果不一致。数量按可喂总数显示，实际喂几只由后端回包决定。
+ * 时机筛选不做前端复现：阶段时长与收获时间点都不在前端 DTO 里，
+ * 猜出来的结果只会和真实结果不一致。数量按可喂总数显示，实际喂几只由后端回包决定。
  */
 const feedable = computed(() => scopedAnimals.value.filter((animal) => {
   if (animal.canFeed !== true)
@@ -101,10 +113,8 @@ const feedHint = computed(() => {
   return ''
 })
 
-/** 阶段策略只影响后端挑哪几只，前端说明清楚即可，不假装能算出具体数量。 */
-const stageHint = computed(() => bucketKind.value === 'normal' && normalStage.value === 'longest'
-  ? '只喂处于最长生长阶段的动物；若本轮没有符合条件的动物，服务端会跳过并说明原因。'
-  : '')
+/** 时机只影响后端挑哪几只，前端说明清楚即可，不假装能算出具体数量。 */
+const stageHint = computed(() => RANCH_FEED_STAGE_HINTS[feedStage.value])
 
 const produceHint = computed(() => produceAfterFeed.value
   ? '喂养成功后会紧接着对本次喂过、且已可生产的动物发起催产；催产失败不影响喂养结果，会单独提示。'
@@ -119,12 +129,12 @@ function submit() {
     input.all = true
   else
     input.ranchId = facilityId.value
-  // 阶段策略只对普通罐头有意义，有机桶所有阶段都能投，带了反而容易误导后端日志。
-  if (bucketKind.value === 'normal')
-    input.normalStage = normalStage.value
+  // 时机按桶类型分别下发：后端普通桶读 normalStage，有机桶读 organicStage。
+  if (feedStage.value !== 'any')
+    input[bucketKind.value === 'organic' ? 'organicStage' : 'normalStage'] = feedStage.value
   if (produceAfterFeed.value)
     input.produceAfterFeed = true
-  const stageText = bucketKind.value === 'normal' && normalStage.value === 'longest' ? '（仅最长阶段）' : ''
+  const stageText = feedStage.value === 'any' ? '' : `（${RANCH_FEED_STAGE_LABELS[feedStage.value]}）`
   emit('direct', {
     action: 'feed',
     input,
@@ -149,8 +159,8 @@ function submit() {
       <BaseSelect v-model="facilityId" label="喂养范围" :options="facilityOptions" :disabled="busy" />
     </div>
 
-    <div v-if="bucketKind === 'normal'" class="mt-3">
-      <BaseSelect v-model="normalStage" label="普通罐头使用阶段" :options="RANCH_FEED_NORMAL_STAGE_OPTIONS" :disabled="busy" />
+    <div class="mt-3">
+      <BaseSelect v-model="feedStage" :label="`${bucketLabel}罐头使用时机`" :options="RANCH_FEED_STAGE_OPTIONS" :disabled="busy" />
       <p class="mt-1 text-xs" :style="{ color: 'var(--muted-text)' }">
         {{ stageHint }}
       </p>

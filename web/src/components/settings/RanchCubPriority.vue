@@ -87,7 +87,8 @@ const sorted = computed(() => {
     stock.set(key, { ...item, count: ((previous ? safeCount(previous.count) : 0n) + safeCount(item.count)).toString() })
   }
   return GROUPS.map((group) => {
-    const order = automation.value[group.key] ?? []
+    // 配置里的顺序是 id 数组；断成 number[] 才能给 map 回调推出口参类型。
+    const order: number[] = automation.value[group.key] ?? []
     const ranks = new Map(order.map((id, index) => [id, index]))
     const cubs = [...stock.values()].filter(item => item.husbandryType === group.housing)
     // 已配置的按配置顺序，未配置的排在末尾再按等级、编号稳定排列。

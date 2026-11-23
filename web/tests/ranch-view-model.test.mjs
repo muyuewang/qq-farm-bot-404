@@ -12,11 +12,17 @@ import {
   describeQuote,
   grassRoom,
   isRanchDirectAction,
+  isRanchFeedStage,
   isRanchUnlocked,
   mapRanchState,
   RANCH_ACTION_FIELDS,
   RANCH_ACTION_REQUIRED,
   RANCH_ACTIONS,
+  RANCH_AUTOMATION_DEFAULTS,
+  RANCH_FEED_STAGE_HINTS,
+  RANCH_FEED_STAGE_LABELS,
+  RANCH_FEED_STAGE_OPTIONS,
+  RANCH_FEED_STAGES,
   RANCH_FIELD_LABELS,
   RANCH_VIEWS,
   taskRatio,
@@ -554,4 +560,40 @@ test('礼包商城购买与罐头购买走同一套校验，但动作名不能�
   assert.equal(buildRanchBody('buyMall', { goodsId: '9001' }).ok, false)
   // buyCan 的入参形态一致，但动作名不同，不能互相顶替。
   assert.equal(buildRanchBody('buyCan', { goodsId: '9001', count: 1 }).ok, true)
+})
+
+test('罐头使用时机：四态常量完整，普通与有机各有一份默认值', () => {
+  assert.deepEqual([...RANCH_FEED_STAGES], ['any', 'longest', 'to_production', 'near_harvest'])
+  // 选项必须覆盖全部取值，否则设置页会漏掉后端认识的某个时机。
+  assert.deepEqual([...RANCH_FEED_STAGE_OPTIONS.map(option => option.value)].sort(), [...RANCH_FEED_STAGES].sort())
+  for (const option of RANCH_FEED_STAGE_OPTIONS) {
+    assert.ok(option.label, `${option.value} 缺少选项名`)
+    // 选中后要有一段说明，只给名字用户没法判断哪种更省罐头。
+    assert.ok(RANCH_FEED_STAGE_LABELS[option.value])
+    assert.ok(RANCH_FEED_STAGE_HINTS[option.value])
+  }
+  assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage, 'longest')
+  // 有机罐头更贵，默认留到快收获时用，与后端默认一致。
+  assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_feed_organic_stage, 'near_harvest')
+  assert.equal(isRanchFeedStage('near_harvest'), true)
+  for (const bad of ['', 'near_harvest ', 'to_production_x', null, 2])
+    assert.equal(isRanchFeedStage(bad), false, `应拒绝 ${JSON.stringify(bad)}`)
+})
+
+test('喂养请求按桶类型带不同的时机字段，未登记字段仍被丢弃', () => {
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 2, normalStage: 'to_production' }),
+    { ok: true, body: { all: true, bucketType: 2, normalStage: 'to_production' } },
+  )
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 1, organicStage: 'near_harvest' }),
+    { ok: true, body: { all: true, bucketType: 1, organicStage: 'near_harvest' } },
+  )
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 1, organicStage: 'any', unknownStage: 'x' }).body,
+    { all: true, bucketType: 1, organicStage: 'any' },
+  )
+  // 两个时机字段都要有可读名称，否则确认弹窗里会出现原始键名。
+  assert.ok(RANCH_FIELD_LABELS.normalStage)
+  assert.ok(RANCH_FIELD_LABELS.organicStage)
 })

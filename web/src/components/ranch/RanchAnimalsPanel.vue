@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RanchAnimal, RanchDirectRequest, RanchFacility, RanchRequest, RanchState } from '@/utils/ranch'
+import type { RanchAnimal, RanchDirectRequest, RanchFacility, RanchFeedStage, RanchRequest, RanchState } from '@/utils/ranch'
 import { computed, onBeforeUnmount, watch } from 'vue'
 import RanchFeedMenu from '@/components/ranch/RanchFeedMenu.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -20,7 +20,8 @@ const emit = defineEmits<{
  * 是空对象，读出来同样会回落到默认值，却多了一层跨页面耦合。菜单里的选择也不回写
  * 自动化配置——手动喂一次不该悄悄改掉自动策略。
  */
-const normalStageDefault = computed<'any' | 'longest'>(() => RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage)
+const normalStageDefault = computed<RanchFeedStage>(() => RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage)
+const organicStageDefault = computed<RanchFeedStage>(() => RANCH_AUTOMATION_DEFAULTS.ranch_feed_organic_stage)
 
 /** 窝固定排在棚前面：服务器返回顺序不固定，直接渲染会让同一账号每次刷新位置都在变。 */
 const ranches = computed(() => sortFacilities((props.state?.facilities || []).filter((facility: RanchFacility) => facility.isRanch)))
@@ -179,6 +180,7 @@ const grassBlockedCount = computed(() => ranches.value
       v-if="state"
       :state="state"
       :default-normal-stage="normalStageDefault"
+      :default-organic-stage="organicStageDefault"
       @direct="emit('direct', $event)"
     />
 

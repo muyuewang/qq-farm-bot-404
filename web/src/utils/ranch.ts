@@ -95,8 +95,9 @@ export const RANCH_ACTION_FIELDS: Record<RanchAction, string[]> = {
   place: ['ranchId', 'itemId', 'count'],
   addGrass: ['facilityId', 'count'],
   useCan: ['uid', 'count'],
-  // normalStage / produceAfterFeed 是喂养专用参数，后端只在这两个动作里读，缺省时按「任意阶段」处理。
-  feed: ['bucketType', 'all', 'ranchId', 'animalId', 'normalStage', 'produceAfterFeed'],
+  // normalStage / organicStage / produceAfterFeed 是喂养专用参数，后端只在这两个动作里读；
+  // 按桶类型分别对应普通罐头与有机罐头的使用时机，缺省时按「任意阶段」处理。
+  feed: ['bucketType', 'all', 'ranchId', 'animalId', 'normalStage', 'organicStage', 'produceAfterFeed'],
   produce: ['all', 'ranchId', 'animalId'],
   harvest: ['all', 'ranchId', 'animalId'],
   sell: ['all', 'uid', 'count'],
@@ -175,8 +176,10 @@ export const RANCH_FIELD_LABELS: Record<string, string> = {
   /** 沙漏加速要扣掉的秒数。 */
   seconds: '加速秒数',
   bucketType: '罐头类型',
-  /** 普通罐头的使用阶段：longest=仅最长生长阶段，any=任意阶段。 */
+  /** 普通罐头的使用时机：any / longest / to_production / near_harvest。 */
   normalStage: '普通罐头阶段',
+  /** 有机罐头的使用时机，取值与 normalStage 相同。 */
+  organicStage: '有机罐头阶段',
   /** 喂养成功后是否顺带对刚喂过、已可生产的动物催产。 */
   produceAfterFeed: '喂养后催产',
   taskId: '任务',
@@ -887,7 +890,8 @@ export interface RanchState {
   tasks: ReturnType<typeof mapTask>[] | null
   book: ReturnType<typeof mapBook>
   activities: { id: string, name: string, startTime: number, endTime: number, status: ReturnType<typeof activityStatus> }[] | null
-  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean }[] | null
+  /** 好友列表项：巡查判据（可偷/可帮）由后端整条下发，前端只负责展示。 */
+  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean, canSteal: boolean, canHelp: boolean, stealLotCount: number, helpCount: number }[] | null
   friendRanch: ReturnType<typeof mapFriendRanch>
   dailyShare: ReturnType<typeof mapDailyShare>
   dailyBenefit: ReturnType<typeof mapDailyBenefit>
@@ -1184,8 +1188,10 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_fill_cans: false,
   ranch_feed_normal: false,
   // 普通罐头默认只在最长生长阶段使用：桶内时长等价，投给最长阶段换取的进度最多。
-  ranch_feed_normal_stage: 'longest' as 'any' | 'longest',
+  ranch_feed_normal_stage: 'longest' as RanchFeedStage,
   ranch_feed_organic: false,
+  // 有机罐头默认留到快收获时再用：成熟期离收获不足 10 分钟才投，长度不会被收获重置。
+  ranch_feed_organic_stage: 'near_harvest' as RanchFeedStage,
   ranch_clean: false,
   // 解锁一级棚免费，但仍会改动账号状态，按保守默认关闭；上游默认开启。
   ranch_activate_shed: false,
@@ -1214,7 +1220,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
  * 开启时只恢复到服务端默认里本就为 true 的动作，避免一次打开全部自动购买与好友互动。
  */
 export function isRanchSwitchDefaultOn(key: string) {
-  const defaults = RANCH_AUTOMATION_DEFAULTS as Record<string, boolean | number | string>
+  // 幼崽优先顺序这类数组项不参与开关判定，但必须留在类型里，否则整块默认值无法断言。
+  const defaults = RANCH_AUTOMATION_DEFAULTS as Record<string, boolean | number | string | number[]>
   return RANCH_AUTOMATION_SWITCHES.some(item => item.key === key) && defaults[key] === true
 }
 
@@ -1241,10 +1248,35 @@ export const RANCH_BAG_FALLBACK_OPTIONS: Array<{ value: string, label: string, d
  * 普通罐头的使用阶段。桶内时长在任意阶段都等价，
  * 但投给最长生长阶段能换到最多进度，所以默认只喂最长阶段。
  */
-export const RANCH_FEED_NORMAL_STAGE_OPTIONS: Array<{ value: 'any' | 'longest', label: string }> = [
-  { value: 'longest', label: '仅最长生长阶段' },
-  { value: 'any', label: '任意阶段' },
+export const RANCH_FEED_STAGES = ['any', 'longest', 'to_production', 'near_harvest'] as const
+
+/** 罐头使用时机，与后端 core/src/config/ranch-automation.ts 的 RanchFeedStage 一一对应。 */
+export type RanchFeedStage = (typeof RANCH_FEED_STAGES)[number]
+
+export const RANCH_FEED_STAGE_OPTIONS: Array<{ value: RanchFeedStage, label: string }> = [
+  { value: 'any', label: '可喂养时就用' },
+  { value: 'longest', label: '仅最长阶段' },
+  { value: 'to_production', label: '成长期 · 加速到生产期' },
+  { value: 'near_harvest', label: '成熟期 · 距收获 10 分钟内' },
 ]
+
+export const RANCH_FEED_STAGE_LABELS: Record<RanchFeedStage, string> = {
+  any: '可喂养时就用',
+  longest: '仅最长阶段',
+  to_production: '成长期',
+  near_harvest: '距收获 10 分钟内',
+}
+
+export const RANCH_FEED_STAGE_HINTS: Record<RanchFeedStage, string> = {
+  any: '只要动物能喂就投，不筛选阶段。',
+  longest: '只喂当前阶段时长最长的动物；桶内时长等价，投给最长阶段换到的进度最多。',
+  to_production: '只喂成长期（第 2 阶段）的动物，把罐头时长直接推进到生产期。',
+  near_harvest: '只喂成熟期且距收获不足 10 分钟的动物，时长不会被收获重置。',
+}
+
+export function isRanchFeedStage(value: unknown): value is RanchFeedStage {
+  return typeof value === 'string' && RANCH_FEED_STAGES.includes(value as RanchFeedStage)
+}
 
 export const RANCH_AUTOMATION_LIMITS = {
   checkMinutes: { min: 1, max: 60 },
