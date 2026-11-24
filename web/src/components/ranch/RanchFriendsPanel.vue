@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { RanchFriendRanch, RanchItem, RanchRequest, RanchState } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -13,8 +13,8 @@ import { formatQuantity, friendGrassLimit, friendGrassRoom, itemListLine } from 
 /**
  * 好友牧场面板。
  *
- * 好友详情走 store 的 fetchFriendRanch 单独读取，不进全局快照：这样列表和已展开的
- * 多张卡片可以同时存在，操作完成后只刷新被操作的那一位，不会把整页翻一次。
+ * 好友详情走 store 的 fetchFriendRanch 单独读取，不进全局快照：列表和展开详情各存一份，
+ * 同一时间只展开一位好友，切换时自动收起上一位；操作完成后只刷新这一位，不会把整页翻一次。
  * 所有写操作仍然只 emit request，由外层 RanchSceneHost 统一走 quote → execute，
  * 价格、限额和资源校验都在后端，页面不自己估算。
  */
@@ -36,7 +36,7 @@ const listReady = computed(() => Array.isArray(props.state?.friends))
 /** 已展开的好友详情，按 gid 缓存；只在这里存，避免覆盖全局快照。 */
 const details = ref<Record<string, RanchFriendRanch>>({})
 const detailErrors = ref<Record<string, string>>({})
-const expanded = reactive<Record<string, boolean>>({})
+const expandedGid = ref<string | null>(null)
 const loadingGid = ref('')
 /** 刚提交过操作的好友：等写请求结束后只刷新这一位。 */
 const pendingGid = ref('')
@@ -76,16 +76,13 @@ function detailOf(gid: string) {
   return details.value[gid] || null
 }
 
-const expandedTotal = computed(() => Object.keys(expanded).filter(gid => expanded[gid]).length)
-
 function collapse(gid: string) {
-  if (expanded[gid])
-    expanded[gid] = false
+  if (expandedGid.value === gid)
+    expandedGid.value = null
 }
 
 function collapseAll() {
-  for (const gid of Object.keys(expanded))
-    expanded[gid] = false
+  expandedGid.value = null
 }
 
 function grassRoomOf(detail: RanchFriendRanch | null) {
@@ -122,20 +119,28 @@ async function loadDetail(gid: string) {
   syncGrassInput(gid, result.ranch)
 }
 
-async function toggle(gid: string) {
+async function toggle(gid: string, event?: MouseEvent) {
   if (!gid)
     return
-  if (expanded[gid]) {
+  if (expandedGid.value === gid) {
     collapse(gid)
     return
   }
-  expanded[gid] = true
+  // 收起上一位后下方卡片整体上移：记录按钮位置，展开后把滚动条补回同一视点。
+  const trigger = event?.currentTarget as HTMLElement | undefined
+  const scrollEl = trigger?.closest('.custom-scrollbar') as HTMLElement | null
+  const triggerTop = trigger?.getBoundingClientRect().top
+  collapseAll()
+  expandedGid.value = gid
+  await nextTick()
+  if (scrollEl && trigger && triggerTop !== undefined)
+    scrollEl.scrollTop += trigger.getBoundingClientRect().top - triggerTop
   // 已有缓存时先展示旧数据，同时后台刷新一次，好友那边刚变化的产物也能跟上。
   await loadDetail(gid)
 }
 
 async function reloadDetail(gid: string) {
-  if (!expanded[gid])
+  if (expandedGid.value !== gid)
     return
   await loadDetail(gid)
 }
@@ -146,7 +151,7 @@ watch(() => ranchStore.acting, (acting, was) => {
     return
   const gid = pendingGid.value
   pendingGid.value = ''
-  if (gid && expanded[gid])
+  if (gid && expandedGid.value === gid)
     void loadDetail(gid)
 })
 
@@ -309,9 +314,6 @@ watch(currentAccountId, () => {
           <span class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
             共 {{ friends.length }} 位好友
           </span>
-          <BaseButton v-if="expandedTotal > 1" variant="ghost" size="sm" @click="collapseAll">
-            全部收起
-          </BaseButton>
         </template>
         <span v-else class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
           黑名单 {{ blacklistGids.length }} 位
@@ -430,14 +432,14 @@ watch(currentAccountId, () => {
                 variant="ghost"
                 size="sm"
                 :disabled="blacklistedSet.has(Number(friend.gid))"
-                @click="toggle(friend.gid)"
+                @click="toggle(friend.gid, $event)"
               >
-                {{ expanded[friend.gid] ? '收起' : '查看牧场' }}
+                {{ expandedGid === friend.gid ? '收起' : '查看牧场' }}
               </BaseButton>
             </div>
 
             <!-- 展开区：详情走单独接口，未拿到前不猜任何状态 -->
-            <div v-if="expanded[friend.gid]" class="border-t border-gray-100 px-3 pb-3 pt-3 space-y-3 dark:border-gray-700">
+            <div v-if="expandedGid === friend.gid" class="border-t border-gray-100 px-3 pb-3 pt-3 space-y-3 dark:border-gray-700">
               <div v-if="loadingGid === friend.gid && !detailOf(friend.gid)" class="py-6 text-center text-xs text-gray-500">
                 正在进入{{ friend.name }}的牧场…
               </div>
