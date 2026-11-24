@@ -3,6 +3,7 @@ import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
 import { useStatusStore } from '@/stores/status'
@@ -497,106 +498,78 @@ useIntervalFn(loadBag, 60000)
     </div>
 
     <div v-else>
-      <div class="mb-4 flex flex-wrap items-center gap-2">
-        <button
-          v-for="cat in CATEGORY_OPTIONS"
-          :key="cat.value"
-          class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-          :class="selectedCategory === cat.value
-            ? 'bg-blue-500 text-white dark:bg-blue-600'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
-          @click="selectedCategory = cat.value"
-        >
-          {{ cat.label }}
-          <span class="ml-1 text-xs opacity-70">({{ categoryCounts[cat.value] || 0 }})</span>
-        </button>
-
-        <div class="flex-1" />
-
-        <template v-if="selectedCategory === 'fruit' || selectedCategory === 'all'">
+      <div class="mb-4 space-y-3">
+        <div class="flex flex-wrap items-center gap-1.5 rounded-lg bg-gray-50 p-1 dark:bg-gray-900/40">
           <button
-            class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-            :class="batchMode
-              ? 'bg-orange-500 text-white dark:bg-orange-600'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
-            @click="toggleBatchMode"
+            v-for="cat in CATEGORY_OPTIONS"
+            :key="cat.value"
+            type="button"
+            class="rounded-md px-3 py-1.5 text-sm font-medium transition"
+            :class="selectedCategory === cat.value
+              ? 'text-white shadow-sm'
+              : 'text-gray-600 hover:bg-white hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-white'"
+            :style="selectedCategory === cat.value ? { backgroundColor: 'var(--theme-primary)' } : {}"
+            @click="selectedCategory = cat.value"
           >
-            <div v-if="batchMode" class="i-carbon-close mr-1 inline-block" />
-            {{ batchMode ? '取消批量' : '批量出售' }}
+            {{ cat.label }}
+            <span class="ml-1 text-xs opacity-70">({{ categoryCounts[cat.value] || 0 }})</span>
           </button>
-          <template v-if="batchMode">
-            <button
-              class="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white font-medium transition dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700"
-              @click="selectAllSellable"
-            >
-              全选
-            </button>
-            <button
-              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-              :class="selectedSellableCount > 0
-                ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
-                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
-              :disabled="selectedSellableCount === 0"
-              @click="handleBatchSellClick"
-            >
-              出售 ({{ selectedSellableCount }})
-            </button>
-          </template>
-        </template>
+        </div>
 
-        <template v-if="lockableCount > 0">
-          <button
-            class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-            :class="lockMode
-              ? 'bg-amber-500 text-white dark:bg-amber-600'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
-            @click="toggleLockMode"
-          >
-            <div v-if="lockMode" class="i-carbon-close mr-1 inline-block" />
-            {{ lockMode ? '退出锁定' : '锁定管理' }}
-          </button>
-          <template v-if="lockMode">
-            <button
-              class="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white font-medium transition dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700"
-              @click="selectAllLockable(true)"
+        <div class="flex flex-wrap items-center gap-2">
+          <template v-if="selectedCategory === 'fruit' || selectedCategory === 'all'">
+            <BaseButton
+              size="sm"
+              :variant="batchMode ? 'primary' : 'secondary'"
+              :aria-pressed="batchMode"
+              @click="toggleBatchMode"
             >
-              全选未锁
-            </button>
-            <button
-              class="rounded-lg bg-gray-500 px-3 py-1.5 text-sm text-white font-medium transition dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-500"
-              @click="selectAllLockable(false)"
-            >
-              全选已锁
-            </button>
-            <button
-              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-              :class="selectedLockCount > 0
-                ? 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700'
-                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
-              :disabled="selectedLockCount === 0"
-              @click="handleLockClick(true)"
-            >
-              锁定 ({{ selectedLockCount }})
-            </button>
-            <button
-              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-              :class="selectedLockCount > 0
-                ? 'bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700'
-                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
-              :disabled="selectedLockCount === 0"
-              @click="handleLockClick(false)"
-            >
-              解锁 ({{ selectedLockCount }})
-            </button>
+              <div v-if="batchMode" class="i-carbon-close mr-1 inline-block" />
+              {{ batchMode ? '取消批量' : '批量出售' }}
+            </BaseButton>
+            <template v-if="batchMode">
+              <BaseButton size="sm" variant="secondary" @click="selectAllSellable">
+                全选
+              </BaseButton>
+              <BaseButton size="sm" variant="danger" :disabled="selectedSellableCount === 0" @click="handleBatchSellClick">
+                出售 ({{ selectedSellableCount }})
+              </BaseButton>
+            </template>
           </template>
-        </template>
+
+          <template v-if="lockableCount > 0">
+            <BaseButton
+              size="sm"
+              :variant="lockMode ? 'primary' : 'secondary'"
+              :aria-pressed="lockMode"
+              @click="toggleLockMode"
+            >
+              <div v-if="lockMode" class="i-carbon-close mr-1 inline-block" />
+              {{ lockMode ? '退出锁定' : '锁定管理' }}
+            </BaseButton>
+            <template v-if="lockMode">
+              <BaseButton size="sm" variant="secondary" @click="selectAllLockable(true)">
+                全选未锁
+              </BaseButton>
+              <BaseButton size="sm" variant="secondary" @click="selectAllLockable(false)">
+                全选已锁
+              </BaseButton>
+              <BaseButton size="sm" variant="primary" :disabled="selectedLockCount === 0" @click="handleLockClick(true)">
+                锁定 ({{ selectedLockCount }})
+              </BaseButton>
+              <BaseButton size="sm" variant="success" :disabled="selectedLockCount === 0" @click="handleLockClick(false)">
+                解锁 ({{ selectedLockCount }})
+              </BaseButton>
+            </template>
+          </template>
+        </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-5 md:grid-cols-4 sm:grid-cols-3 xl:grid-cols-6">
+      <div class="grid grid-cols-2 gap-3 2xl:grid-cols-7 lg:grid-cols-5 md:grid-cols-4 sm:grid-cols-3 xl:grid-cols-6">
         <div
           v-for="item in filteredItems"
           :key="item.id"
-          class="group relative flex flex-col items-center border rounded-lg bg-white p-3 transition dark:border-gray-700 dark:bg-gray-800 hover:shadow-md"
+          class="group relative flex flex-col items-center border border-gray-200 rounded-xl bg-white p-3 text-center transition dark:border-gray-700 hover:border-blue-300 dark:bg-gray-800 hover:shadow-md dark:hover:border-blue-700"
           :class="{
             'ring-2 ring-orange-500 dark:ring-orange-400': batchMode && selectedForBatch.has(Number(item.id)),
             'ring-2 ring-amber-500 dark:ring-amber-400': lockMode && selectedLockUids.has(Number(item.uid)),
@@ -606,7 +579,7 @@ useIntervalFn(loadBag, 60000)
           }"
           @click="lockMode ? toggleLockSelection(item) : (batchMode && canBatchSell(item) && handleSellClick(item))"
         >
-          <div class="absolute left-2 top-2 text-xs text-gray-400 font-mono">
+          <div class="absolute left-2 top-2 text-[10px] text-gray-400 font-mono">
             #{{ item.id }}
           </div>
 
@@ -619,11 +592,11 @@ useIntervalFn(loadBag, 60000)
             已锁
           </div>
 
-          <div class="order-last mt-5 w-full flex flex-wrap justify-end gap-2">
+          <div class="order-last mt-auto w-full flex gap-1.5 pt-1">
             <template v-if="lockMode">
               <div
                 v-if="canLock(item)"
-                class="h-5 w-5 flex items-center justify-center border-2 rounded transition"
+                class="mx-auto h-6 w-6 flex items-center justify-center border-2 rounded transition"
                 :class="selectedLockUids.has(Number(item.uid))
                   ? 'border-amber-500 bg-amber-500 text-white'
                   : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700'"
@@ -633,25 +606,28 @@ useIntervalFn(loadBag, 60000)
             </template>
             <template v-else-if="!batchMode">
               <button
-                v-if="canSell(item)"
-                class="min-h-11 rounded bg-red-500 px-2 py-2 text-xs text-white transition-colors dark:bg-red-600 hover:opacity-100"
-                title="出售全部"
-                @click.stop="handleSellClick(item)"
-              >
-                出售全部
-              </button>
-              <button
                 v-if="canUse(item)"
-                class="min-h-11 rounded bg-green-500 px-2 py-2 text-xs text-white transition-colors dark:bg-green-600 hover:opacity-100"
+                type="button"
+                class="h-8 flex-1 rounded-lg text-xs text-white font-medium shadow-sm transition hover:brightness-105"
+                style="background: var(--theme-primary)"
                 :title="Number(item.id) === 6001 ? '使用一枚' : '使用全部'"
                 @click.stop="handleUseClick(item)"
               >
-                {{ Number(item.id) === 6001 ? '使用一枚' : '使用全部' }}
+                {{ Number(item.id) === 6001 ? '用1枚' : '使用' }}
+              </button>
+              <button
+                v-if="canSell(item)"
+                type="button"
+                class="h-8 flex-1 border border-gray-200 rounded-lg bg-white/70 text-xs text-gray-600 font-medium transition dark:border-gray-600 dark:bg-gray-700/50 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                title="出售全部"
+                @click.stop="handleSellClick(item)"
+              >
+                出售
               </button>
             </template>
             <div
               v-else-if="canBatchSell(item)"
-              class="h-5 w-5 flex items-center justify-center border-2 rounded transition"
+              class="mx-auto h-6 w-6 flex items-center justify-center border-2 rounded transition"
               :class="selectedForBatch.has(Number(item.id))
                 ? 'border-orange-500 bg-orange-500 text-white'
                 : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700'"
@@ -661,7 +637,7 @@ useIntervalFn(loadBag, 60000)
           </div>
 
           <div
-            class="thumb-wrap mb-2 mt-6 h-16 w-16 flex items-center justify-center rounded-full bg-gray-50 dark:bg-gray-700/50"
+            class="thumb-wrap mb-2 mt-7 h-[72px] w-[72px] flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700/50"
             :data-fallback="(item.name || '物').slice(0, 1)"
           >
             <img
@@ -677,7 +653,7 @@ useIntervalFn(loadBag, 60000)
             </div>
           </div>
 
-          <div class="mb-1 w-full flex items-center justify-center gap-1 px-2 text-center text-sm font-bold" :title="item.name">
+          <div class="mb-1 w-full flex items-center justify-center gap-1 px-2 text-center text-sm font-semibold" :title="item.name">
             <span class="truncate">{{ item.name || `物品${item.id}` }}</span>
             <span
               v-if="getItemCategory(item) === 'seed' && Number(item.plantSize) === 2"
@@ -688,7 +664,7 @@ useIntervalFn(loadBag, 60000)
             </span>
           </div>
 
-          <div class="mb-2 flex flex-col items-center gap-0.5 text-xs text-gray-400">
+          <div class="mb-1 flex flex-col items-center gap-0.5 text-[11px] text-gray-400">
             <span v-if="item.uid">UID: {{ item.uid }}</span>
             <span>
               类型: {{ itemType(item) }}
@@ -698,8 +674,8 @@ useIntervalFn(loadBag, 60000)
             </span>
           </div>
 
-          <div class="mt-auto font-medium" :class="item.hoursText ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'">
-            {{ item.hoursText || `x${item.count || 0}` }}
+          <div class="mb-2 text-base font-semibold tabular-nums" :class="item.hoursText ? 'text-blue-500' : 'text-gray-700 dark:text-gray-200'">
+            {{ item.hoursText || `×${item.count || 0}` }}
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@
 import type { InteractionAttempt, InteractionItem } from '@/stores/interaction'
 import { computed, ref, watch } from 'vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { useInteractionStore } from '@/stores/interaction'
 import { useToastStore } from '@/stores/toast'
 
@@ -221,9 +222,9 @@ if (props.defaultExpanded)
 
       <div v-else-if="loadError" class="flex flex-col items-center gap-2 py-4 text-center text-sm text-red-500">
         <span>{{ loadError }}</span>
-        <button class="rounded bg-gray-100 px-3 py-1.5 text-xs text-gray-600 transition dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-600" @click="refresh">
+        <BaseButton variant="secondary" size="sm" @click="refresh">
           重试
-        </button>
+        </BaseButton>
       </div>
 
       <div v-else-if="items.length === 0" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -263,12 +264,12 @@ if (props.defaultExpanded)
 
           <template v-if="selectedItem.targetKind === 'land'">
             <div class="flex flex-wrap items-center gap-2">
-              <button class="rounded bg-gray-100 px-2.5 py-1.5 text-xs text-gray-600 transition dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-600" @click="selectAllLands">
+              <BaseButton variant="secondary" size="sm" @click="selectAllLands">
                 全选地貌
-              </button>
-              <button class="rounded bg-gray-100 px-2.5 py-1.5 text-xs text-gray-600 transition dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-600" @click="clearLands">
+              </BaseButton>
+              <BaseButton variant="ghost" size="sm" @click="clearLands">
                 清空
-              </button>
+              </BaseButton>
               <span class="text-xs text-gray-400">已选 {{ selectedCount }} / 库存 {{ maxCount }}</span>
             </div>
 
@@ -291,20 +292,18 @@ if (props.defaultExpanded)
             </div>
           </template>
 
-          <div class="flex items-center gap-2">
-            <button
-              class="rounded bg-amber-500 px-3 py-2 text-sm text-white transition dark:bg-amber-600 hover:bg-amber-600 disabled:opacity-50 dark:hover:bg-amber-700"
-              :disabled="interactionStore.submitting || (selectedItem.targetKind === 'land' && selectedCount === 0)"
+          <div class="flex flex-wrap items-center gap-2">
+            <BaseButton
+              variant="primary"
+              :loading="interactionStore.submitting"
+              :disabled="selectedItem.targetKind === 'land' && selectedCount === 0"
               @click="openConfirm"
             >
               {{ interactionStore.submitting ? '提交中…' : selectedItem.targetKind === 'farm' ? '使用到该农场' : `使用到 ${selectedCount} 块地` }}
-            </button>
-            <button
-              class="rounded bg-gray-100 px-3 py-2 text-sm text-gray-600 transition dark:bg-gray-700 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-600"
-              @click="refresh"
-            >
+            </BaseButton>
+            <BaseButton variant="secondary" @click="refresh">
               刷新库存
-            </button>
+            </BaseButton>
           </div>
         </div>
 
