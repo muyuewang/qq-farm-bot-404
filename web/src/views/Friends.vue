@@ -1000,8 +1000,8 @@ async function handleBatchAddKnownFriendGids() {
     </template>
 
     <RanchSceneHost v-else view="friends" title="好友牧场" icon="i-carbon-user-multiple">
-      <template #default="{ state, onRequest }">
-        <RanchFriendsPanel :state="state" @request="onRequest" />
+      <template #default="{ state, onRequest, onDirect }">
+        <RanchFriendsPanel :state="state" @request="onRequest" @direct="onDirect" />
       </template>
     </RanchSceneHost>
 

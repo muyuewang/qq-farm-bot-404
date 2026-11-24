@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RanchFriendRanch, RanchItem, RanchRequest, RanchState } from '@/utils/ranch'
+import type { RanchDirectRequest, RanchFriendRanch, RanchItem, RanchRequest, RanchState } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
@@ -22,6 +22,7 @@ const props = defineProps<{ state: RanchState | null }>()
 
 const emit = defineEmits<{
   request: [payload: RanchRequest]
+  direct: [payload: RanchDirectRequest]
 }>()
 
 const { currentAccountId } = storeToRefs(useAccountStore())
@@ -162,6 +163,15 @@ function requestSteal(gid: string, name: string) {
     input: { hostGid: gid },
     title: `偷取${name}的牧场产物`,
     note: '服务端按进入牧场那一刻的可偷货架执行，可能少于页面显示的数量；每位好友每天可偷次数由服务端控制。',
+  })
+}
+
+function requestProduce(gid: string, name: string) {
+  pendingGid.value = gid
+  emit('direct', {
+    action: 'produceFriend',
+    input: { hostGid: gid },
+    title: `帮${name}的牧场生产`,
   })
 }
 
@@ -517,6 +527,15 @@ watch(currentAccountId, () => {
                   <span v-else class="text-[11px] text-gray-400">
                     最多可送 {{ formatQuantity(String(grassLimitOf(detailOf(friend.gid)))) }} 份
                   </span>
+                  <BaseButton
+                    variant="primary"
+                    size="sm"
+                    :disabled="!friend.canMidwife"
+                    :title="friend.canMidwife ? '' : '对方当前没有可帮生产的动物'"
+                    @click="requestProduce(friend.gid, friend.name)"
+                  >
+                    帮忙生产
+                  </BaseButton>
                   <BaseButton
                     variant="secondary"
                     size="sm"

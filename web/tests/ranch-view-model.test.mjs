@@ -387,9 +387,9 @@ test('两阶段协议：execute 必须回传报价签名，skipped 报价不发�
   assert.equal(buildRanchExecuteBody('sell', { uid: '9527' }, { expected: { signature: 'sig-1' } }).ok, false)
 })
 
-test('直投协议：只有喂养 / 催产 / 收获 / 清理免报价，其余动作仍强制走报价', () => {
-  // 四个免报价动作：带上 direct 标记，且不带 expected。
-  for (const action of ['feed', 'produce', 'harvest', 'clean']) {
+test('直投协议：喂养 / 催产 / 收获 / 清理 / 帮好友生产免报价，其余动作仍强制走报价', () => {
+  // 免报价动作：带上 direct 标记，且不带 expected。
+  for (const action of ['feed', 'produce', 'harvest', 'clean', 'produceFriend']) {
     assert.equal(isRanchDirectAction(action), true, `${action} 应走直投`)
   }
   assert.deepEqual(buildRanchDirectBody('harvest', { all: true }), { ok: true, body: { all: true, direct: true } })
@@ -398,6 +398,11 @@ test('直投协议：只有喂养 / 催产 / 收获 / 清理免报价，其余�
 
   // 直投同样受白名单与必填约束，未知字段不会漏发。
   assert.equal(buildRanchDirectBody('produce', { ranchId: '1:101', animalId: 5001 }).ok, true)
+  // 帮好友生产只带 hostGid，不能夹带自家动作才有的 ranchId/animalId。
+  assert.deepEqual(buildRanchDirectBody('produceFriend', { hostGid: '88001', animalId: 5001 }), {
+    ok: true, body: { hostGid: '88001', direct: true },
+  })
+  assert.equal(buildRanchDirectBody('produceFriend', {}).ok, false, '缺 hostGid 不能直发')
   assert.equal(buildRanchDirectBody('feed', { animalId: 5001 }).ok, false)
 
   // 交易类动作不能借 direct 绕开成本确认。

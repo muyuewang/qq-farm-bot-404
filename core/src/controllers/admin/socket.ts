@@ -34,7 +34,8 @@ function applySocketSubscription(ctx: AdminContext, socket: any, accountRef: str
             socket.emit('status:update', { accountId: targetId, status: currentStatus });
         }
         if (ctx.provider && typeof ctx.provider.getLogs === 'function') {
-            let currentLogs: any[] = ctx.provider.getLogs(targetId, { limit: 100 });
+            // 逐块务农日志密集，前端先聚合再截断，快照给足原始行以免聚合前被裁掉。
+            let currentLogs: any[] = ctx.provider.getLogs(targetId, { limit: 500 });
             if (!Array.isArray(currentLogs)) currentLogs = [];
 
             socket.emit('logs:snapshot', {

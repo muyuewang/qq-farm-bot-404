@@ -14,6 +14,7 @@ const { setTimeout: wait } = require('node:timers/promises');
 const { ACTIONS } = require('./contract');
 // 这四个动作不改动资源交易，界面可以直接执行、不必先报价再确认（上游 #165）。
 const DIRECT_ACTIONS = new Set(['feed', 'produce', 'harvest', 'clean']);
+const FRIEND_INTERACTIONS = new Set(['stroke', 'putMosquito', 'cleanFriend', 'produceFriend']);
 const LABELS: Record<string, string> = {
     buy: '购买牧场商品', place: '放养幼崽', addGrass: '补充牧草', useCan: '添加罐头', feed: '喂养动物',
     produce: '牧场生产', harvest: '牧场收获', sell: '出售牧场产物', clean: '清理牧场', activateShed: '解锁牧场棚',
@@ -384,7 +385,7 @@ function inActionScene(action: string, input: any, run: (cells: any, recipient?:
 
 async function prepareAction(action: string, input: any = {}, feedStage?: RanchFeedStage): Promise<any> {
     if (action === 'steal') return require('./friends').prepareSteal(input);
-    if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').prepareInteraction(action, input);
+    if (FRIEND_INTERACTIONS.has(action)) return require('./friends').prepareInteraction(action, input);
     return inActionScene(action, input, async (cells, recipient) => {
         // 图鉴领奖只用 book/weightBook 两个接口，不需要整份牧场快照，省一次 cells + bag 读取。
         const raw = action === 'claimIllustrated' ? null : { ...await loadRaw(cells), recipient };
@@ -422,7 +423,7 @@ function animalsInResults(ranches: any[], rows: any[]): any[] {
 }
 
 async function operate(action: string, input: any = {}, feedStage?: RanchFeedStage): Promise<any> {
-    if (['stroke', 'putMosquito', 'cleanFriend'].includes(action)) return require('./friends').interact(action, input);
+    if (FRIEND_INTERACTIONS.has(action)) return require('./friends').interact(action, input);
     if (action === 'acknowledge') return inScene(async () => {
         reservations.forCurrentAccount().acknowledge(String(input.id));
         require('./automation').resetSchedule();

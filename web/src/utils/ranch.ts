@@ -81,6 +81,7 @@ export const RANCH_ACTIONS = [
   'release',
   'putMosquito',
   'cleanFriend',
+  'produceFriend',
 ] as const
 
 export type RanchAction = (typeof RANCH_ACTIONS)[number] | 'acknowledge'
@@ -123,6 +124,8 @@ export const RANCH_ACTION_FIELDS: Record<RanchAction, string[]> = {
   release: ['ranchId', 'animalId'],
   putMosquito: ['hostGid', 'ranchId'],
   cleanFriend: ['hostGid'],
+  /** 好友一键帮忙生产：只指定主人，由服务端选就绪动物。 */
+  produceFriend: ['hostGid'],
   acknowledge: ['id'],
 }
 
@@ -154,6 +157,7 @@ export const RANCH_ACTION_REQUIRED: Record<RanchAction, string[][]> = {
   release: [['ranchId', 'animalId']],
   putMosquito: [['hostGid', 'ranchId']],
   cleanFriend: [['hostGid']],
+  produceFriend: [['hostGid']],
   acknowledge: [['id']],
 }
 
@@ -1094,10 +1098,10 @@ export function buildRanchExecuteBody(action: RanchAction, input: Record<string,
 }
 
 /**
- * 直投协议：喂养 / 催产 / 收获 / 清理不改动资源交易，服务端允许免报价直接执行。
+ * 直投协议：喂养 / 催产 / 收获 / 清理 / 帮好友生产不改动资源交易，服务端允许免报价直接执行。
  * 只在这四个动作上开放，其余动作仍必须走 quote → execute，避免绕开报价的成本确认。
  */
-export const RANCH_DIRECT_ACTIONS: RanchAction[] = ['feed', 'produce', 'harvest', 'clean']
+export const RANCH_DIRECT_ACTIONS: RanchAction[] = ['feed', 'produce', 'harvest', 'clean', 'produceFriend']
 
 export function isRanchDirectAction(action: RanchAction) {
   return RANCH_DIRECT_ACTIONS.includes(action)
@@ -1134,7 +1138,7 @@ export interface RanchRequest {
   danger?: boolean
 }
 
-/** 免报价的直投请求：只有喂养 / 催产 / 收获 / 清理走这条路。 */
+/** 免报价的直投请求：喂养 / 催产 / 收获 / 清理 / 帮好友生产走这条路。 */
 export interface RanchDirectRequest {
   action: RanchAction
   input: Record<string, any>

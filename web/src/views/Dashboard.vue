@@ -15,7 +15,7 @@ import { useSceneStore } from '@/stores/scene'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
-import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
+import { compactRuntimeLogs, LOG_SUBMODULES, matchesRuntimeLog, matchesRuntimeSubmodule, normalizeRuntimeLog } from '@/utils/runtime-log'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
@@ -50,13 +50,16 @@ const logScrollStates = new Map<string, { top: number, atBottom: boolean }>()
 
 const filter = reactive({
   module: '',
+  submodule: '',
   event: '',
   keyword: '',
 })
 
 const hasActiveLogFilter = computed(() =>
-  !!(filter.module || filter.event || filter.keyword),
+  !!(filter.module || filter.submodule || filter.event || filter.keyword),
 )
+// 一级模块切换时清掉旧子模块，避免留下「农场/好友」却切到牧场的错配。
+const submoduleOptions = computed(() => LOG_SUBMODULES[filter.module] || [])
 const currentAccountDisconnected = computed(() =>
   currentStatusReady.value && !status.value?.connection?.connected,
 )
@@ -74,6 +77,7 @@ const allLogs = computed(() => {
 
 const filteredLogs = computed(() => allLogs.value.filter((log) => {
   return matchesRuntimeLog(log, filter)
+    && matchesRuntimeSubmodule(log, filter.module, filter.submodule)
 }))
 
 const visibleLogs = computed(() => compactRuntimeLogs(filteredLogs.value))
@@ -540,6 +544,9 @@ function syncRealtimeAccount() {
 }
 
 function onLogFilterChange() {
+  // 一级模块变了，二级选项已不适用：清掉旧选择再套用新筛选。
+  if (filter.submodule && !submoduleOptions.value.some(option => option.value === filter.submodule))
+    filter.submodule = ''
   pendingLogCount.value = 0
   restoreLogScroll()
 }
@@ -841,6 +848,14 @@ useIntervalFn(updateCountdowns, 1000)
               />
 
               <BaseSelect
+                v-if="submoduleOptions.length"
+                v-model="filter.submodule"
+                :options="submoduleOptions"
+                class="w-32"
+                @change="onLogFilterChange"
+              />
+
+              <BaseSelect
                 v-model="filter.event"
                 :options="events"
                 class="w-36"
@@ -851,7 +866,7 @@ useIntervalFn(updateCountdowns, 1000)
                 v-if="hasActiveLogFilter"
                 variant="ghost"
                 size="sm"
-                @click="Object.assign(filter, { module: '', event: '', keyword: '' }); onLogFilterChange()"
+                @click="Object.assign(filter, { module: '', submodule: '', event: '', keyword: '' }); onLogFilterChange()"
               >
                 <div class="i-carbon-filter-remove mr-1" />
                 重置

@@ -186,13 +186,22 @@ function createRuntimeState(options: RuntimeStateOptions) {
             if (Number.isFinite(timeToMs) && Number.isFinite(logMs) && logMs > timeToMs) return false;
             if (tag && String(l.tag || '') !== tag) return false;
             if (moduleName) {
+                // 日志的模块信息多数落在 tag 上（meta.module 常为空），按 tag 归一化后一起匹配，
+                // 否则「按模块筛选」对农场/牧场/任务等日志几乎全部筛不出来。
                 const logModule = String((l.meta || {}).module || '');
-                if (moduleName === 'system') {
-                    const isSystemTag = String(l.tag || '') === '系统' || String(l.tag || '') === '错误';
-                    if (logModule !== 'system' && !isSystemTag) return false;
-                } else if (logModule !== moduleName) {
-                    return false;
-                }
+                const logTag = String(l.tag || '');
+                const TAG_MODULE: Record<string, string> = {
+                    '农场': 'farm', '好友': 'friend', '仓库': 'warehouse',
+                    '牧场': 'ranch', '任务': 'task', '系统': 'system', '错误': 'system',
+                    'QQ机器人': 'qqbot',
+                };
+                const tagModule = TAG_MODULE[logTag] || '';
+                const modules = String(moduleName).split(',').map(part => part.trim()).filter(Boolean);
+                const matched = modules.some((name) => {
+                    if (name === 'system') return logModule === 'system' || tagModule === 'system';
+                    return logModule === name || tagModule === name;
+                });
+                if (!matched) return false;
             }
             if (eventName && String((l.meta || {}).event || '') !== eventName) return false;
             if (isWarn !== undefined && isWarn !== null && String(isWarn) !== '') {
