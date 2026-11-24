@@ -314,6 +314,7 @@ type FriendInteraction = { action: 'stroke'; ranchId: string; animalId: number }
 /** 一次好友拜访的续跑进度：让路后带着它回来，从断点继续而不是从头重复。 */
 export interface FriendPatrolProgress {
     stealChecked?: boolean;
+    produceChecked?: boolean;
     cleanChecked?: boolean;
     pending?: FriendInteraction[];
 }
@@ -359,7 +360,7 @@ async function automateFriend(
             if (outcome.status === 'confirmed' || action === 'steal') onOutcome?.(outcome, nickname);
             return outcome;
         }
-        // 可偷产物可能被好友收走，先处理当前货架再做清理和需要查询次数的互动。
+        // 可偷产物可能被好友收走，先处理当前货架，再用本次拜访读到的栏舍安排帮忙生产和清理。
         if (!progress.stealChecked) {
             if (enabled('steal')) {
                 const plan = quote(host, ranches);
@@ -367,21 +368,23 @@ async function automateFriend(
             }
             progress.stealChecked = true;
         }
-        let cleaned = false;
-        if (!progress.cleanChecked) {
-            if (enabled('cleanFriend')) {
-                const plan = interactionPlan('cleanFriend', {}, ranches, host, null);
+        let ranchesChanged = false;
+        for (const [action, checked] of [['produceFriend', 'produceChecked'], ['cleanFriend', 'cleanChecked']] as const) {
+            if (progress[checked]) continue;
+            if (enabled(action)) {
+                const plan = interactionPlan(action, {}, ranches, host, null);
                 if (plan.count) {
                     if (pause()) return { results, times, yielded: true };
-                    cleaned = (await act(plan, () => commitInteraction(plan)))?.status === 'confirmed';
+                    const outcome = await act(plan, () => commitInteraction(plan));
+                    if (outcome?.status === 'confirmed') ranchesChanged = true;
                 }
             }
-            progress.cleanChecked = true;
+            progress[checked] = true;
         }
         if (!enabled('stroke') && !enabled('putMosquito')) return { results, times };
         // 目标清单只在第一次进牧场时生成一次，让路后原样复用，避免重复抚摸同一只。
         if (!progress.pending) {
-            if (cleaned) {
+            if (ranchesChanged) {
                 if (pause()) return { results, times, yielded: true };
                 ranches = (await rpc('animals', { host_gid: host })).ranches;
             }

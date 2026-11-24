@@ -95,7 +95,7 @@ function loadAutomation({ automation = {}, unlocked = true, taskState = { doneTo
 }
 
 test('牧场自动化默认只开领取类动作，会改状态的动作全部关闭', () => {
-    const actions = ['ranch_buy', 'ranch_upgrade', 'ranch_grass_buy', 'ranch_sell', 'ranch_fill_cans', 'ranch_feed_normal', 'ranch_feed_organic', 'ranch_harvest', 'ranch_produce', 'ranch_clean', 'ranch_grass', 'ranch_market_organic', 'ranch_market_organic_poop', 'ranch_market_organic_pinecone'];
+    const actions = ['ranch_buy', 'ranch_upgrade', 'ranch_grass_buy', 'ranch_sell', 'ranch_fill_cans', 'ranch_feed_normal', 'ranch_feed_organic', 'ranch_harvest', 'ranch_produce', 'ranch_clean', 'ranch_grass', 'ranch_market_organic', 'ranch_market_organic_poop', 'ranch_market_organic_pinecone', 'ranch_friend_steal', 'ranch_friend_produce', 'ranch_friend_clean', 'ranch_friend_mosquito'];
     assert.deepEqual(actions.filter(key => RANCH_AUTOMATION_DEFAULTS[key] !== false), []);
     assert.deepEqual(actions.filter(key => !RANCH_SWITCH_KEYS.includes(key)), [], '每个自动动作都必须有对应开关');
     // 领取类动作只是把已达标奖励收下，不改账号其它状态，保持默认开启。

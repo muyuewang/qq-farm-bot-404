@@ -82,7 +82,10 @@ function resetCycle(keepFriendProgress = false): void {
     cycleChanged = false;
     ownRecheckUsed = false;
 }
-const FRIEND_CONTROLS: Record<string, string> = { stroke: 'ranch_stroke', steal: 'ranch_friend_steal', cleanFriend: 'ranch_friend_clean', putMosquito: 'ranch_friend_mosquito' };
+const FRIEND_CONTROLS: Record<string, string> = {
+    stroke: 'ranch_stroke', steal: 'ranch_friend_steal', produceFriend: 'ranch_friend_produce',
+    cleanFriend: 'ranch_friend_clean', putMosquito: 'ranch_friend_mosquito',
+};
 const enabled = (key: string) => getAutomation()[key] === true;
 /** 罐头相关日志统一带事件名，方便在运行日志里区分普通罐头与有机罐头。 */
 function logCanFeed(canLabel: string, message: string, result: 'skipped' | 'ok'): void {
@@ -581,8 +584,8 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                     const blacklist = new Set(getRanchFriendBlacklist(process.env.FARM_ACCOUNT_ID));
                     const friends = patrolFriends.filter(friend => !blacklist.has(friend.gid));
                     if (!friends.length) return;
-                    // 偷取/清理不消耗次数，不必先查次数；只有摸头/放蚊才需要。
-                    const hasBulkWork = enabled('ranch_friend_steal') || enabled('ranch_friend_clean');
+                    // 偷取/帮忙生产/清理不消耗互动次数，不必先查次数；只有摸头/放蚊才需要。
+                    const hasBulkWork = canInteract('steal') || canInteract('produceFriend') || canInteract('cleanFriend');
                     const times = hasBulkWork ? {} : await interactions.getInteractionTimes();
                     const wanted = (action: string) => canInteract(action) && times[action] !== 0;
                     // 摸头和放蚊都用完次数时，只能靠好友状态名单决定还要不要进门。
@@ -622,7 +625,8 @@ async function run(options: { farmDeadline?: () => number; canContinue?: () => b
                             }
                             // 状态足够新时直接用状态判断：没得偷也没得帮就不进门。
                             if (!canVisit() || (pendingFriend?.gid !== gid && statusDecides() && Date.now() - friend.statusAtMs <= FRIEND_STATUS_FRESH_MS
-                                && !(wanted('steal') && friend.canSteal) && !(wanted('cleanFriend') && friend.canHelp))) {
+                                && !(wanted('steal') && friend.canSteal) && !(wanted('produceFriend') && friend.canMidwife)
+                                && !(wanted('cleanFriend') && friend.canHelp))) {
                                 pendingFriend = null;
                                 continue;
                             }

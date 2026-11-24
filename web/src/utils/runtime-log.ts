@@ -86,7 +86,7 @@ export const LOG_SUBMODULES: Record<string, { label: string, value: string }[]> 
 /** 子模块筛选：按事件白名单（土地/牧场子模块）或降级模块（好友/仓库）匹配。 */
 const SUBMODULE_EVENTS: Record<string, string[]> = {
   'farm:land': ['farm_cycle', 'plant_seed', '土地推送通知', '种植种子', '农场循环', '铲除植物', '收获后状态分类'],
-  'ranch:friend': ['ranch_cleanFriend', 'ranch_steal', '好友牧场清理', '牧场产物偷取'],
+  'ranch:friend': ['ranch_cleanFriend', 'ranch_steal', 'ranch_produceFriend', '好友牧场清理', '牧场产物偷取', '帮好友生产'],
   'ranch:warehouse': ['ranch_sell', 'ranch_feed', '出售牧场产物', '牧场罐头喂养'],
 }
 const SUBMODULE_MODULE: Record<string, string> = { 'farm:friend': 'friend', 'farm:warehouse': 'warehouse' }

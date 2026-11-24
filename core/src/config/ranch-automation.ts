@@ -44,6 +44,8 @@ export const RANCH_AUTOMATION_DEFAULTS = {
     ranch_clean: false,
     ranch_stroke: false,
     ranch_friend_steal: false,
+    // 帮忙生产会改动好友动物的生产状态，按保守默认关闭，与其余好友互动一致。
+    ranch_friend_produce: false,
     ranch_friend_clean: false,
     ranch_friend_mosquito: false,
     ranch_task: true,

@@ -25,7 +25,7 @@ function schedulerRef(): any {
     return _scheduler;
 }
 
-const allFriendsRequests: Partial<Record<'low' | 'normal', Promise<any>>> = {};
+const allFriendsRequests: Partial<Record<'low' | 'normal' | 'sync', Promise<any>>> = {};
 
 // ============ 好友 API ============
 async function fetchAllFriends(forceSync: boolean, priority: 'low' | 'normal'): Promise<any> {
@@ -67,16 +67,20 @@ async function fetchAllFriends(forceSync: boolean, priority: 'low' | 'normal'): 
 export async function getAllFriends(forceSync: boolean = false, priority: 'low' | 'normal' = 'normal'): Promise<any> {
     // 同优先级好友列表请求合并，避免页面刷新、巡田和后台同步同时重复拉取。
     // 低优先级请求不会阻塞普通请求；反过来低优先级可以复用正在执行的普通请求。
-    if (priority === 'low' && allFriendsRequests.normal) return allFriendsRequests.normal;
-    const current = allFriendsRequests[priority];
+    // QQ 强制复查走独立的 sync key，不能被在飞的普通请求复用，否则强制刷新读到的还是旧列表。
+    const requests = allFriendsRequests;
+    const key = forceSync && CONFIG.platform === 'qq' ? 'sync' : priority;
+    if (requests.sync) return requests.sync;
+    if (key === 'low' && requests.normal) return requests.normal;
+    const current = requests[key];
     if (current) return current;
 
     const request = fetchAllFriends(forceSync, priority);
-    allFriendsRequests[priority] = request;
+    requests[key] = request;
     try {
         return await request;
     } finally {
-        if (allFriendsRequests[priority] === request) delete allFriendsRequests[priority];
+        if (requests[key] === request) delete requests[key];
     }
 }
 

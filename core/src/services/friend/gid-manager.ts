@@ -3,7 +3,7 @@
  */
 
 const { parentPort } = require('node:worker_threads');
-const { sendMsgAsync, getGatewayLoad, GatewayError, GatewayBusyError } = require('../../utils/network');
+const { sendMsgAsync, getGatewayLoad, getUserState, GatewayError, GatewayBusyError } = require('../../utils/network');
 const { isGatewayHealthyForBusiness, isGatewayYieldError } = require('../../utils/low-priority-gate');
 const { types } = require('../../utils/proto');
 const { toNum, toLong, log, logWarn, randomDelay } = require('../../utils/utils');
@@ -124,7 +124,10 @@ export function buildFriendReply(friends: any[]): any {
 // ============ 公开函数 ============
 
 export function syncKnownFriendGidsFromFriends(friends: any[]): number[] {
-    const fetchedGids: number[] = normalizeFriendGids((Array.isArray(friends) ? friends : []).map(friend => friend && friend.gid));
+    const selfGid: number = toNum(getUserState().gid);
+    const fetchedGids: number[] = normalizeFriendGids((Array.isArray(friends) ? friends : []).map(friend => friend && friend.gid))
+        // 回包偶尔把自己也列进来，不能把自身 GID 写进已知好友，否则会尝试拜访自己。
+        .filter((gid: number) => gid !== selfGid);
     if (fetchedGids.length === 0) return [];
 
     clearInvalidKnownFriendGidMarks(fetchedGids);
@@ -153,7 +156,8 @@ export function getEffectiveKnownQqFriendGids(): number[] {
 
     const invalidGidSet: Set<number> = getInvalidKnownFriendGidSet();
     const blacklistSet: Set<number> = new Set(getFriendBlacklist(accountId));
-    return normalizeFriendGids(currentKnownGids).filter((gid: number) => !invalidGidSet.has(gid) && !blacklistSet.has(gid));
+    const selfGid: number = toNum(getUserState().gid);
+    return currentKnownGids.filter((gid: number) => gid !== selfGid && !invalidGidSet.has(gid) && !blacklistSet.has(gid));
 }
 
 export async function syncKnownFriendGidsFromRecentVisitors(force: boolean = false, priority: 'low' | 'normal' = 'normal'): Promise<number[]> {
