@@ -8,6 +8,7 @@ import { mountQixiActivityRoutes } from './qixi-routes';
 import { mountStellarActivityRoutes } from './stellar-routes';
 import { mountWeatherActivityRoutes } from './weather-routes';
 import { mountPetDiaryRoutes } from './pet-diary-routes';
+import { mountYishuHuanfuActivityRoutes } from './yishuhuanfu-routes';
 
 function mountActivityCenterRoutes(app: Application, ctx: AdminContext): void {
     const routes = createActivityRouteContext(app, ctx);
@@ -18,6 +19,7 @@ function mountActivityCenterRoutes(app: Application, ctx: AdminContext): void {
     mountCharityActivityRoutes(routes);
     mountWeatherActivityRoutes(routes);
     mountPetDiaryRoutes(routes);
+    mountYishuHuanfuActivityRoutes(routes);
 }
 
 module.exports = { mountActivityCenterRoutes };

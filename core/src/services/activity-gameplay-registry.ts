@@ -1,6 +1,6 @@
 export {};
 
-type ActivityDetailTarget = 'travel' | 'constellation' | 'shop' | 'solar' | 'qixi' | 'qingmei' | 'charity' | 'weather' | 'pet' | 'wish' | 'happy' | 'milk' | 'muge';
+type ActivityDetailTarget = 'travel' | 'constellation' | 'shop' | 'solar' | 'qixi' | 'qingmei' | 'charity' | 'weather' | 'pet' | 'wish' | 'happy' | 'milk' | 'muge' | 'yishuhuanfu';
 
 interface ActivityGameplayContext {
     season?: any;
@@ -11,6 +11,7 @@ interface ActivityGameplayContext {
     qingMei?: any;
     charity?: any;
     weather?: any;
+    yishuHuanfu?: any;
 }
 
 interface ActivityGameplayAdapter {
@@ -27,6 +28,10 @@ interface ActivityGameplayBinding {
 }
 
 const GAMEPLAY_ADAPTERS: readonly ActivityGameplayAdapter[] = [
+    {
+        gameplayKey: 'yishuhuanfu', detailTarget: 'yishuhuanfu', priority: 90,
+        activityIds: context => ['2026111707', '2026111708', '2026111709', context.yishuHuanfu?.groupId, context.yishuHuanfu?.activityId],
+    },
     { gameplayKey: 'muge', detailTarget: 'muge', priority: 1, activityIds: () => ['2026111700', '2026111702', '2026111703', '2026111704', '2026111705'] },
     { gameplayKey: 'wish', detailTarget: 'wish', priority: 1, activityIds: () => ['2026092400', '2026092401'] },
     { gameplayKey: 'happy', detailTarget: 'happy', priority: 2, activityIds: () => ['2026092500', '2026092501', '2026110104'] },

@@ -22,6 +22,7 @@ const { isRanchMarketEnabled, RANCH_MARKET_SWITCH_BY_CURRENCY } = require('../co
 const { createScheduler, getSchedulerRegistrySnapshot } = require('../services/scheduler');
 const { checkDailyShareStatus, getShareDailyState } = require('../services/share');
 const { refreshActivityWindows } = require('../services/activity-windows');
+const { startYishuTimer } = require('../services/yishuhuanfu-auto');
 const { resetSessionGains, recordOperation, initStatsWithPersistence, saveStats } = require('../services/stats');
 const { initStatusBar, setStatusPlatform, statusData } = require('../services/status');
 const { setRecordGoldExpHook } = require('../services/status');
@@ -526,6 +527,7 @@ async function runStartupSequence(canContinue: () => boolean = () => loginReady)
         startUnifiedScheduler();
         startDailyRoutineTimer(false);
         startMysteryShopTimer();
+        startYishuTimer(workerScheduler, () => loginReady);
     } catch (e: any) {
         log('系统', `登录启动序列执行失败: ${e.message}`, { module: 'system', event: '启动序列', result: 'error' });
     }
@@ -627,6 +629,7 @@ function applyRuntimeConfig(snapshot: any, syncNow: boolean = false): number {
             }
 
             startMysteryShopTimer();
+            startYishuTimer(workerScheduler, () => loginReady);
         }
     }
 
@@ -1251,6 +1254,39 @@ async function handleApiCall(msg: any): Promise<void> {
                     break;
                 case 'operateAutumnActivity':
                     result = await require('../services/autumn-activities').operateAutumnActivity(args[0], args[1], args[2]);
+                    break;
+                case 'getCurrentYishuHuanfuActivity':
+                    result = await require('../services/activity-center').getCurrentYishuHuanfuActivity();
+                    break;
+                case 'queryYishuHuanfuCatalog':
+                    result = await require('../services/activity-center').queryYishuHuanfuCatalog();
+                    break;
+                case 'queryYishuHuanfuRecords':
+                    result = await require('../services/activity-center').queryYishuHuanfuRecords();
+                    break;
+                case 'claimYishuHuanfuCommission':
+                    result = await require('../services/activity-center').claimYishuHuanfuCommission();
+                    break;
+                case 'claimYishuHuanfuSeeds':
+                    result = await require('../services/activity-center').claimYishuHuanfuSeeds();
+                    break;
+                case 'sellYishuHuanfuSweetPotato':
+                    result = await require('../services/activity-center').sellYishuHuanfuSweetPotato(args[0], args[1]);
+                    break;
+                case 'queryYishuHuanfuShop':
+                    result = await require('../services/activity-center').queryYishuHuanfuShop(args[0]);
+                    break;
+                case 'scanYishuHuanfuFriendShops':
+                    result = await require('../services/activity-center').scanYishuHuanfuFriendShops(args[0]);
+                    break;
+                case 'exchangeYishuHuanfuGoods':
+                    result = await require('../services/activity-center').exchangeYishuHuanfuGoods(args[0], args[1]);
+                    break;
+                case 'refreshYishuHuanfuQuote':
+                    result = await require('../services/activity-center').refreshYishuHuanfuQuote();
+                    break;
+                case 'shareYishuHuanfuShop':
+                    result = await require('../services/activity-center').shareYishuHuanfuShop();
                     break;
                 case 'getPropsShop':
                     result = await require('../services/commerce').getPropsShop();

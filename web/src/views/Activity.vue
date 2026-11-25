@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import api from '@/api'
 import CharityFlowerActivityPanel from '@/components/activity/CharityFlowerActivityPanel.vue'
+import YishuHuanfuActivityPanel from '@/components/activity/YishuHuanfuActivityPanel.vue'
 import HeluExchangePanel from '@/components/activity/HeluExchangePanel.vue'
 import HeluPassportPanel from '@/components/activity/HeluPassportPanel.vue'
 import HeluSolarTermsPanel from '@/components/activity/HeluSolarTermsPanel.vue'
@@ -118,7 +119,7 @@ const petDiaryActivityActive = computed(() => isWithinActivityWindowMs(PET_DIARY
 const selectedActivity = ref<string | null>(null)
 const activityStatusFilter = ref<'active' | 'upcoming' | 'ended'>('active')
 const activeSection = ref<ActivitySectionKey>('journey')
-type AdaptedActivityKey = 'pet-diary' | 'rain-poem' | 'charity-flower' | 'milk-tea' | 'wish-sign' | 'share-reward' | 'muge'
+type AdaptedActivityKey = 'pet-diary' | 'rain-poem' | 'charity-flower' | 'milk-tea' | 'wish-sign' | 'share-reward' | 'muge' | 'yishuhuanfu'
 
 // 服务端玩法标识（activity-gameplay-registry）到本页详情面板的映射。
 const ACTIVITY_DETAIL_TARGET_KEYS: Record<string, AdaptedActivityKey | undefined> = {
@@ -129,6 +130,7 @@ const ACTIVITY_DETAIL_TARGET_KEYS: Record<string, AdaptedActivityKey | undefined
   wish: 'wish-sign',
   happy: 'share-reward',
   muge: 'muge',
+  yishuhuanfu: 'yishuhuanfu',
 }
 const ACTIVITY_GAMEPLAY_LABELS: Record<string, string> = {
   pet: '萌宠成长',
@@ -141,6 +143,7 @@ const ACTIVITY_GAMEPLAY_LABELS: Record<string, string> = {
   qingmei: '青梅酿酒',
   stellar: '星垂野',
   muge: '牧歌初启',
+  yishuhuanfu: '以薯换福',
 }
 
 interface ActivityDirectoryWindow {
@@ -249,7 +252,9 @@ const activityCards = computed(() => {
                 ? 'charity-flower'
                 : group.id === 2026090100
                   ? 'pet-diary'
-                  : null)
+                  : (group.activityIds.includes(2026111707) || group.activityIds.includes(2026111708))
+                    ? 'yishuhuanfu'
+                    : null)
                 ?? null
     const window = { startMs: group.startTime * 1000, endMs: group.endTime * 1000 }
     const hue = Math.abs(group.id * 37) % 360
@@ -260,7 +265,7 @@ const activityCards = computed(() => {
       adaptedKey: adapted,
       title: adapted === 'pet-diary' ? '萌宠日记' : group.title || `活动 ${group.id}`,
       description: adapted
-        ? adapted === 'milk-tea' ? '经营奶茶小店、兑换商店与兼职工作' : adapted === 'pet-diary' ? '查看比熊成长、爪印手记、拾物小铺与比熊赠礼' : adapted === 'charity-flower' ? '查看爱心、公益进度与奖励状态' : adapted === 'wish-sign' ? '查看祈愿状态、祈愿池和每日奖励' : adapted === 'share-reward' ? '查看每日快乐值与档位进度' : adapted === 'muge' ? '全服庆贺、好友同游、成长手册与牧歌人格' : '查看天气、每日进度与气象研究'
+        ? adapted === 'yishuhuanfu' ? '领红薯种子、分享暴击、按好友收购价卖蜜薯与福气兑换' : adapted === 'milk-tea' ? '经营奶茶小店、兑换商店与兼职工作' : adapted === 'pet-diary' ? '查看比熊成长、爪印手记、拾物小铺与比熊赠礼' : adapted === 'charity-flower' ? '查看爱心、公益进度与奖励状态' : adapted === 'wish-sign' ? '查看祈愿状态、祈愿池和每日奖励' : adapted === 'share-reward' ? '查看每日快乐值与档位进度' : adapted === 'muge' ? '全服庆贺、好友同游、成长手册与牧歌人格' : '查看天气、每日进度与气象研究'
         : ACTIVITY_CLIENT_PREVIEWS.some(item => item.title === group.title || item.ids.some(id => group.activityIds.includes(id)))
           ? '已读取客户端静态预览，动态规则待服务端开放'
           : '暂未适配详情',
@@ -273,8 +278,9 @@ const activityCards = computed(() => {
         'wish-sign': 'i-carbon-sun',
         'share-reward': 'i-carbon-share',
         'muge': 'i-carbon-music',
+        'yishuhuanfu': 'i-carbon-repeat',
       }[adapted || ''] || 'i-carbon-calendar',
-      image: adapted === 'milk-tea' ? '/activity/milk-tea/img_s4Main_bg.png' : adapted === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : adapted === 'wish-sign' ? '/activity/wish-sign/card-bg.svg' : adapted === 'share-reward' ? '/activity/share-reward/card-bg.svg' : adapted === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : adapted === 'muge' ? '/activity-assets/muge/icon.png' : '',
+      image: adapted === 'milk-tea' ? '/activity/milk-tea/img_s4Main_bg.png' : adapted === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : adapted === 'wish-sign' ? '/activity/wish-sign/card-bg.svg' : adapted === 'share-reward' ? '/activity/share-reward/card-bg.svg' : adapted === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : adapted === 'muge' ? '/activity-assets/muge/icon.png' : adapted === 'yishuhuanfu' ? '/activity/yishuhuanfu/card-bg.svg' : '',
       imagePosition: adapted === 'pet-diary' ? 'center 64%' : 'center',
       window,
       updatedMs: window.startMs,
@@ -662,6 +668,9 @@ onUnmounted(() => {
       牧歌初启面板自带顶栏返回按钮，也自带未选账号的提示，
       因此不外挂返回按钮、不传 activity/loading props。
     -->
+    <div v-else-if="selectedActivityCard?.adaptedKey === 'yishuhuanfu' && selectedActivityCard.status === 'active'">
+      <YishuHuanfuActivityPanel @back="selectedActivity = null" />
+    </div>
     <div v-else-if="selectedActivityCard?.adaptedKey === 'muge' && selectedActivityCard.status === 'active'">
       <MugeActivityPanel @back="selectedActivity = null" />
     </div>

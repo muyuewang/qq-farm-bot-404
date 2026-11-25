@@ -248,6 +248,25 @@ function createDataProvider(options: DataProviderOptions) {
         operateShareRewardActivity: (accountRef: string, activityId: string, action: string, input: any) => callWorkerApi(resolveAccountRefId(accountRef), 'operateShareRewardActivity', activityId, action, input),
         getAutumnActivity: (accountRef: string, key: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getAutumnActivity', key),
         operateAutumnActivity: (accountRef: string, key: string, action: string, input: unknown) => callWorkerApi(resolveAccountRefId(accountRef), 'operateAutumnActivity', key, action, input),
+        getCurrentYishuHuanfuActivity: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getCurrentYishuHuanfuActivity'),
+        queryYishuHuanfuCatalog: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'queryYishuHuanfuCatalog'),
+        queryYishuHuanfuRecords: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'queryYishuHuanfuRecords'),
+        claimYishuHuanfuCommission: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'claimYishuHuanfuCommission'),
+        claimYishuHuanfuSeeds: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'claimYishuHuanfuSeeds'),
+        queryYishuHuanfuShop: (accountRef: string, friendGid: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'queryYishuHuanfuShop', friendGid)
+        ),
+        scanYishuHuanfuFriendShops: (accountRef: string, options: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'scanYishuHuanfuFriendShops', options)
+        ),
+        exchangeYishuHuanfuGoods: (accountRef: string, index: unknown, count: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'exchangeYishuHuanfuGoods', index, count)
+        ),
+        sellYishuHuanfuSweetPotato: (accountRef: string, friendGid: unknown, count: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'sellYishuHuanfuSweetPotato', friendGid, count)
+        ),
+        refreshYishuHuanfuQuote: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'refreshYishuHuanfuQuote'),
+        shareYishuHuanfuShop: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'shareYishuHuanfuShop'),
         getPropsShop: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getPropsShop'),
         purchaseProps: (accountRef: string, goodsId: unknown, count: unknown, expectedOffer: unknown) => (
             callWorkerApi(resolveAccountRefId(accountRef), 'purchaseProps', goodsId, count, expectedOffer)

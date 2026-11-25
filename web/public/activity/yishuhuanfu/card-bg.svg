@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#C2410C"/>
+      <stop offset=".5" stop-color="#B45309"/>
+      <stop offset="1" stop-color="#7C2D12"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(960 120) rotate(130) scale(380)">
+      <stop stop-color="#FDE68A" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#FDE68A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="0" cy="0" r="1" gradientTransform="translate(180 500) rotate(-40) scale(320)">
+      <stop stop-color="#FB923C" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#FB923C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="560" fill="url(#bg)"/>
+  <rect width="1200" height="560" fill="url(#glow)"/>
+  <rect width="1200" height="560" fill="url(#ember)"/>
+  <g opacity=".2" fill="#FFF7ED">
+    <ellipse cx="880" cy="360" rx="92" ry="120" transform="rotate(-22 880 360)"/>
+    <ellipse cx="1010" cy="400" rx="66" ry="88" transform="rotate(16 1010 400)"/>
+    <ellipse cx="770" cy="430" rx="58" ry="78" transform="rotate(-38 770 430)"/>
+  </g>
+  <g opacity=".16" stroke="#FEF3C7" stroke-width="3" fill="none">
+    <path d="M880 250c-18-22-46-30-70-18"/>
+    <path d="M1010 300c-16-20-42-26-62-14"/>
+    <path d="M770 360c-14-18-38-24-56-12"/>
+  </g>
+  <circle cx="1090" cy="90" r="54" fill="#FCD34D" opacity=".28"/>
+  <circle cx="1090" cy="90" r="30" fill="#FDE68A" opacity=".4"/>
+</svg>

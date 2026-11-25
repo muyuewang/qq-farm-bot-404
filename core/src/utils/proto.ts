@@ -295,6 +295,18 @@ async function loadProto(): Promise<void> {
         types[name] = root.lookupType(`gamepb.activitypb.${name}`);
     }
     types.CharityRedFlowerProgressRewardResult = root.lookupType('gamepb.activitypb.CharityRedFlowerProgressRewardResult');
+    // 以薯换福（cmd 91/92/93/95/96/97/98/99，参数与回包挂 190+cmd 槽）
+    types.YshfState = root.lookupType('gamepb.activitypb.YshfState');
+    types.YshfCatalog = root.lookupType('gamepb.activitypb.YshfCatalog');
+    types.YshfClaimSeedRequest = root.lookupType('gamepb.activitypb.YshfClaimSeedRequest');
+    types.YshfShopQueryRequest = root.lookupType('gamepb.activitypb.YshfShopQueryRequest');
+    types.YshfSellRequest = root.lookupType('gamepb.activitypb.YshfSellRequest');
+    types.YshfExchangeRequest = root.lookupType('gamepb.activitypb.YshfExchangeRequest');
+    types.YshfRecordRequest = root.lookupType('gamepb.activitypb.YshfRecordRequest');
+    types.YshfClaimCommissionRequest = root.lookupType('gamepb.activitypb.YshfClaimCommissionRequest');
+    types.YshfCatalogRequest = root.lookupType('gamepb.activitypb.YshfCatalogRequest');
+    types.YshfShareRequest = root.lookupType('gamepb.activitypb.YshfShareRequest');
+    types.ActivityData = root.lookupType('gamepb.activitypb.ActivityData');
     types.ActivityOperateReply = root.lookupType('gamepb.activitypb.ActivityOperateReply');
     types.GetWeatherStatusRequest = root.lookupType('gamepb.weatherpb.GetWeatherStatusRequest');
     types.GetWeatherStatusReply = root.lookupType('gamepb.weatherpb.GetWeatherStatusReply');

@@ -40,5 +40,9 @@ export function isWithinActivityWindowMs(window: { startMs: number, endMs: numbe
   return nowMs >= window.startMs && nowMs <= window.endMs
 }
 
+// 以薯换福（活动组 2026111707）：时间窗取文档登记的活动期 2026-11-25 ~ 2026-12-09（UTC+8）。
+// 服务端目录时间才是权威；这里只供设置页自动化开关与列表卡片的时效判断。
+export const YISHU_HUANFU_ACTIVITY_WINDOW = { startMs: 1795564800000, endMs: 1796860799000, updatedMs: 1795564800000 }
+
 export const MILK_TEA_ACTIVITY_WINDOW = { startMs: 1792029600000, endMs: 1794844799000, updatedMs: 1792029600000 }
 export const MILK_TEA_BUSINESS_WINDOW = { ...MILK_TEA_ACTIVITY_WINDOW, endMs: 1794671998000 }

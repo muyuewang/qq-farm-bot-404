@@ -46,6 +46,20 @@ export interface AutomationConfig extends RanchAutomationConfig {
   fertilizer_smart_seconds: number;
   skip_own_weed_bug: boolean;
   show_manual_fertilizer: boolean;
+  // 以薯换福：领种子 / 分享 / 自动按好友收购价卖薯，数值项控制比价频率与分摊风险。
+  yishu_claim_seed: boolean;
+  yishu_share: boolean;
+  yishu_auto_sell: boolean;
+  /** 小铺收购提成（好友把蜜薯卖进你的铺子产生）到账后自动领。 */
+  yishu_claim_commission: boolean;
+  /** 好友铺子当天都收满时，把剩下的卖给自己铺子（不浪费已收获的蜜薯）。 */
+  yishu_sell_fallback_own: boolean;
+  /** 每次比价扫描的好友数量上限，好友越多单轮读请求越多。 */
+  yishu_scan_friend_limit: number;
+  /** 两次比价之间的最小间隔（分钟），间隔内复用上一轮结果。 */
+  yishu_scan_interval_minutes: number;
+  /** 背包蜜薯达到该数量才进入比价卖薯。 */
+  yishu_sell_min_count: number;
 }
 
 export interface IntervalConfig {

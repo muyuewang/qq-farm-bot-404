@@ -8,7 +8,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW, YISHU_HUANFU_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useRanchStore } from '@/stores/ranch'
 import { useSceneStore } from '@/stores/scene'
 import { isRanchFeedStage, isRanchSwitchDefaultOn, RANCH_AUTOMATION_DEFAULTS, RANCH_AUTOMATION_GROUPS, RANCH_AUTOMATION_LIMITS, RANCH_AUTOMATION_SWITCHES, RANCH_BAG_FALLBACK_OPTIONS, RANCH_FEED_STAGE_HINTS, RANCH_FEED_STAGE_OPTIONS, RANCH_STRATEGY_OPTIONS, ranchUsesPreferredAnimal } from '@/utils/ranch'
@@ -65,6 +65,7 @@ const showCharityFlowerActivity = computed(() => isWithinActivityWindowMs(CHARIT
 const showPetDiaryActivity = computed(() => isWithinActivityWindowMs(PET_DIARY_ACTIVITY_WINDOW, nowMs.value))
 const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
 const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
+const showYishuHuanfuActivity = computed(() => isWithinActivityWindowMs(YISHU_HUANFU_ACTIVITY_WINDOW, nowMs.value))
 
 const ranchStore = useRanchStore()
 const { scene } = storeToRefs(useSceneStore())
@@ -145,6 +146,7 @@ const activityKeys = computed(() => [
     : []),
   ...(showWishSignActivity.value ? ['wish_sign_draw', 'wish_sign_claim'] : []),
   ...(showShareRewardActivity.value ? ['share_reward_share', 'share_reward_daily', 'share_reward_milestones'] : []),
+  ...(showYishuHuanfuActivity.value ? ['yishu_claim_seed', 'yishu_share', 'yishu_auto_sell', 'yishu_claim_commission', 'yishu_sell_fallback_own'] : []),
 ])
 const activityEnabledCount = computed(() => activityKeys.value.filter(key => automation.value.automation[key]).length)
 const starFestivalEnabled = computed(() => ['star_passport_claim', 'star_record_claim'].some(key => automation.value.automation[key]))
@@ -156,6 +158,7 @@ const charityFlowerActivityEnabled = computed(() => ['charity_flower_share_claim
 const petDiaryActivityEnabled = computed(() => ['pet_diary_adopt', 'pet_diary_feed', 'pet_diary_draw', 'pet_diary_story_claim', 'pet_diary_seed_claim', 'pet_diary_solar_claim', 'pet_diary_treasure_open', 'pet_diary_compensation_claim', 'pet_diary_charm_equip', 'pet_diary_battle'].some(key => automation.value.automation[key]))
 const wishSignActivityEnabled = computed(() => ['wish_sign_draw', 'wish_sign_claim'].some(key => automation.value.automation[key]))
 const shareRewardActivityEnabled = computed(() => ['share_reward_share', 'share_reward_daily', 'share_reward_milestones'].some(key => automation.value.automation[key]))
+const yishuActivityEnabled = computed(() => ['yishu_claim_seed', 'yishu_share', 'yishu_auto_sell', 'yishu_claim_commission'].some(key => automation.value.automation[key]))
 
 function intervalTag(min: number, max: number) {
   return `${min}-${max} 秒`
@@ -231,6 +234,7 @@ function summaryTags(key: ModuleKey) {
     showPetDiaryActivity.value && petDiaryActivityEnabled.value && '萌宠成长日记',
     showWishSignActivity.value && wishSignActivityEnabled.value && '秋祈良愿',
     showShareRewardActivity.value && shareRewardActivityEnabled.value && '快乐不独享',
+    showYishuHuanfuActivity.value && yishuActivityEnabled.value && '以薯换福',
     activityEnabledCount.value === 0 && !starFestivalEnabled.value
     && (!SHOW_QIXI_ACTIVITY || !qixiActivityEnabled.value) && '未开启活动',
   ].filter(Boolean)
@@ -939,6 +943,38 @@ watch(() => props.currentAccountId, loadQixiFriends)
                   <BaseSwitch v-model="automation.automation.share_reward_daily" label="自动领取每日快乐值" />
                   <BaseSwitch v-model="automation.automation.share_reward_milestones" label="自动领取档位奖励" />
                 </div>
+              </section>
+
+              <section v-if="showYishuHuanfuActivity" class="border border-orange-100 rounded-lg p-4 space-y-3 dark:border-orange-900/40">
+                <div>
+                  <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
+                    以薯换福
+                  </div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    每日领种子与分享、按好友收购价自动卖薯、领取小铺提成
+                  </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <BaseSwitch v-model="automation.automation.yishu_claim_seed" label="自动领取红薯种子" />
+                  <BaseSwitch v-model="automation.automation.yishu_share" label="自动分享铺子" />
+                  <BaseSwitch v-model="automation.automation.yishu_auto_sell" label="自动比价卖薯" />
+                  <BaseSwitch v-model="automation.automation.yishu_claim_commission" label="自动领取收购提成" />
+                  <BaseSwitch v-model="automation.automation.yishu_sell_fallback_own" label="好友收满时卖给自己" />
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <label class="text-xs text-gray-500">比价好友上限（1–50）
+                    <input v-model.number="automation.automation.yishu_scan_friend_limit" type="number" min="1" max="50" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
+                  </label>
+                  <label class="text-xs text-gray-500">比价间隔分钟（5–720）
+                    <input v-model.number="automation.automation.yishu_scan_interval_minutes" type="number" min="5" max="720" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
+                  </label>
+                  <label class="text-xs text-gray-500">起卖数量（1–10000）
+                    <input v-model.number="automation.automation.yishu_sell_min_count" type="number" min="1" max="10000" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
+                  </label>
+                </div>
+                <p class="text-xs text-amber-600 dark:text-amber-400">
+                  自动卖薯会占用好友铺子的当日额度；比价只读、不成交，价格以出售回包为准。
+                </p>
               </section>
 
               <section v-if="showMilkTeaActivity" class="border border-amber-200 rounded-xl bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/10">

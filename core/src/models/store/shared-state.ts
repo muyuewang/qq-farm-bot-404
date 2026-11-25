@@ -85,6 +85,15 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         fertilizer_smart_seconds: 300,
         skip_own_weed_bug: true,
         show_manual_fertilizer: true,
+        // 以薯换福按本项目保守默认：会改状态的自动动作全部关闭，由用户主动开启。
+        yishu_claim_seed: false,
+        yishu_share: false,
+        yishu_auto_sell: false,
+        yishu_claim_commission: false,
+        yishu_sell_fallback_own: false,
+        yishu_scan_friend_limit: 20,
+        yishu_scan_interval_minutes: 30,
+        yishu_sell_min_count: 1,
     },
     plantingStrategy: 'max_exp',
     preferredSeedId: 0,
@@ -380,6 +389,12 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
                 (cfg.automation as any)[k] = normalizeRanchSetting(k, v);
             } else if (k === 'fertilizer_smart_seconds') {
                 cfg.automation.fertilizer_smart_seconds = Math.max(30, Math.min(3600, Number(v) || 300));
+            } else if (k === 'yishu_scan_friend_limit') {
+                (cfg.automation as any)[k] = Math.max(1, Math.min(50, Number.parseInt(String(v), 10) || 20));
+            } else if (k === 'yishu_scan_interval_minutes') {
+                (cfg.automation as any)[k] = Math.max(5, Math.min(720, Number.parseInt(String(v), 10) || 30));
+            } else if (k === 'yishu_sell_min_count') {
+                (cfg.automation as any)[k] = Math.max(1, Math.min(10000, Number.parseInt(String(v), 10) || 1));
             } else {
                 (cfg.automation as any)[k] = !!v;
             }

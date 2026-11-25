@@ -6,5 +6,9 @@
   "share-reward/card-bg.svg": {
     "source": "local themed SVG fallback; no dedicated official activity banner was present in the latest client package",
     "sha256": "91256b37665e059e02b7f251bb402b9dac56a329d24402bc7c6936a0060867a5"
+  },
+  "yishuhuanfu/card-bg.svg": {
+    "source": "local themed SVG fallback; no dedicated official banner was present in the latest client package",
+    "sha256": "d0d1717e89022924dd39c4a8045950d320a7ed71c9b08352d6d7b58b3597f54a"
   }
 }

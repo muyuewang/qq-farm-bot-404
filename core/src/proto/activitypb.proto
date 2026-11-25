@@ -122,6 +122,278 @@ message WeatherResearchData {
     WeatherResearchTrack track = 1;
 }
 
+// ===== 以薯换福（2026-11-25 ~ 2026-12-09，活动组 2026111707）=====
+// 主模块 2026111708（type=26）承载状态槽 field 130 与全部命令；副模块
+// 2026111709（type=6）在实机抓包中 field 117 始终为空，暂不建模。
+// 命令走 ActivityService.Operate 的 cmd（field 2），与老式 operate_type 协议
+// 不同；每条命令的参数消息挂在 190+cmd 号槽位，回包挂在同一个槽位。
+message YshfEmpty {}
+
+// 状态槽 130 的 1 号子槽：今日领取标记。
+// 早期把它当成 entry{joined, initialized}，导致“今天是否已领种子”只能靠本地记账。
+// 用 Anrylin/qq-farm-bot 同一天的官方抓包 fixture 交叉确认：未领未分享时整个子消息
+// 为空（0a00），领种子（cmd 91）后 1=1，分享（cmd 98）后 2=1，因此它就是 claims。
+message YshfClaims {
+    bool seed_claimed = 1;
+    bool share_claimed = 2;
+}
+
+// 状态槽 130 的 2 号子槽：分享状态（不是“今日行情”）。
+// 实机 13:51 抓包：1=33（与 bonus_price 同值）、2=1、3=分享时间戳、4=1。
+message YshfShareState {
+    // 本次分享触发的暴击加成，与 bonus_price 同值。
+    int64 bonus = 1;
+    int64 field_2 = 2;
+    // 分享时间（秒）。
+    int64 timestamp = 3;
+    int64 field_4 = 4;
+}
+
+// 状态槽 130 的 4 号子槽：动作标记。实机只保留最近一次动作（卖出 / 分享 /
+// 领种子互相覆盖），不能用来判断“今天是否已领种子”。
+message YshfActionSlot {
+    int64 field_1 = 1;
+    int64 field_2 = 2;
+    int64 field_3 = 3;
+}
+
+message YshfState {
+    YshfClaims claims = 1;
+    YshfShareState share = 2;
+    // 福气币余额。首次出售（cmd 93）之前缺失，之后出现；兑换（cmd 96）会扣减，
+    // 与 cmd 96 回包 field 3 完全一致（实机 69120 → 62120 → 27120）。
+    int64 luck_coin = 3;
+    YshfActionSlot actions = 4;
+    // 本人铺子今日基础收购价（实机 111）。成交价 = base_price + bonus_price，
+    // 13:51 抓包 111 + 33 = 144，与界面「今日收购价 144」一致。
+    int64 base_price = 5;
+    // 分享暴击加成（实机 33），每日 0 点清零。旧文档把 5/6 写反过，勿再混用。
+    int64 bonus_price = 6;
+    // 本人铺子今日接收总量（实机 12972 / 10000），与 cmd 92 的 remaining 不是同一个量。
+    int64 capacity = 7;
+    // 待领取的收购提成（好友把蜜薯卖进你的铺子后按比例产生）。
+    // 2026-11-25 15:11 抓包实机 86，cmd 99 领取后该字段消失、130.3 福气币 +86。
+    // 界面「可领提成 86」就是它；没有提成时字段缺失（不是 0）。
+    int64 pending_commission = 11;
+    // 与 11 同时出现/消失的标记，实机恒为 1，语义未取证。
+    int64 commission_flag = 13;
+}
+
+// 兑换目录（cmd 97）的单档商品。实机只下发序号、价格、状态与限额，商品
+// item_id 由客户端静态配置映射，协议层拿不到。
+message YshfCatalogGoods {
+    int64 index = 1;
+    int64 price = 2;
+    int64 status = 3;
+    // 该档限购数量：实机 1 / 28 / 40 / 50 / 10，与界面逐档一致。
+    int64 limit = 4;
+    // 下面三个字段只在兑换过之后出现，实机均取值 1，疑似今日/累计兑换次数与
+    // 达上限标记，未取得跨多日的样本，不做语义断言。
+    int64 field_5 = 5;
+    int64 field_6 = 6;
+    int64 field_7 = 7;
+}
+
+message YshfCatalog {
+    repeated YshfCatalogGoods goods = 1;
+    // 兑换过之后目录尾部会带福气币余额（实机 27120），与状态槽 field 3 一致。
+    int64 field_2 = 2;
+}
+
+message YshfGrant {
+    int64 item_id = 1;
+    int64 count = 2;
+}
+
+message YshfGrantReply {
+    YshfGrant grant = 1;
+}
+
+// 铺子主人的摘要信息，cmd 92 与 cmd 98 回包共用。
+message YshfShopBrief {
+    int64 gid = 1;
+    string name = 2;
+    string avatar = 3;
+    int64 level = 4;
+}
+
+// 分享回包里的本人铺子信息（cmd 98），field 2 为分享 key。
+message YshfSelfShop {
+    int64 gid = 1;
+    string share_key = 2;
+    string avatar = 3;
+    int64 level = 4;
+    bytes field_5 = 5;
+}
+
+// cmd 92 结果：某铺子的今日行情。这是只读查询，不会产生成交。
+// 字段语义已用官方抓包（好友 1006086548：1=99、2=66、3=8000，界面显示 165）确认：
+// 收购价 = base_price + bonus_price，两个字段都不可单独当成交价用。
+message YshfShopQuote {
+    // 该铺今日基础收购价，实机 99。
+    int64 base_price = 1;
+    // 该铺的分享暴击加成，实机 66。
+    int64 bonus_price = 2;
+    // 该铺今日「还能再收多少」，实机 8000（= 上限，未成交时）。
+    // 成交后递减，因此进度条按 8000 - quota 算已用量。
+    int64 quota = 3;
+    YshfShopBrief shop = 4;
+}
+
+// cmd 92 的整体回包。quote 是行情，can_sell 是「这个铺子现在收不收薯」。
+// 之前这里写成 int64 field_2，从没读过；对照官方 MapleMarketGetShopRsp
+// （shop = 1、can_sell = 2）以及 2026-11-25 抓包里 field 2 = 1（当时卖自己铺子成功），
+// 确认字段 2 就是 can_sell。现在按 bool 解，缺省时保持 undefined（= 未知，不当成 false 用）。
+message YshfShopQueryReply {
+    YshfShopQuote quote = 1;
+    bool can_sell = 2;
+}
+
+// cmd 93 结果：本次出售的成交明细。成交价 = 单价 × 数量。
+message YshfSellReply {
+    // 成交数量，实机 480。
+    int64 count = 1;
+    // 成交单价，实机 144（界面「当前价格」同值）。
+    int64 price = 2;
+    // 本次获得福气币，实机 69120 = 480 × 144。
+    int64 total = 3;
+    // 该铺每日接收额度上限，实机 8000。
+    int64 quota = 4;
+    // 成交后福气币余额，实机 69120。
+    int64 balance = 5;
+}
+
+message YshfShareReply {
+    YshfGrant grant = 1;
+    int64 price = 2;
+    int64 field_3 = 3;
+    YshfSelfShop shop = 4;
+    int64 field_5 = 5;
+    int64 field_6 = 6;
+}
+
+// cmd 91 领取每日红薯种子。
+message YshfClaimSeedRequest {
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    YshfEmpty params = 191;
+}
+
+// cmd 92 查询指定铺子的今日行情。shop_gid 传本人 gid 即查自己铺子。
+message YshfShopQueryRequest {
+    message Params { int64 shop_gid = 1; }
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    Params params = 192;
+}
+
+// cmd 93 出售蜜薯。shop_gid 传本人 gid 即卖给自己的铺子；count 为本次数量。
+message YshfSellRequest {
+    message Params {
+        int64 shop_gid = 1;
+        int64 count = 2;
+    }
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    Params params = 193;
+}
+
+// cmd 95 收购记录列表：请求为空，回包是最近的收购记录（界面「只展示最近 30 条」）。
+// 之前把这个命令当成“刷新行情”，实际它一条行情都不返回——没有记录时就是一个空回包，
+// 所以“刷新行情”按钮点了没反应。行情本身走 cmd 92（shop_gid 传自己 gid）。
+message YshfRecordRequest {
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    YshfEmpty params = 195;
+}
+
+// 一条收购记录：好友把蜜薯卖进你的铺子，你按比例拿到提成。
+// 2026-11-25 15:11 抓包：{1:1795590561, 2:1006806548, 3:30, 4:4320, 6:'风筝有风',
+// 7:avatar, 8:114, 9:86}，界面写「你收购了风筝有风 蜜薯30个，获得分红86」。
+message YshfPurchaseRecord {
+    // 收购时间（秒），实机 1795590561。
+    int64 timestamp = 1;
+    // 卖家 gid，实机 1006806548。
+    int64 gid = 2;
+    // 收购数量，实机 30。
+    int64 count = 3;
+    // 本次支付给卖家的福气币总额，实机 4320 = 30 × 144（本人铺子的收购价）。
+    int64 total = 4;
+    // 卖家昵称。
+    string name = 6;
+    string avatar = 7;
+    // 卖家等级，实机 114。
+    int64 level = 8;
+    // 本人从这笔收购里拿到的提成，实机 86。
+    int64 commission = 9;
+}
+
+message YshfRecordReply {
+    repeated YshfPurchaseRecord records = 1;
+}
+
+// cmd 99 领取收购提成：请求为空。
+message YshfClaimCommissionRequest {
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    YshfEmpty params = 199;
+}
+
+message YshfCommissionReply {
+    // 本次领取到的提成，实机 86。
+    int64 amount = 1;
+    // 实机 1，语义未取证。
+    int64 field_3 = 3;
+    // 领取后的福气币余额，实机 32156（32070 + 86，与状态槽 130.3 一致）。
+    int64 balance = 4;
+}
+
+// cmd 96 兑换下单：index 为目录序号，count 为兑换数量。
+message YshfExchangeRequest {
+    message Params {
+        int64 index = 1;
+        int64 count = 2;
+    }
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    Params params = 196;
+}
+
+// cmd 96 回包里的到手道具。
+message YshfExchangeGrant {
+    int64 item_id = 1;
+    int64 count = 2;
+    // 实机恒为 -16，语义未取证（既非扣款也非余额变化量）。
+    int64 field_3 = 3;
+    // 实机 24069 / 24076，两次兑换递增 7，疑似道具流水号。
+    int64 field_6 = 6;
+    int64 field_7 = 7;
+}
+
+message YshfExchangeReply {
+    // 本档单价，实机 7000 / 35000。
+    int64 price = 1;
+    YshfExchangeGrant grant = 2;
+    // 兑换后福气币余额，实机 62120 / 27120。
+    int64 balance = 3;
+    int64 field_4 = 4;
+    int64 field_5 = 5;
+}
+
+// cmd 97 查询兑换目录。
+message YshfCatalogRequest {
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    YshfEmpty params = 197;
+}
+
+// cmd 98 分享本人铺子，每日首次触发分享暴击。
+message YshfShareRequest {
+    int64 activity_id = 1;
+    int64 cmd = 2;
+    YshfEmpty params = 198;
+}
+
 message ActivityData {
     ActivityBodyMilkTea milk_tea = 121;
     ActivityBodyGrowthFund growth_fund = 122;
@@ -129,6 +401,7 @@ message ActivityData {
     ActivityBodyShareReward share_reward = 120;
     ActivityContent activity = 1;
     repeated ActivityData children = 2;
+    YshfState yishuhuanfu = 130;
     StarSandGoodsList catalog = 102;
     QingMeiDailySeedData qingmei_daily_seed = 103;
     QingMeiBrewData qingmei_brew = 108;
@@ -497,6 +770,14 @@ message ActivityOperateReply {
     CharityRedFlowerProgressRewardResult charity_progress_reward_result = 137;
     CharityRedFlowerPublicFundResult charity_public_fund_result = 138;
     CharityRedFlowerAgreementResult charity_agreement_result = 139;
+    YshfGrantReply yshf_claim_seed = 191;
+    YshfShopQueryReply yshf_shop = 192;
+    YshfSellReply yshf_sell = 193;
+    YshfRecordReply yshf_records = 195;
+    YshfExchangeReply yshf_exchange = 196;
+    YshfCatalog yshf_catalog = 197;
+    YshfShareReply yshf_share = 198;
+    YshfCommissionReply yshf_commission = 199;
 }
 
 message ExchangeShopResult {
