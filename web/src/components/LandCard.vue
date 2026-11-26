@@ -1270,6 +1270,20 @@ function getIsometricBubbleClass(targetLand: any) {
   transform: translateX(-50%);
 }
 
+/* dark 主题：容器底色随主题切换，避免白底与浅色文字冲突 */
+.dark .land-bubble {
+  border-color: rgb(55 65 81);
+  background: rgb(17 24 39 / 0.97);
+  color: #e5e7eb;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.5);
+}
+
+.dark .land-bubble::before,
+.dark .land-bubble-floating::before,
+.dark .land-bubble-floating.land-bubble-floating-below::before {
+  border-color: rgb(55 65 81);
+}
+
 .land-bubble::before {
   position: absolute;
   left: 50%;
