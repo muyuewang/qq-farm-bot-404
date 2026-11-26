@@ -42,8 +42,13 @@ async function refresh() {
       return
     if (!res.data.ok)
       throw new Error(res.data.error || '读取背包失败')
-    seeds.value = res.data.data.seeds
-    priority.value = [...priority.value, ...res.data.data.priority.filter((id: number) => !priority.value.includes(id))]
+    // 后端 /api/bag/seeds 直接返回背包种子数组；兼容老/新两种返回结构
+    const payload: any = res.data.data
+    const list: Seed[] = Array.isArray(payload) ? payload : (payload?.seeds || [])
+    seeds.value = Array.isArray(list) ? list : []
+    // 优先级名单来自账号配置（v-model 已由设置页下发）；后端若额外返回 priority 则合并去重
+    const extra: number[] = Array.isArray(payload?.priority) ? payload.priority : []
+    priority.value = [...priority.value, ...extra.filter((id: number) => !priority.value.includes(id))]
   }
   catch (e) {
     if (request === requestId)
