@@ -320,7 +320,10 @@ function loadConfigs(): void {
             plantPhaseImageMap.clear();
             for (const [key, phases] of Object.entries(manifest || {})) {
                 const match = /^Crop_(\d+)$/.exec(key);
-                if (!match || !phases || typeof phases !== 'object') continue;
+                // 条目必须是 { 阶段: URL } 对象；数组会被 Object.entries 展开成
+                // phase→phase+1 的裸数字 URL（如 "2"），前端请求 /2 被 SPA
+                // fallback 兜底成 HTML 渲染成破图，因此直接跳过坏条目走占位图。
+                if (!match || !phases || typeof phases !== 'object' || Array.isArray(phases)) continue;
                 const plantId = Number(match[1]);
                 if (plantId <= 0) continue;
                 const phaseMap = new Map<number, string>();
