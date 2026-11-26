@@ -95,10 +95,11 @@ const defaultAutomation = {
   yishu_claim_commission: false,
   yishu_sell_fallback_own: false,
   yishu_scan_friend_limit: 20,
-  yishu_scan_interval_minutes: 30,
+  // 默认两小时比价一次：cmd 92 逐个查铺子比较重，间隔拉长可以少打网关。
+  yishu_scan_interval_minutes: 120,
   yishu_sell_min_count: 1,
-  // 空串 = 不限时段；到点后每轮自动任务都按原逻辑卖。
-  yishu_sell_after_time: '',
+  // 默认 14:00 开始卖：这个点好友大多已分享、暴击加成齐全，报价更高；空串 = 不限时段（用户可显式选）。
+  yishu_sell_after_time: '14:00',
   ...RANCH_AUTOMATION_DEFAULTS,
 }
 

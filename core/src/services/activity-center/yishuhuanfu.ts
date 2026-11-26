@@ -178,21 +178,50 @@ function createYishuHuanfuActivityService(deps: any) {
         const result: Array<{ gid: string; accountName: string }> = [];
         const seen = new Set<string>();
         try {
-            const store = require('../models/store');
-            const { readKnownFriendGidsCache } = require('../models/store/gid-cache');
+            // 本文件在 services/activity-center/ 下，store 在 models/ 下，要退两级；
+            // 写成 '../models/store' 会指向不存在的 services/models/store，require 抛错被
+            // 下面的 catch 吞掉，面板好友池就永远为空（只剩本账号好友）。
+            const store = require('../../models/store');
+            const { listAllKnownFriendGidsCaches, readKnownFriendGidsCache } = require('../../models/store/gid-cache');
             const listed = store?.getAccounts?.();
             const accounts = Array.isArray(listed?.accounts) ? listed.accounts : [];
+            const namesById = new Map<string, string>();
             for (const account of accounts) {
                 const accountId = String(account?.id || '');
-                if (!accountId) continue;
-                const gids = readKnownFriendGidsCache(accountId);
-                if (!Array.isArray(gids)) continue;
-                const accountName = String(account?.name || account?.nick || accountId);
-                for (const raw of gids) {
+                if (accountId)
+                    namesById.set(accountId, String(account?.name || account?.nick || accountId));
+            }
+
+            // 以缓存目录为准扫描所有 <accountId>.json：面板可能只挂一个账号，
+            // 但历史账号落盘的文件同样有比价价值。按账号列表读会漏掉这些文件。
+            const caches = typeof listAllKnownFriendGidsCaches === 'function'
+                ? listAllKnownFriendGidsCaches()
+                : [];
+            for (const cache of caches) {
+                const accountId = String(cache?.accountId || '');
+                if (!accountId || !Array.isArray(cache?.gids)) continue;
+                const accountName = namesById.get(accountId) || `账号${accountId}`;
+                for (const raw of cache.gids) {
                     const gid = int64String(raw);
                     if (!gid || gid === '0' || !/^\d+$/.test(gid) || seen.has(gid)) continue;
                     seen.add(gid);
                     result.push({ gid, accountName });
+                }
+            }
+            // 兼容旧版本：若目录扫描函数缺失，退回按账号列表逐个读。
+            if (caches.length === 0 && typeof readKnownFriendGidsCache === 'function') {
+                for (const account of accounts) {
+                    const accountId = String(account?.id || '');
+                    if (!accountId) continue;
+                    const gids = readKnownFriendGidsCache(accountId);
+                    if (!Array.isArray(gids)) continue;
+                    const accountName = namesById.get(accountId) || `账号${accountId}`;
+                    for (const raw of gids) {
+                        const gid = int64String(raw);
+                        if (!gid || gid === '0' || !/^\d+$/.test(gid) || seen.has(gid)) continue;
+                        seen.add(gid);
+                        result.push({ gid, accountName });
+                    }
                 }
             }
         } catch {

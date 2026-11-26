@@ -40,7 +40,8 @@ const YISHU_SKIP_SHOP_CODES = new Set([
 ]);
 
 const DEFAULT_FRIEND_LIMIT = 60;
-const DEFAULT_SCAN_INTERVAL_MINUTES = 30;
+// 默认两小时比价一次，和账号配置默认值一致；这里兜底用于配置缺字段的情况。
+const DEFAULT_SCAN_INTERVAL_MINUTES = 120;
 const DEFAULT_SELL_MIN_COUNT = 1;
 /** 自动任务沿用旧余额的上限：与 activity-center 的 AUTO_BALANCE_STALE_MAX_MS 对齐。 */
 const YISHU_BALANCE_STALE_MAX_MS = 60 * 60 * 1000;

@@ -92,10 +92,11 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         yishu_claim_commission: false,
         yishu_sell_fallback_own: false,
         yishu_scan_friend_limit: 20,
-        yishu_scan_interval_minutes: 30,
+        // 默认两小时比价一次：cmd 92 逐个查铺子比较重，间隔拉长可以少打网关。
+        yishu_scan_interval_minutes: 120,
         yishu_sell_min_count: 1,
-        // 空串 = 不限时段；填 "HH:MM" 就等过了这个点才卖。
-        yishu_sell_after_time: '',
+        // 默认 14:00 开始卖：这个点好友大多已分享、暴击加成齐全，报价更高；空串 = 不限时段（用户可显式选）。
+        yishu_sell_after_time: '14:00',
     },
     plantingStrategy: 'max_exp',
     preferredSeedId: 0,
@@ -394,7 +395,7 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
             } else if (k === 'yishu_scan_friend_limit') {
                 (cfg.automation as any)[k] = Math.max(1, Math.min(200, Number.parseInt(String(v), 10) || 60));
             } else if (k === 'yishu_scan_interval_minutes') {
-                (cfg.automation as any)[k] = Math.max(5, Math.min(720, Number.parseInt(String(v), 10) || 30));
+                (cfg.automation as any)[k] = Math.max(5, Math.min(720, Number.parseInt(String(v), 10) || 120));
             } else if (k === 'yishu_sell_min_count') {
                 (cfg.automation as any)[k] = Math.max(1, Math.min(10000, Number.parseInt(String(v), 10) || 1));
             } else if (k === 'yishu_sell_after_time') {
