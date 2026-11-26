@@ -25,12 +25,15 @@ const bagLoaded = ref(false)
 const CATEGORY_OPTIONS = [
   { label: '全部', value: 'all' },
   { label: '果实', value: 'fruit' },
+  { label: '超变果实', value: 'mutant' },
   { label: '种子', value: 'seed' },
   { label: '道具', value: 'tool' },
-  { label: '其他', value: 'other' },
 ] as const
 
 type CategoryValue = typeof CATEGORY_OPTIONS[number]['value']
+
+// 配置为果实类型或无类型、但官方仓库归入"道具"的功能物品（牧草/幸运硬币/蜜薯等）。
+const TOOL_ONLY_IDS = new Set([70001, 20535, 1032, 1033])
 
 const selectedCategory = ref<CategoryValue>('fruit')
 
@@ -43,18 +46,27 @@ function itemType(item: any) {
 }
 
 function getItemCategory(item: any): CategoryValue {
+  const id = Number(item?.id) || 0
+  // 官方仓库把牧草、幸运硬币等功能物品归入"道具"，尽管它们配置为果实/无类型。
+  if (TOOL_ONLY_IDS.has(id))
+    return 'tool'
   if (item?.category === 'seed')
     return 'seed'
   if (item?.category === 'fruit')
     return 'fruit'
+  if (item?.category === 'mutant')
+    return 'mutant'
   const type = itemType(item)
-  if (type === 17 || type === 6)
+  // 变异/超变果实：官方 type 17；配置缺失时按变异果实编号规律（10+果实ID，如
+  // 1049004 黄金·泡泡棉花糖、1040307 黄金·红薯）兜底分类。
+  if (type === 17 || (id >= 1000000 && id < 11000000))
+    return 'mutant'
+  if (type === 6)
     return 'fruit'
   if (type === 5)
     return 'seed'
-  if (type === 11 || Number(item?.id) === 6001)
-    return 'tool'
-  return 'other'
+  // 官方仓库只有果实/超变果实/种子/道具四类：化肥、货币、卡片等其余物品统归道具。
+  return 'tool'
 }
 
 const filteredItems = computed(() => {
@@ -64,7 +76,7 @@ const filteredItems = computed(() => {
 })
 
 const categoryCounts = computed(() => {
-  const counts: Record<CategoryValue, number> = { all: items.value.length, fruit: 0, seed: 0, tool: 0, other: 0 }
+  const counts: Record<CategoryValue, number> = { all: items.value.length, fruit: 0, mutant: 0, seed: 0, tool: 0 }
   for (const item of items.value) {
     const cat = getItemCategory(item)
     counts[cat]++
@@ -517,7 +529,7 @@ useIntervalFn(loadBag, 60000)
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <template v-if="selectedCategory === 'fruit' || selectedCategory === 'all'">
+          <template v-if="selectedCategory === 'fruit' || selectedCategory === 'mutant' || selectedCategory === 'all'">
             <BaseButton
               size="sm"
               :variant="batchMode ? 'primary' : 'secondary'"
