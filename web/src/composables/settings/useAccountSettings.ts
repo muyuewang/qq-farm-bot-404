@@ -46,10 +46,10 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     return ''
   })
 
-  const stoppedAccounts = computed(() => accounts.value.filter((acc: any) => !acc.running))
+  const stoppedAccounts = computed(() => (accounts.value || []).filter((acc: any) => !acc.running))
   const stoppedAccountsCount = computed(() => stoppedAccounts.value.length)
   const currentAccountName = computed(() => {
-    const acc = accounts.value.find((item: any) => item.id === currentAccountId.value)
+    const acc = (accounts.value || []).find((item: any) => item.id === currentAccountId.value)
     return acc ? (acc.name || acc.nick || acc.id) : null
   })
 

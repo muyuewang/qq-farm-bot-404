@@ -152,7 +152,7 @@ function moveQixiFriend(index: number, direction: number) {
   settings.value.automation.qixi_friend_priority = list
 }
 function qixiFriendName(gid: number) {
-  return qixiFriends.value.find(friend => friend.gid === gid)?.name || `好友 ${gid}`
+  return (qixiFriends.value || []).find(friend => friend.gid === gid)?.name || `好友 ${gid}`
 }
 onMounted(() => {
   loadQixiFriends()
