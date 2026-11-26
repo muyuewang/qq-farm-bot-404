@@ -17,15 +17,18 @@ const dropSide = ref<'before' | 'after'>('before')
 const pointer = ref({ x: 0, y: 0, offsetX: 0, offsetY: 0, width: 0, height: 0 })
 let pending: { id: number, pointerId: number, x: number, y: number, element: HTMLElement } | null = null
 let scrollFrame = 0
-const draggedSeed = computed(() => seeds.value.find(seed => seed.seedId === dragging.value))
+// 接口异常或账号切换时不能让渲染期的 .find/.map 拿到 undefined。
+const seedList = computed(() => Array.isArray(seeds.value) ? seeds.value : [])
+const priorityIds = computed(() => Array.isArray(priority.value) ? priority.value : [])
+const draggedSeed = computed(() => seedList.value.find(seed => seed.seedId === dragging.value))
 let requestId = 0
 onBeforeUnmount(() => {
   requestId += 1
   cancelDrag()
 })
 const ordered = computed(() => {
-  const ids = [...priority.value, ...seeds.value.map(s => s.seedId).filter(id => !priority.value.includes(id))]
-  return ids.map(id => seeds.value.find(s => s.seedId === id)).filter((s): s is Seed => !!s)
+  const ids = [...priorityIds.value, ...seedList.value.map(s => s.seedId).filter(id => !priorityIds.value.includes(id))]
+  return ids.map(id => seedList.value.find(s => s.seedId === id)).filter((s): s is Seed => !!s)
 })
 const visibleSeeds = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
@@ -40,10 +43,17 @@ async function refresh() {
     const res = await api.get('/api/bag/seeds', { headers: { 'x-account-id': props.accountId } })
     if (request !== requestId)
       return
-    if (!res.data.ok)
-      throw new Error(res.data.error || '读取背包失败')
-    seeds.value = res.data.data.seeds
-    priority.value = [...priority.value, ...res.data.data.priority.filter((id: number) => !priority.value.includes(id))]
+    const body = res.data
+    if (!body?.ok)
+      throw new Error(body?.error || '读取背包失败')
+    // 后端 /api/bag/seeds 直接返回种子数组，优先级由账号设置下发；兼容旧版 { seeds, priority } 响应。
+    const payload = body.data
+    const rawSeeds = Array.isArray(payload) ? payload : payload?.seeds
+    seeds.value = (Array.isArray(rawSeeds) ? rawSeeds : []).filter(Boolean)
+    const saved = Array.isArray(payload?.priority) ? payload.priority : []
+    const extra = saved.filter((id: number) => !priorityIds.value.includes(id))
+    if (extra.length)
+      priority.value = [...priorityIds.value, ...extra]
   }
   catch (e) {
     if (request === requestId)

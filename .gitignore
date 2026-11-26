@@ -34,6 +34,9 @@ Update.log
 .idea/
 .vscode/
 
+# CodeBuddy local workspace memory
+.codebuddy
+
 # WorkBuddy local workspace memory
 .workbuddy/
 
