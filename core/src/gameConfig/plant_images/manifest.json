@@ -1816,5 +1816,13 @@
     "5": "/game-config/plant_images/Plant_1129005/5.png",
     "6": "/game-config/plant_images/Plant_1128005/6.png",
     "7": "/game-config/plant_images/Plant_1128005/7.png"
+  },
+  "Crop_307": {
+    "1": "/game-config/plant_images/Crop_307/1.png",
+    "2": "/game-config/plant_images/Crop_307/2.png",
+    "3": "/game-config/plant_images/Crop_307/3.png",
+    "4": "/game-config/plant_images/Crop_307/4.png",
+    "5": "/game-config/plant_images/Crop_307/5.png",
+    "6": "/game-config/plant_images/Crop_307/6.png"
   }
 }
