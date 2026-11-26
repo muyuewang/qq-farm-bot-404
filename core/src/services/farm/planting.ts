@@ -5,8 +5,8 @@ export {};
 
 const protobuf = require('protobufjs');
 const { performance } = require('node:perf_hooks');
-const { getPlantNameBySeedId, formatGrowTime, getPlantGrowTime, getAllSeeds, getPlantBySeedId } = require('../../config/gameConfig');
-const { getPreferredSeed, getAutomation, getPlantingStrategy, getBagSeedPriority, getBagSeedMultiLandReservationEnabled, getBagSeedLandTypes, getBagSeedFallbackStrategy, getPlantDelaySeconds } = require('../../models/store');
+const { getPlantNameBySeedId, formatGrowTime, getPlantGrowTime, getAllSeeds, getPlantBySeedId, getItemById } = require('../../config/gameConfig');
+const { getPreferredSeed, getAutomation, getPlantingStrategy, getPrioritize2x2Crops, getPrioritizeGrowthTasks, getBagSeedPriority, getBagSeedMultiLandReservationEnabled, getBagSeedLandTypes, getBagSeedFallbackStrategy, getPlantDelaySeconds } = require('../../models/store');
 const { getUserState, getWsErrorState, sendMsgAsync } = require('../../utils/network');
 const { toNum, getServerTimeSec, log, logWarn, sleep } = require('../../utils/utils');
 const { types } = require('../../utils/proto');
@@ -775,6 +775,119 @@ async function autoPlantEmptyLands(deadLandIds: number[], emptyLandIds: number[]
 
     const accountStrategy = String(getPlantingStrategy() || '').trim();
 
+    // 2×2 作物优先（prioritize2x2Crops 独立开关）：
+    // 背包里的多格种子优先入土占满完整布局，剩余空地再走后续策略。
+    // 与旧版一致只处理完整可种的布局；等待清空的区域本轮留给普通策略。
+    if (landsToPlant.length > 0 && getPrioritize2x2Crops()) {
+        try {
+            const { compareBagSeedGameOrder } = require('../../utils/bag-seed-order');
+            const bagSeeds = await getBagSeeds();
+            const size2Seeds = (bagSeeds || [])
+                .filter((seed: any) => seed && toNum(seed.seedId) > 0 && toNum(seed.count) > 0
+                    && Math.max(1, toNum(seed.plantSize) || getPlantSizeBySeedId(seed.seedId)) === 2
+                    && state.level >= Math.max(0, toNum((getItemById(seed.seedId) as any)?.level)))
+                .sort(compareBagSeedGameOrder);
+            const twoByTwoPlanted: number[] = [];
+            for (const seed of size2Seeds) {
+                if (landsToPlant.length === 0 || pacing.deferred) break;
+                const layouts = selectNonOverlappingLayouts(buildPlantingLayouts(landsToPlant, 2), toNum(seed.count));
+                if (layouts.length === 0) continue;
+                const result = await plantSeeds(seed.seedId, layouts.map((layout: PlantingLayout) => layout.anchorLandId), {
+                    layouts, pacing, propagateErrors: options.propagateErrors,
+                });
+                const occupied = [...new Set([...(result.occupiedLandIds || []), ...(result.plantedLandIds || [])])];
+                if (occupied.length > 0) {
+                    log('种植', `已优先种植 2×2 作物 ${seed.name}(${seed.seedId})，占地 ${occupied.join(',')}`, {
+                        module: 'farm', event: '种植2x2作物', result: 'ok',
+                        seedId: seed.seedId, landIds: occupied,
+                    });
+                    twoByTwoPlanted.push(...occupied);
+                    landsToPlant = landsToPlant.filter((id: number) => !occupied.includes(id));
+                }
+                // 种植结果不完整/不确定时中断本轮 2×2 优先，避免布局交错。
+                if (toNum(result.planted) < layouts.length) break;
+            }
+            if (twoByTwoPlanted.length > 0) {
+                await runFertilizerByConfig(twoByTwoPlanted, options);
+            }
+        } catch (e: any) {
+            logWarn('种植', `2×2 优先种植中断，继续普通种植: ${e.message}`, {
+                module: 'farm', event: '种植2x2作物', result: 'error',
+            });
+            if (options.propagateErrors) throw e;
+        }
+    }
+
+    // 任务作物优先（task_priority 策略或 prioritizeGrowthTasks 独立开关）：
+    // 成长任务需要种植的种子优先入土，剩余空地再走后续策略。
+    // task_priority 本身不决定补种，商店补种时回退到第二优先策略。
+    const growthTaskPriorityEnabled = accountStrategy === 'task_priority' || getPrioritizeGrowthTasks();
+    const taskPlantedLands: number[] = [];
+    if (landsToPlant.length > 0 && growthTaskPriorityEnabled) {
+        try {
+            const { getTaskInfo, normalizeTaskInfo } = require('../task');
+            const { plantGrowthTasks } = require('./growth-planting');
+            const taskResult = await plantGrowthTasks(landsToPlant, {
+                getTasks: async () => {
+                    const reply: any = await getTaskInfo();
+                    if (!reply || !reply.task_info) throw new Error('任务响应缺少任务信息');
+                    return normalizeTaskInfo(reply.task_info).growthTasks;
+                },
+                getBagSeeds,
+                getPlant: (seedId: number) => getPlantBySeedId(seedId) || null,
+                // 与背包种子列表同一套等级校验：ItemInfo 的种子等级优先于 Plant 的 land_level_need。
+                isLocked: (seedId: number) => {
+                    const seedItem: any = getItemById(seedId);
+                    const requiredLevel = seedItem ? Math.max(0, toNum(seedItem.level)) : Math.max(0, toNum(getPlantBySeedId(seedId)?.land_level_need));
+                    return state.level < requiredLevel;
+                },
+                plantSeeds: (seedId: number, taskLandIds: number[], taskOptions: any) =>
+                    plantSeeds(seedId, taskLandIds, { ...(taskOptions || {}), pacing, propagateErrors: options.propagateErrors }),
+                buySeed: async (seedId: number, count: number, previousOwned: number) => {
+                    const { getShopInfo } = require('./api');
+                    const shopReply: any = await getShopInfo(2);
+                    const goods = (shopReply.goods_list || []).find((item: any) => toNum(item.item_id) === seedId && item.unlocked);
+                    if (!goods || (goods.conds || []).some((cond: any) => toNum(cond.type) !== 1 || toNum(cond.param) > state.level)) return 0;
+                    if (toNum(goods.item_count) !== 1) return 0;
+                    const price = toNum(goods.price);
+                    if (price <= 0) return 0;
+                    const limit = toNum(goods.limit_count);
+                    const shopAvailable = limit > 0 ? Math.max(0, limit - toNum(goods.bought_num)) : count;
+                    const buyCount = Math.min(count, shopAvailable, Math.max(0, Math.floor(toNum(state.gold) / price)));
+                    if (!buyCount) return 0;
+                    await buyGoods(toNum(goods.id), buyCount, price);
+                    state.gold = Math.max(0, toNum(state.gold) - buyCount * price);
+                    // 以背包实际入库数量为准，不假设购买必然全部到账。
+                    const bag = await getBagSeeds();
+                    const owned = toNum((bag || []).find((seed: any) => toNum(seed && seed.seedId) === seedId)?.count);
+                    return Math.min(buyCount, Math.max(0, owned - previousOwned));
+                },
+                warn: (message: string) => logWarn('成长种植', message),
+            });
+            taskPlantedLands.push(...(taskResult.plantedLandIds || []));
+            landsToPlant = taskResult.remainingLandIds;
+            if (taskPlantedLands.length > 0) {
+                log('种植', `已优先种植 ${taskPlantedLands.length} 块任务作物`, {
+                    module: 'farm', event: '种植种子', result: 'growth_task_ok', count: taskPlantedLands.length,
+                });
+                await runFertilizerByConfig(taskPlantedLands, options);
+            }
+            if (taskResult.interrupted || landsToPlant.length === 0) {
+                // 部分成功/结果不确定时本轮到此为止，剩余空地下轮重试，避免误购。
+                return { plantedLands: [...new Set(taskPlantedLands)] };
+            }
+        } catch (e: any) {
+            logWarn('成长种植', `任务种植中断，下轮重试: ${e.message}`, {
+                module: 'farm', event: '种植种子', result: 'growth_task_error',
+            });
+            if (options.propagateErrors) throw e;
+            if (taskPlantedLands.length > 0) {
+                await runFertilizerByConfig(taskPlantedLands, options);
+                return { plantedLands: [...new Set(taskPlantedLands)] };
+            }
+        }
+    }
+
     // 背包种子优先策略
     if (accountStrategy === 'bag_priority') {
         let bagResult: any;
@@ -820,15 +933,22 @@ async function autoPlantEmptyLands(deadLandIds: number[], emptyLandIds: number[]
             await runFertilizerByConfig(plantedLands, options);
         }
         return {
-            plantedLands: [...new Set(plantedLands)],
+            plantedLands: [...new Set([...taskPlantedLands, ...plantedLands])],
             deferredLandIds: bagResult.deferredLandIds || [],
         };
     }
 
-    // 其他策略：从商店购买种植
-    const shopResult = await plantFromShop(landsToPlant, state, undefined, { ...options, pacing });
+    // 其他策略：从商店购买种植；task_priority 的补种按第二优先策略排序
+    const shopFallbackStrategy = accountStrategy === 'task_priority' ? (getBagSeedFallbackStrategy() || 'level') : undefined;
+    const shopResult = await plantFromShop(landsToPlant, state, shopFallbackStrategy, { ...options, pacing });
     if (shopResult.plantedLands && shopResult.plantedLands.length > 0) {
         await runFertilizerByConfig(shopResult.plantedLands, options);
+    }
+    if (taskPlantedLands.length > 0) {
+        return {
+            ...shopResult,
+            plantedLands: [...new Set([...taskPlantedLands, ...(shopResult.plantedLands || [])])],
+        };
     }
     return shopResult;
 }

@@ -103,7 +103,7 @@ function setRanchGroup(group: { items: ReadonlyArray<{ key: string }> }, enabled
   emit('save', 'ranch', true)
 }
 const ranchEnabledCount = computed(() => ranchKeys.filter(key => automation.value.automation[key] === true).length)
-const ranchStrategyLabel = computed(() => RANCH_STRATEGY_OPTIONS.find(item => item.value === automation.value.automation.ranch_strategy)?.label || '未设置')
+const ranchStrategyLabel = computed(() => (RANCH_STRATEGY_OPTIONS || []).find(item => item.value === automation.value?.automation?.ranch_strategy)?.label || '未设置')
 const ranchCheckMinutes = computed(() => {
   const minutes = Number(automation.value.automation.ranch_check_minutes)
   return Number.isInteger(minutes) ? minutes : RANCH_AUTOMATION_DEFAULTS.ranch_check_minutes
@@ -137,7 +137,7 @@ const activeInfo = computed(() => activeModule.value ? moduleInfo[activeModule.v
  * 否则同一个开关会在设置弹窗和策略页各有一份入口。
  */
 const visibleModules = computed(() => Object.entries(moduleInfo).filter(([key]) => scene.value !== 'ranch' || key !== 'ranch'))
-const fertilizerName = computed(() => props.fertilizerOptions.find(item => item.value === automation.value.automation.fertilizer)?.label || '未设置')
+const fertilizerName = computed(() => (props.fertilizerOptions || []).find(item => item.value === automation.value?.automation?.fertilizer)?.label || '未设置')
 const selectedLandNames = computed(() => props.fertilizerLandTypeOptions.filter(item => automation.value.automation.fertilizer_land_types?.includes(item.value)).map(item => item.label))
 const selectedLandTypeCount = computed(() => Array.isArray(automation.value.automation.fertilizer_land_types) ? automation.value.automation.fertilizer_land_types.length : 0)
 const activityKeys = computed(() => [
@@ -183,7 +183,7 @@ function summaryTags(key: ModuleKey) {
   if (key === 'planting') {
     const primaryStrategy = strategy.value.plantingStrategy
     const hasFallback = primaryStrategy === 'bag_priority' || primaryStrategy === 'task_priority'
-    const primaryLabel = props.plantingStrategyOptions.find(option => option.value === primaryStrategy)?.label
+    const primaryLabel = (props.plantingStrategyOptions || []).find(option => option.value === primaryStrategy)?.label
     return [
       ...(hasFallback ? [primaryLabel || '未设置策略'] : []),
       hasFallback ? `第二策略：${props.strategyPreviewLabel || '等待选种'}` : props.strategyPreviewLabel || '等待选种',
@@ -334,7 +334,7 @@ function moveQixiFriend(index: number, direction: number) {
   automation.value.automation.qixi_friend_priority = list
 }
 function friendName(gid: number) {
-  return qixiFriends.value.find(item => item.gid === gid)?.name || `好友 ${gid}`
+  return (qixiFriends.value || []).find(item => item.gid === gid)?.name || `好友 ${gid}`
 }
 async function loadQixiFriends() {
   // 活动已结束、模块被常量关闭时不发请求，避免设置页弹无关的失败提示。

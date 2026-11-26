@@ -231,6 +231,21 @@ const statusLabel = computed(() => {
   return labels[status] || phaseName || '未知状态'
 })
 
+// 详情弹窗状态徽章配色：白底上用实底色块+白字保证对比度（对齐官方胶囊样式）
+const statusBadgeClass = computed(() => {
+  const status = String(land.value?.status || '')
+  const map: Record<string, string> = {
+    growing: 'bg-emerald-600 text-white',
+    harvestable: 'bg-orange-500 text-white',
+    stealable: 'bg-purple-500 text-white',
+    harvested: 'bg-emerald-600 text-white',
+    dead: 'bg-gray-500 text-white',
+    empty: 'bg-gray-400 text-white',
+    locked: 'bg-slate-400 text-white',
+  }
+  return map[status] || 'bg-emerald-600 text-white'
+})
+
 const phaseProgress = computed(() => {
   const start = Number(land.value?.phaseStartTime) || 0
   const end = Number(land.value?.phaseEndTime) || 0
@@ -504,30 +519,30 @@ function getIsometricBubbleClass(targetLand: any) {
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="text-[10px] text-gray-400">
+            <div class="text-[10px] text-gray-500 dark:text-gray-400">
               土地 #{{ land.id }}
             </div>
             <div class="truncate text-sm text-gray-900 font-bold dark:text-gray-100">
               {{ land.plantName || '未种植' }}
             </div>
           </div>
-          <span class="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700 font-medium dark:bg-green-900/30 dark:text-green-300">{{ statusLabel }}</span>
+          <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold shadow-sm" :class="statusBadgeClass">{{ statusLabel }}</span>
         </div>
 
         <div class="grid grid-cols-2 mt-2 gap-2 text-xs">
-          <div class="rounded-lg bg-gray-50 p-2 dark:bg-gray-900/60">
-            <div class="text-[10px] text-gray-400">
+          <div class="rounded-lg bg-gray-100 p-2 dark:bg-gray-900/60">
+            <div class="text-[10px] text-gray-500 dark:text-gray-400">
               成熟倒计时
             </div>
-            <div class="mt-0.5 font-semibold tabular-nums">
+            <div class="mt-0.5 text-gray-900 font-semibold tabular-nums dark:text-gray-100">
               {{ land.matureInSec > 0 ? formatTime(land.matureInSec) : '—' }}
             </div>
           </div>
-          <div class="rounded-lg bg-gray-50 p-2 dark:bg-gray-900/60">
-            <div class="text-[10px] text-gray-400">
+          <div class="rounded-lg bg-gray-100 p-2 dark:bg-gray-900/60">
+            <div class="text-[10px] text-gray-500 dark:text-gray-400">
               生长季数
             </div>
-            <div class="mt-0.5 font-semibold">
+            <div class="mt-0.5 text-gray-900 font-semibold dark:text-gray-100">
               {{ land.totalSeason > 0 ? `${land.currentSeason}/${land.totalSeason}` : '—' }}
             </div>
           </div>
@@ -548,14 +563,14 @@ function getIsometricBubbleClass(targetLand: any) {
               :style="{ width: `${phaseProgress.percent}%` }"
             />
           </div>
-          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-gray-400 tabular-nums">
+          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-gray-500 tabular-nums dark:text-gray-400">
             <span>已进行 {{ formatTime(phaseProgress.elapsed) }}</span>
             <span>本阶段 {{ formatTime(phaseProgress.duration) }}</span>
           </div>
         </div>
 
         <div v-if="mutantEffects.length > 0" class="mt-2 rounded-lg bg-pink-50 p-2 dark:bg-pink-950/30">
-          <div class="mb-1 text-[10px] text-pink-500 font-medium dark:text-pink-300">
+          <div class="mb-1 text-[10px] text-pink-600 font-medium dark:text-pink-300">
             变异效果
           </div>
           <div class="flex flex-wrap gap-1.5">
@@ -1253,6 +1268,20 @@ function getIsometricBubbleClass(targetLand: any) {
   text-align: left;
   box-shadow: 0 14px 32px rgb(15 23 42 / 0.24);
   transform: translateX(-50%);
+}
+
+/* dark 主题：容器底色随主题切换，避免白底与浅色文字冲突 */
+.dark .land-bubble {
+  border-color: rgb(55 65 81);
+  background: rgb(17 24 39 / 0.97);
+  color: #e5e7eb;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 0.5);
+}
+
+.dark .land-bubble::before,
+.dark .land-bubble-floating::before,
+.dark .land-bubble-floating.land-bubble-floating-below::before {
+  border-color: rgb(55 65 81);
 }
 
 .land-bubble::before {

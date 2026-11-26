@@ -17,15 +17,16 @@ const dropSide = ref<'before' | 'after'>('before')
 const pointer = ref({ x: 0, y: 0, offsetX: 0, offsetY: 0, width: 0, height: 0 })
 let pending: { id: number, pointerId: number, x: number, y: number, element: HTMLElement } | null = null
 let scrollFrame = 0
-const draggedSeed = computed(() => seeds.value.find(seed => seed.seedId === dragging.value))
+const draggedSeed = computed(() => (seeds.value || []).find(seed => seed.seedId === dragging.value))
 let requestId = 0
 onBeforeUnmount(() => {
   requestId += 1
   cancelDrag()
 })
 const ordered = computed(() => {
-  const ids = [...priority.value, ...seeds.value.map(s => s.seedId).filter(id => !priority.value.includes(id))]
-  return ids.map(id => seeds.value.find(s => s.seedId === id)).filter((s): s is Seed => !!s)
+  const safeSeeds = seeds.value || []
+  const ids = [...priority.value, ...safeSeeds.map(s => s.seedId).filter(id => !priority.value.includes(id))]
+  return ids.map(id => safeSeeds.find(s => s.seedId === id)).filter((s): s is Seed => !!s)
 })
 const visibleSeeds = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()

@@ -95,6 +95,8 @@ function getConfigSnapshot(accountId?: unknown): AccountConfig & { ui: typeof gl
     return {
         automation: { ...cfg.automation },
         plantingStrategy: cfg.plantingStrategy,
+        prioritize2x2Crops: !!cfg.prioritize2x2Crops,
+        prioritizeGrowthTasks: !!cfg.prioritizeGrowthTasks,
         preferredSeedId: cfg.preferredSeedId,
         intervals: { ...cfg.intervals },
         friendQuietHours: { ...cfg.friendQuietHours },
@@ -114,6 +116,9 @@ function getConfigSnapshot(accountId?: unknown): AccountConfig & { ui: typeof gl
         fertilizerBuyCheckIntervalMinutes: Math.max(1, Math.min(1440, Number(cfg.fertilizerBuyCheckIntervalMinutes) || 30)),
         emailClaimHour: normalizeEmailClaimHour(cfg.emailClaimHour, sharedState.DEFAULT_ACCOUNT_CONFIG.emailClaimHour),
         bagSeedPriority: [...(cfg.bagSeedPriority || [])],
+        bagSeedKnownIds: [...(cfg.bagSeedKnownIds || [])],
+        goldenBugKeepCount: Math.max(0, Number(cfg.goldenBugKeepCount) || 0),
+        goldenBugRoundLimit: Math.max(1, Number(cfg.goldenBugRoundLimit) || 24),
         bagSeedMultiLandReservationEnabled: !!cfg.bagSeedMultiLandReservationEnabled,
         bagSeedLandTypes: cloneBagSeedLandTypes(cfg.bagSeedLandTypes),
         bagSeedFallbackStrategy: cfg.bagSeedFallbackStrategy,
@@ -161,6 +166,13 @@ function applyConfigSnapshot(snapshot: Record<string, any> | undefined, options:
 
     if (cfg.plantingStrategy && ALLOWED_PLANTING_STRATEGIES.includes(cfg.plantingStrategy)) {
         next.plantingStrategy = cfg.plantingStrategy;
+    }
+
+    if (cfg.prioritize2x2Crops !== undefined && cfg.prioritize2x2Crops !== null) {
+        next.prioritize2x2Crops = cfg.prioritize2x2Crops === true;
+    }
+    if (cfg.prioritizeGrowthTasks !== undefined && cfg.prioritizeGrowthTasks !== null) {
+        next.prioritizeGrowthTasks = cfg.prioritizeGrowthTasks === true;
     }
 
     if (cfg.preferredSeedId !== undefined && cfg.preferredSeedId !== null) {
@@ -257,6 +269,18 @@ function applyConfigSnapshot(snapshot: Record<string, any> | undefined, options:
         next.bagSeedPriority = normalizeBagSeedPriority(cfg.bagSeedPriority);
     }
 
+    if (cfg.bagSeedKnownIds !== undefined && cfg.bagSeedKnownIds !== null) {
+        next.bagSeedKnownIds = normalizeBagSeedPriority(cfg.bagSeedKnownIds);
+    }
+
+    if (cfg.goldenBugKeepCount !== undefined && cfg.goldenBugKeepCount !== null) {
+        next.goldenBugKeepCount = Math.max(0, Math.min(9999, Number(cfg.goldenBugKeepCount) || 0));
+    }
+
+    if (cfg.goldenBugRoundLimit !== undefined && cfg.goldenBugRoundLimit !== null) {
+        next.goldenBugRoundLimit = Math.max(1, Math.min(100, Number(cfg.goldenBugRoundLimit) || 24));
+    }
+
     if (cfg.bagSeedMultiLandReservationEnabled !== undefined && cfg.bagSeedMultiLandReservationEnabled !== null) {
         next.bagSeedMultiLandReservationEnabled = !!cfg.bagSeedMultiLandReservationEnabled;
     }
@@ -321,8 +345,64 @@ function getPlantingStrategy(accountId?: unknown): PlantingStrategy {
     return getAccountConfigSnapshot(accountId).plantingStrategy;
 }
 
+function getPrioritize2x2Crops(accountId?: unknown): boolean {
+    return !!getAccountConfigSnapshot(accountId).prioritize2x2Crops;
+}
+
+function getPrioritizeGrowthTasks(accountId?: unknown): boolean {
+    return !!getAccountConfigSnapshot(accountId).prioritizeGrowthTasks;
+}
+
 function getBagSeedPriority(accountId?: unknown): number[] {
     return [...(getAccountConfigSnapshot(accountId).bagSeedPriority || [])];
+}
+
+const { compareBagSeedGameOrder } = require('../../utils/bag-seed-order');
+
+/**
+ * 背包种子面板的数据同步：
+ * 按"游戏内排序"返回当前 1×1 可种种子；把新出现的种子追加进优先级与 knownIds，
+ * 变化时持久化（bagSeedPriority / bagSeedKnownIds）。与旧版 store.js 逻辑一致。
+ */
+function syncBagSeedPriority(accountId: unknown, bagSeeds: any[], options: { persist?: boolean } = {}) {
+    const cfg = getAccountConfigSnapshot(accountId);
+    const currentSeeds = (Array.isArray(bagSeeds) ? bagSeeds : [])
+        .map((seed: any) => ({
+            ...seed,
+            seedId: Number(seed && seed.seedId) || 0,
+            count: Number(seed && seed.count) || 0,
+            requiredLevel: Number(seed && seed.requiredLevel) || 0,
+            rarity: Number(seed && seed.rarity) || 0,
+            plantExp: Number(seed && seed.plantExp) || 0,
+            plantingPriority: Number(seed && seed.plantingPriority) || 0,
+            plantSize: Number(seed && seed.plantSize) || 1,
+        }))
+        .filter((seed: any) => seed.seedId > 0 && seed.count > 0 && seed.plantSize === 1)
+        .sort(compareBagSeedGameOrder);
+    const currentIds = currentSeeds.map((seed: any) => seed.seedId);
+    const priority = normalizeBagSeedPriority(cfg.bagSeedPriority);
+    const knownIds = normalizeBagSeedPriority(cfg.bagSeedKnownIds);
+    const nextPriority = [...priority, ...currentIds.filter((id: number) => !priority.includes(id))];
+
+    const nextKnownIds = [...new Set([...knownIds, ...priority, ...currentIds])];
+    const changed = JSON.stringify(nextPriority) !== JSON.stringify(priority)
+        || JSON.stringify(nextKnownIds) !== JSON.stringify(knownIds);
+    if (changed) {
+        applyConfigSnapshot({
+            bagSeedPriority: nextPriority,
+            bagSeedKnownIds: nextKnownIds,
+        }, {
+            accountId,
+            persist: options.persist !== false,
+        });
+    }
+
+    return {
+        seeds: currentSeeds,
+        priority: nextPriority,
+        knownIds: nextKnownIds,
+        changed,
+    };
 }
 
 function getBagSeedMultiLandReservationEnabled(accountId?: unknown): boolean {
@@ -526,7 +606,10 @@ module.exports = {
     isAutomationOn,
     getPreferredSeed,
     getPlantingStrategy,
+    getPrioritize2x2Crops,
+    getPrioritizeGrowthTasks,
     getBagSeedPriority,
+    syncBagSeedPriority,
     getBagSeedMultiLandReservationEnabled,
     getBagSeedLandTypes,
     getBagSeedFallbackStrategy,

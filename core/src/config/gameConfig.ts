@@ -320,7 +320,10 @@ function loadConfigs(): void {
             plantPhaseImageMap.clear();
             for (const [key, phases] of Object.entries(manifest || {})) {
                 const match = /^Crop_(\d+)$/.exec(key);
-                if (!match || !phases || typeof phases !== 'object') continue;
+                // 条目必须是 { 阶段: URL } 对象；数组会被 Object.entries 展开成
+                // phase→phase+1 的裸数字 URL（如 "2"），前端请求 /2 被 SPA
+                // fallback 兜底成 HTML 渲染成破图，因此直接跳过坏条目走占位图。
+                if (!match || !phases || typeof phases !== 'object' || Array.isArray(phases)) continue;
                 const plantId = Number(match[1]);
                 if (plantId <= 0) continue;
                 const phaseMap = new Map<number, string>();
@@ -512,13 +515,21 @@ function getPlantPhaseImage(plantId: number, phase: number): string {
         if (exact) return exact;
         let fallback = '';
         let fallbackPhase = 0;
+        let smallest = '';
+        let smallestPhase = Number.MAX_SAFE_INTEGER;
         for (const [candidatePhase, url] of phaseMap) {
             if (candidatePhase <= target && candidatePhase > fallbackPhase) {
                 fallback = url;
                 fallbackPhase = candidatePhase;
             }
+            if (candidatePhase < smallestPhase) {
+                smallest = url;
+                smallestPhase = candidatePhase;
+            }
         }
-        return fallback;
+        // 连最低阶段都比目标大（如只提取到阶段 2/3 而目标是种子阶段 1）时，
+        // 回退到最小可用阶段，保证物品仍有官方贴图而非占位图。
+        return fallback || smallest;
     }
     return '';
 }
@@ -533,6 +544,17 @@ function getItemImageById(itemId: number): string {
         // 复用配置明确指向的同一图标；解锁卡也可使用其对应作物的模型图。
         imageId = iconImageIds.get(getItemImageKey(item, 'icon_res'))
             || assetImageIds.get(getItemImageKey(item, 'asset_name')) || 0;
+        if (!imageId) {
+            // 物品图标文件缺失时，按 asset_name 的 Crop_<编号> 回退到该作物的官方
+            // 阶段贴图（果实/变异果实用成熟阶段，种子用种子阶段）。编号即
+            // plant_images/manifest.json 的资源键，目录缺失时返回空串走占位图。
+            const cropMatch = /(?:^|\/)Crop_(\d+)$/.exec(getItemImageKey(item, 'asset_name').split(':').pop() || '');
+            if (cropMatch) {
+                const phase = Number(item.type) === 5 ? 1 : 6;
+                const phaseImage = getPlantPhaseImage(Number(cropMatch[1]), phase);
+                if (phaseImage) return phaseImage;
+            }
+        }
     }
     return imageId ? `/game-config/seed_images_named/seed_images/${imageId}.png` : '';
 }
