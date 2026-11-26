@@ -22,6 +22,21 @@
 const express = require('express');
 const { resolveAdvertiseAddresses } = require('./ip-utils');
 
+/**
+ * 创建抓包 API（Express 包装 + 进程内共享 handler）
+ * @param {object} [options]
+ * @param {object} options.config
+ * @param {object} options.ca
+ * @param {object} options.sessionStore
+ * @param {object} options.proxyManager
+ * @param {(...args: any[]) => void} [options.log]
+ * @returns {{
+ *   app: import('express').Express,
+ *   start: () => Promise<import('http').Server>,
+ *   handleApiRequest: (method: string, path: string, body?: object, context?: object) => Promise<{ status: number, body?: object, buffer?: Buffer }>,
+ *   getCaCertDer: () => Buffer,
+ * }}
+ */
 function createCaptureApi({ config, ca, sessionStore, proxyManager, log = () => {} } = {}) {
   const startedAt = Date.now();
 

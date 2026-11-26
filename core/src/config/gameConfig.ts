@@ -161,6 +161,8 @@ let illustratedConfig: IllustratedConfigItem[] | null = null;
 const illustratedItemMap = new Map<number, IllustratedConfigItem>();
 let buffConfig: BuffConfigItem[] | null = null;
 const buffConfigMap = new Map<number, BuffConfigItem>();
+// 作物生长阶段贴图：plant_images/manifest.json，键 Crop_<作物ID> → 阶段 1-6 贴图 URL。
+const plantPhaseImageMap = new Map<number, Map<number, string>>();
 
 // 官方活动说明确认：变异 13 为鹊羽活动效果，收获时会额外获得鹊羽。
 // 运行时 MutantEffect 暂未下发 tips/description，因此在展示 DTO 层补充说明。
@@ -308,6 +310,31 @@ function loadConfigs(): void {
         }
     } catch (e: any) {
         console.warn('[配置] 加载 BuffCfg.json 失败:', e.message);
+    }
+
+    // 加载作物生长阶段贴图清单（官方客户端 Crop_* 阶段贴图，阶段 1-6）。
+    try {
+        const plantImageManifestPath = path.join(configDir, 'plant_images', 'manifest.json');
+        if (fs.existsSync(plantImageManifestPath)) {
+            const manifest = JSON.parse(fs.readFileSync(plantImageManifestPath, 'utf8'));
+            plantPhaseImageMap.clear();
+            for (const [key, phases] of Object.entries(manifest || {})) {
+                const match = /^Crop_(\d+)$/.exec(key);
+                if (!match || !phases || typeof phases !== 'object') continue;
+                const plantId = Number(match[1]);
+                if (plantId <= 0) continue;
+                const phaseMap = new Map<number, string>();
+                for (const [phaseKey, url] of Object.entries(phases as Record<string, string>)) {
+                    const phase = Number(phaseKey);
+                    if (!Number.isInteger(phase) || phase <= 0 || !String(url || '').trim()) continue;
+                    phaseMap.set(phase, String(url).trim());
+                }
+                if (phaseMap.size > 0) plantPhaseImageMap.set(plantId, phaseMap);
+            }
+            console.warn(`[配置] 已加载作物阶段贴图 (${plantPhaseImageMap.size} 种)`);
+        }
+    } catch (e: any) {
+        console.warn('[配置] 加载 plant_images/manifest.json 失败:', e.message);
     }
 
     // 图片目录只在加载配置时扫描，避免列表请求为每个物品反复访问磁盘。
@@ -461,6 +488,39 @@ function getMappedSeedImage(targetId: number): string {
 
 function getSeedImageBySeedId(seedId: number): string {
     return getMappedSeedImage(seedId);
+}
+
+/**
+ * 查询作物在指定生长阶段的官方贴图（plant_images/Crop_<编号>/<阶段>.png）。
+ * manifest 键 Crop_<编号> 使用官方资源编号，普通作物的编号 = 协议作物ID - 1020000
+ * （如 1020084→Crop_84、1029004→Crop_9004）；同时兼容直接以完整作物ID为键的清单。
+ * 阶段取值 1-6（种子/发芽/小叶/大叶/开花/成熟）；缺失精确阶段时回退到
+ * 不大于该阶段的最近贴图，避免个别作物缺少中间阶段时前端出现空图。
+ * 枯死（7）与未知阶段（0）返回空串，由前端回退占位图标。
+ */
+function getPlantPhaseImage(plantId: number, phase: number): string {
+    const id = Number(plantId) || 0;
+    if (!Number.isSafeInteger(id) || id <= 0) return '';
+    // 变异显示植物（112xxxx）没有独立贴图目录，查不到时由调用方回退到原作物 ID。
+    const candidates = id >= 1020000 ? [id - 1020000, id] : [id];
+    for (const candidate of candidates) {
+        const phaseMap = plantPhaseImageMap.get(candidate);
+        if (!phaseMap || phaseMap.size === 0) continue;
+        const target = Number(phase) || 0;
+        if (!Number.isInteger(target) || target <= 0) return '';
+        const exact = phaseMap.get(Math.min(target, 6));
+        if (exact) return exact;
+        let fallback = '';
+        let fallbackPhase = 0;
+        for (const [candidatePhase, url] of phaseMap) {
+            if (candidatePhase <= target && candidatePhase > fallbackPhase) {
+                fallback = url;
+                fallbackPhase = candidatePhase;
+            }
+        }
+        return fallback;
+    }
+    return '';
 }
 
 function getItemImageById(itemId: number): string {
@@ -756,6 +816,7 @@ module.exports = {
     parseSells,
     getEffectiveSellInfo,
     getSeedImageBySeedId,
+    getPlantPhaseImage,
     // 配置管理查询
     getAllFruits,
     getAllItems,
