@@ -30,6 +30,10 @@ const tabs: { key: TabKey, label: string }[] = [
 
 const sellCount = ref('')
 const targetGid = ref('')
+const manualGid = ref('')
+const manualQuote = ref<YshfFriendShop | null>(null)
+const manualNote = ref('')
+const queryingQuote = ref(false)
 const exchangeCount = ref('1')
 const busy = computed(() => !!store.pending || store.loading || store.loadingCatalog || store.loadingRecords || store.loadingFriends)
 const sweetPotatoCount = computed(() => store.sweetPotatoCount)
@@ -97,7 +101,10 @@ async function sell() {
   if (count !== null) payload.count = count
   const ok = await store.operate('sell', payload, accountId.value)
   toast[ok ? 'success' : 'error'](ok ? '蜜薯已出售' : (store.error || '出售失败'))
-  if (ok) sellCount.value = ''
+  if (ok) {
+    sellCount.value = ''
+    if (/^\d+$/.test(manualGid.value.trim())) void queryManualQuote()
+  }
 }
 async function exchange(index: number) {
   if (!canExchange.value || busy.value) return
@@ -114,6 +121,22 @@ async function claimCommission() {
   const ok = await store.operate('commission/claim', {}, accountId.value)
   toast[ok ? 'success' : 'error'](ok ? '提成已领取' : (store.error || '领取失败'))
 }
+/** 手填 GID 查行情：蜜薯可卖给陌生人，不必先加好友；改号后旧回执自动丢弃。 */
+async function queryManualQuote() {
+  const gid = manualGid.value.trim()
+  manualQuote.value = null
+  manualNote.value = ''
+  if (!/^\d+$/.test(gid)) { toast.error('请填写有效的铺子主人 GID'); return }
+  if (!accountId.value || queryingQuote.value) return
+  queryingQuote.value = true
+  try {
+    const quote = await store.queryShopQuote(accountId.value, gid)
+    if (!quote) { manualNote.value = '查不到这个铺子的行情，请确认 GID'; return }
+    manualQuote.value = quote
+    manualNote.value = `可收 ${quote.unlimited ? '不限' : fmt(quote.quota)}，单价 ${fmt(quote.totalPrice)}`
+  } finally { queryingQuote.value = false }
+}
+
 async function scan(force = false) {
   if (!accountId.value || busy.value) return
   const ok = await store.scanFriendShops(accountId.value, force)
@@ -121,6 +144,8 @@ async function scan(force = false) {
 }
 
 watch(accountId, (id) => {
+  manualQuote.value = null
+  manualNote.value = ''
   if (id) void store.load(id)
   else store.clear()
 }, { immediate: true })
@@ -295,6 +320,12 @@ onUnmounted(() => {
               </BaseButton>
             </div>
           </div>
+          <div class="mt-4 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-4 dark:border-gray-700">
+            <BaseInput v-model="manualGid" label="目标 GID（非好友也可）" placeholder="填铺子主人 QQ 号" type="number" class="min-w-48 flex-1" />
+            <BaseButton variant="secondary" size="sm" :loading="queryingQuote" @click="queryManualQuote">查行情</BaseButton>
+            <BaseButton v-if="manualQuote" variant="text" size="sm" @click="targetGid = manualQuote!.gid; tab = 'shop'">选它出售</BaseButton>
+          </div>
+          <p v-if="manualNote" class="mt-2 text-xs text-gray-500">{{ manualNote }}</p>
           <p v-if="activity.actions.sell.reason" class="mt-2 text-xs text-gray-500">
             {{ activity.actions.sell.reason }}
           </p>
@@ -408,6 +439,7 @@ onUnmounted(() => {
               <div class="text-sm font-medium">
                 {{ shop.name || `GID ${shop.gid}` }}
                 <span v-if="shop.own" class="ml-1 text-xs text-orange-500">自家</span>
+                <span v-else-if="shop.via === 'panel'" class="ml-1 text-xs text-violet-500">其它号好友</span>
               </div>
               <span class="text-xs text-gray-500">Lv.{{ fmt(shop.level) }}</span>
             </div>
@@ -422,7 +454,7 @@ onUnmounted(() => {
             </div>
             <BaseButton
               variant="secondary" size="sm" class="mt-3" block
-              :disabled="!targetGid || shop.canSell === false || (!shop.unlimited && num(shop.quota) <= 0)"
+              :disabled="shop.canSell === false || (!shop.unlimited && num(shop.quota) <= 0)"
               @click="targetGid = shop.gid; tab = 'shop'"
             >
               选它出售

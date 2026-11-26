@@ -55,13 +55,20 @@ const BALANCE_CACHE_TTL_MS = 10 * 1000;
  * 背包读取连续失败时，最多沿用多久之前的成功值。
  * 余额变化只发生在本次进程内的几个写操作上（写操作后都会强制刷新缓存），
  * 因此 10 分钟内的旧值仍然可信，比把界面刷成“--”更有用。
+ *
+ * 注意：自动任务的轮询间隔也是 10 分钟，正好卡在这个窗口边界上，
+ * 一旦 Bag 超时就会「刚好过期 → 判定未知 → 跳过卖薯」。自动任务传自己的
+ * 宽窗口（AUTO_BALANCE_STALE_MAX_MS），界面仍用这 10 分钟。
  */
 const BALANCE_STALE_MAX_MS = 10 * 60 * 1000;
+/** 自动任务沿用旧余额的上限：一小时内的蜜薯数足够可信，卖薯失败服务端还会兜底。 */
+const AUTO_BALANCE_STALE_MAX_MS = 60 * 60 * 1000;
 
 /** 好友比价结果缓存时间：cmd 92 是实时行情，短缓存只为防连点刷屏。 */
 const FRIEND_SCAN_TTL_MS = 3 * 60 * 1000;
-const FRIEND_SCAN_DEFAULT_LIMIT = 40;
-const FRIEND_SCAN_MAX_LIMIT = 100;
+// 候选池现在是「本账号好友 + 面板其它账号好友」，上限放宽到 200；超出时按轮换窗口扫。
+const FRIEND_SCAN_DEFAULT_LIMIT = 60;
+const FRIEND_SCAN_MAX_LIMIT = 200;
 const FRIEND_SCAN_CONCURRENCY = 4;
 
 /**
@@ -104,6 +111,8 @@ function createYishuHuanfuActivityService(deps: any) {
         getUserState,
         // 好友列表默认懒加载，测试可注入桩函数，避免拉起真实的网关请求。
         getAllFriends: getAllFriendsDep,
+        // 面板其它账号的好友同样可注入，测试不必读写磁盘存档。
+        getPanelFriendGids: getPanelFriendGidsDep,
     } = deps;
 
     // 状态槽 130 的 4 号子槽只保留最近一次动作，不能用它判断“今天是否已领”，
@@ -111,6 +120,8 @@ function createYishuHuanfuActivityService(deps: any) {
     let seedClaimedDateKey = '';
     let sharedDateKey = '';
     let friendScanCache: { at: number; data: any } | null = null;
+    // 候选池（本账号好友 + 面板其它账号好友）超过单轮上限时的轮换游标。
+    let friendScanRotation = 0;
     // 背包读取失败时保留原因，随快照一起下发，前端可以显示“余额未知”的具体理由。
     let lastBalanceError = '';
     // 前端轮询很密，同一个超时错误 5 分钟内只记一条，避免把日志刷爆后反而看不到别的信息。
@@ -139,6 +150,73 @@ function createYishuHuanfuActivityService(deps: any) {
             body,
         );
         return types.GetGroupReply.decode(replyBody);
+    }
+
+    /**
+     * 面板里所有账号的「已知好友 GID」。每个账号的 worker 同步好友列表时会把它落盘到
+     * `known_friend_gids/<accountId>.json`（worker-manager 的 known_friend_gids_sync），
+     * 这里把目录里所有账号的文件并起来，比价候选池就不再只有当前账号的好友。
+     *
+     * 蜜薯能卖给任何开着铺子的人，非好友也收，所以候选池越大越容易挑到当日最高价。
+     * 读不到（文件缺失 / 存档损坏）只当没有，不影响本账号好友。
+     */
+    function collectPanelFriendGids(): Array<{ gid: string; accountName: string }> {
+        if (typeof getPanelFriendGidsDep === 'function') {
+            const injected = getPanelFriendGidsDep();
+            if (Array.isArray(injected)) {
+                const result: Array<{ gid: string; accountName: string }> = [];
+                const seen = new Set<string>();
+                for (const raw of injected) {
+                    const gid = int64String(raw?.gid);
+                    if (!gid || gid === '0' || !/^\d+$/.test(gid) || seen.has(gid)) continue;
+                    seen.add(gid);
+                    result.push({ gid, accountName: String(raw?.accountName || '') });
+                }
+                return result;
+            }
+        }
+        const result: Array<{ gid: string; accountName: string }> = [];
+        const seen = new Set<string>();
+        try {
+            const store = require('../models/store');
+            const { readKnownFriendGidsCache } = require('../models/store/gid-cache');
+            const listed = store?.getAccounts?.();
+            const accounts = Array.isArray(listed?.accounts) ? listed.accounts : [];
+            for (const account of accounts) {
+                const accountId = String(account?.id || '');
+                if (!accountId) continue;
+                const gids = readKnownFriendGidsCache(accountId);
+                if (!Array.isArray(gids)) continue;
+                const accountName = String(account?.name || account?.nick || accountId);
+                for (const raw of gids) {
+                    const gid = int64String(raw);
+                    if (!gid || gid === '0' || !/^\d+$/.test(gid) || seen.has(gid)) continue;
+                    seen.add(gid);
+                    result.push({ gid, accountName });
+                }
+            }
+        } catch {
+            // 读不到面板账号存档不是错误：退回只用本账号好友。
+        }
+        return result;
+    }
+
+    /**
+     * 候选池超过本轮上限时的轮换窗口：自己的铺子永远在内，其余按扫描轮次前后滚动，
+     * 几轮下来能把整个候选池覆盖一遍，不会被「永远只扫前 N 个」卡住。
+     */
+    function takeScanWindow(targets: any[], limit: number, hasOwn: boolean): any[] {
+        if (targets.length <= limit) return targets;
+        const ownEntry = hasOwn ? targets[0] : null;
+        const others = hasOwn ? targets.slice(1) : targets.slice();
+        const capacity = Math.max(1, limit - (ownEntry ? 1 : 0));
+        if (others.length <= capacity) return ownEntry ? [ownEntry, ...others] : others;
+        const start = friendScanRotation % others.length;
+        const window: any[] = [];
+        for (let offset = 0; offset < capacity; offset += 1)
+            window.push(others[(start + offset) % others.length]);
+        friendScanRotation = (start + capacity) % others.length;
+        return ownEntry ? [ownEntry, ...window] : window;
     }
 
     async function operateYshf(requestType: any, payload: any): Promise<any> {
@@ -336,9 +414,12 @@ function createYishuHuanfuActivityService(deps: any) {
      * 现在只有 refreshBalances 一个通道打网关（互斥，同一时刻只有一个在途），结果写进内存；
      * 快照只同步读内存。并发快照读的是同一份状态，不可能一个成功一个失败把数字打回去。
      */
-    async function refreshBalances(options: { retries?: number } = {}): Promise<Map<string, string> | null> {
+    async function refreshBalances(options: { retries?: number; staleMaxMs?: number } = {}): Promise<Map<string, string> | null> {
+        // 在途请求直接复用。注意：复用方拿到的可能是「按更窄窗口判定的 null」，
+        // 自动任务因此先在调用处决定重试次数与窗口，避免和界面抢同一个 promise。
         if (balanceRefreshingPromise) return balanceRefreshingPromise;
         const retryDelays = options.retries === 0 ? [] : [250, 700];
+        const staleMaxMs = options.staleMaxMs ?? BALANCE_STALE_MAX_MS;
         const task = (async () => {
             for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
                 try {
@@ -359,8 +440,8 @@ function createYishuHuanfuActivityService(deps: any) {
                 }
             }
             logBalanceFailure();
-            if (freshFallback()) {
-                // 失败但手里有 10 分钟内的成功值：继续用它，只标 stale。
+            if (freshFallback(staleMaxMs)) {
+                // 失败但手里还有可用成功值：继续用它，只标 stale。
                 balanceStale = true;
                 return (lastGoodBalances as { data: Map<string, string> }).data;
             }
@@ -389,14 +470,14 @@ function createYishuHuanfuActivityService(deps: any) {
         }
     }
 
-    /** 最近一次成功值是否还能用。 */
-    function freshFallback(): boolean {
-        return !!lastGoodBalances && Date.now() - lastGoodBalances.at <= BALANCE_STALE_MAX_MS;
+    /** 最近一次成功值是否还能用（窗口可由调用方放宽，自动任务用 1 小时）。 */
+    function freshFallback(maxMs: number = BALANCE_STALE_MAX_MS): boolean {
+        return !!lastGoodBalances && Date.now() - lastGoodBalances.at <= maxMs;
     }
 
     /** 快照专用：同步返回内存里的余额，绝不 await 网关。 */
-    function currentBalances(): Map<string, string> | null {
-        if (freshFallback()) {
+    function currentBalances(maxMs: number = BALANCE_STALE_MAX_MS): Map<string, string> | null {
+        if (freshFallback(maxMs)) {
             // 值还在手就先给出去；超过 10 秒顺手在后台补一次，不阻塞本次快照。
             if (Date.now() - (lastGoodBalances as { at: number }).at > BALANCE_CACHE_TTL_MS) void refreshBalances();
             return (lastGoodBalances as { data: Map<string, string> }).data;
@@ -411,13 +492,20 @@ function createYishuHuanfuActivityService(deps: any) {
         void refreshBalances();
     }
 
-    async function getCurrentYishuHuanfuActivity(options: { freshBalances?: boolean } = {}) {
+    async function getCurrentYishuHuanfuActivity(options: {
+        freshBalances?: boolean;
+        balanceRetries?: number;
+        balanceStaleMaxMs?: number;
+    } = {}) {
         const groupReply = await queryYshfGroupReply();
         // 写操作后、以及进程里还没有任何成功值时，同步单次读一次（不重试）。
         // 其余情况只读内存，快照不会被 Bag 拖住，也不会出现并发快照互相覆盖。
-        const balances = options.freshBalances || !freshFallback()
-            ? await refreshBalances({ retries: 0 })
-            : currentBalances();
+        // 自动任务需要更硬的读数：给重试次数和更宽松的 stale 窗口，
+        // 否则「轮询间隔 10 分钟 = stale 上限 10 分钟」会让它每次刚好读到未知值。
+        const staleMaxMs = options.balanceStaleMaxMs ?? BALANCE_STALE_MAX_MS;
+        const balances = options.freshBalances || !freshFallback(staleMaxMs)
+            ? await refreshBalances({ retries: options.balanceRetries ?? 0, staleMaxMs })
+            : currentBalances(staleMaxMs);
         // 目录查询是独立命令，快照里不拉，避免每次刷新快照都多发一条网关请求；
         // 前端进入活动页时单独调用 queryYishuHuanfuCatalog。
         return yshfDto(groupReply, balances, null);
@@ -571,10 +659,12 @@ function createYishuHuanfuActivityService(deps: any) {
             friendListError = error?.message || '好友列表获取失败';
         }
 
+        const panelFriends = collectPanelFriendGids();
+
         const targets: any[] = [];
         const seen = new Set<string>();
         if (own) {
-            targets.push({ gid: own, own: true, name: '我的铺子', avatar: '', level: '0' });
+            targets.push({ gid: own, own: true, name: '我的铺子', avatar: '', level: '0', via: 'own' });
             seen.add(own);
         }
         for (const friend of friends) {
@@ -587,9 +677,28 @@ function createYishuHuanfuActivityService(deps: any) {
                 name: friend?.remark || friend?.name || gid,
                 avatar: friend?.avatar_url || '',
                 level: int64String(friend?.level),
+                via: 'friend',
             });
         }
-        const slice = targets.slice(0, limit);
+        // 面板里其它账号的好友同样并进来：蜜薯能卖给任何开着铺子的人，
+        // 不限于本账号好友，候选池越大越容易挑到当日最高价。
+        let panelCount = 0;
+        for (const entry of panelFriends) {
+            if (seen.has(entry.gid)) continue;
+            seen.add(entry.gid);
+            panelCount += 1;
+            targets.push({
+                gid: entry.gid,
+                own: false,
+                // 名字靠 cmd 92 回包里的铺主信息补，界面没有名字时会退化成显示 GID。
+                name: '',
+                avatar: '',
+                level: '0',
+                via: 'panel',
+                panelAccount: entry.accountName,
+            });
+        }
+        const slice = takeScanWindow(targets, limit, !!own);
 
         const shops: any[] = [];
         let failed = 0;
@@ -604,8 +713,14 @@ function createYishuHuanfuActivityService(deps: any) {
                     if (!failureMessage) failureMessage = result.reason?.message || '铺子行情查询失败';
                     return;
                 }
+                const quotedOwner = result.value.shop;
                 shops.push({
                     ...entry,
+                    // 其它账号好友在这里没有本地名字：cmd 92 回包自带铺主昵称 / 头像 / 等级，
+                    // 用它补齐，界面上就不用只显示一串 GID。
+                    name: entry.name || quotedOwner?.name || '',
+                    avatar: entry.avatar || quotedOwner?.avatar || '',
+                    level: entry.level && entry.level !== '0' ? entry.level : (quotedOwner?.level || '0'),
                     price: result.value.price,
                     totalPrice: result.value.totalPrice,
                     quota: result.value.quota,
@@ -633,11 +748,18 @@ function createYishuHuanfuActivityService(deps: any) {
             ownShop: shops.find(entry => entry.own) || null,
             scanned: slice.length,
             failed,
+            // 候选池 = 本账号好友 + 面板里其它账号的已知好友（去重后）。
             friendCount: targets.length - (own ? 1 : 0),
+            panelFriendCount: panelCount,
+            candidateCount: targets.length - (own ? 1 : 0),
+            // 候选池超过本轮上限时按轮换窗口扫，这里告诉界面还有多少没轮到。
+            pendingCount: Math.max(0, targets.length - (own ? 1 : 0) - slice.filter(entry => !entry.own).length),
+            limit,
             friendListError,
             message: shops.length === 0
-                ? (friendListError || '没有可查询的好友铺子')
-                : `已扫描 ${shops.length} 个铺子，最高收购价 ${shops[0].totalPrice}`,
+                ? (friendListError || '没有可查询的铺子')
+                : `已扫描 ${shops.length} 个铺子${panelCount ? `（含其它账号好友 ${panelCount} 个）` : ''}，`
+                    + `最高收购价 ${shops[0].totalPrice}`,
             errorMessage: failureMessage,
             cached: false,
             scannedAt: now,

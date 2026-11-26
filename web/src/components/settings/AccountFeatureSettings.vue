@@ -66,6 +66,15 @@ const showPetDiaryActivity = computed(() => isWithinActivityWindowMs(PET_DIARY_A
 const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
 const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
 const showYishuHuanfuActivity = computed(() => isWithinActivityWindowMs(YISHU_HUANFU_ACTIVITY_WINDOW, nowMs.value))
+// 卖薯开始时间：30 分钟一档，空串=不限。到点后每轮自动任务都卖，不是精准卡点。
+const yishuSellTimeOptions = computed(() => {
+  const options = [{ label: '不限时段（随时可卖）', value: '' }]
+  for (let minutes = 0; minutes < 24 * 60; minutes += 30) {
+    const label = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+    options.push({ label, value: label })
+  }
+  return options
+})
 
 const ranchStore = useRanchStore()
 const { scene } = storeToRefs(useSceneStore())
@@ -961,9 +970,9 @@ watch(() => props.currentAccountId, loadQixiFriends)
                   <BaseSwitch v-model="automation.automation.yishu_claim_commission" label="自动领取收购提成" />
                   <BaseSwitch v-model="automation.automation.yishu_sell_fallback_own" label="好友收满时卖给自己" />
                 </div>
-                <div class="grid gap-3 sm:grid-cols-3">
-                  <label class="text-xs text-gray-500">比价好友上限（1–50）
-                    <input v-model.number="automation.automation.yishu_scan_friend_limit" type="number" min="1" max="50" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <label class="text-xs text-gray-500">比价好友上限（1–200）
+                    <input v-model.number="automation.automation.yishu_scan_friend_limit" type="number" min="1" max="200" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
                   </label>
                   <label class="text-xs text-gray-500">比价间隔分钟（5–720）
                     <input v-model.number="automation.automation.yishu_scan_interval_minutes" type="number" min="5" max="720" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
@@ -971,7 +980,11 @@ watch(() => props.currentAccountId, loadQixiFriends)
                   <label class="text-xs text-gray-500">起卖数量（1–10000）
                     <input v-model.number="automation.automation.yishu_sell_min_count" type="number" min="1" max="10000" class="mt-1 w-full border rounded p-2 dark:bg-gray-900" />
                   </label>
+                  <BaseSelect v-model="automation.automation.yishu_sell_after_time" label="开始售卖时间" :options="yishuSellTimeOptions" />
                 </div>
+                <p class="text-xs text-gray-400 dark:text-gray-500">
+                  「开始售卖时间」不是精准卡点：选 23:00 表示过了 23:00 后每轮自动任务（10 分钟）都按原价逻辑卖，晚一点好友多已分享、暴击加成更高；留空为不限。比价候选池已包含面板其它账号的好友。
+                </p>
                 <p class="text-xs text-amber-600 dark:text-amber-400">
                   自动卖薯会占用好友铺子的当日额度；比价只读、不成交，价格以出售回包为准。
                 </p>

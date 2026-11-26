@@ -6,21 +6,38 @@ const { createYishuAutomation, isYishuAutomationEnabled } = require('../dist/ser
 // 以薯换福自动任务的纯逻辑测试：所有网关调用都用桩替换，只验证「什么时候发、发给谁、发几次」。
 const NOW_SEC = 1795573881;
 
+/**
+ * 快照必须与真实 DTO 同形：蜜薯在 `sweetPotato.balance` 上（item_id=1032 蜜薯），
+ * DTO 里没有顶层 `sweetPotatoBalance` 字段。旧桩用了不存在的顶层字段，正好把
+ * 「自动任务每轮都判成没读到蜜薯」这个 bug 盖住了，所以这里按 DTO 生成。
+ */
 function makeSnapshot(overrides = {}) {
+    const { sweetPotatoBalance, ...rest } = overrides || {};
     const base = {
         active: true,
         daily: { seedClaimed: false, shared: false, sharedToday: false },
-        sweetPotatoBalance: '0',
+        sweetPotato: { balance: '0', balanceKnown: true },
+        luckCoin: { balance: '0', balanceKnown: true },
         shop: { priceKnown: true, price: '111', bonus: '33', estimatedPrice: '144' },
         commission: { pending: '0', claimable: false, flag: '0' },
     };
-    return {
+    const snapshot = {
         ...base,
-        ...overrides,
-        daily: { ...base.daily, ...(overrides.daily || {}) },
-        shop: { ...base.shop, ...(overrides.shop || {}) },
-        commission: { ...base.commission, ...(overrides.commission || {}) },
+        ...rest,
+        daily: { ...base.daily, ...(rest.daily || {}) },
+        shop: { ...base.shop, ...(rest.shop || {}) },
+        commission: { ...base.commission, ...(rest.commission || {}) },
+        sweetPotato: { ...base.sweetPotato, ...(rest.sweetPotato || {}) },
     };
+    // 兼容旧写法的简写参数：sweetPotatoBalance: '500' / null 都映射到真实字段上。
+    if (sweetPotatoBalance !== undefined) {
+        snapshot.sweetPotato = {
+            ...snapshot.sweetPotato,
+            balance: sweetPotatoBalance === null ? null : String(sweetPotatoBalance),
+            balanceKnown: sweetPotatoBalance !== null,
+        };
+    }
+    return snapshot;
 }
 
 function makeShop(overrides = {}) {
@@ -69,7 +86,7 @@ function createHarness(options = {}) {
             if (options.sell) return options.sell(friendGid, count);
             return { count, price: '165', income: String(Number(count) * 165) };
         },
-        getServerTimeSec: () => NOW_SEC,
+        getServerTimeSec: () => options.nowSec ?? NOW_SEC,
         log: (module, message, meta) => logs.push({ module, message, meta }),
     });
     return {
@@ -261,4 +278,210 @@ test('an inactive activity window stops the whole round', async () => {
 
     assert.deepEqual(harness.calls.map(entry => entry[0]), ['getActivity']);
     assert.ok(harness.logs.some(entry => entry.message.includes('不在开放窗口')));
+});
+
+/**
+ * 定时器接线：桩掉 store 与 scheduler，只断言「什么时候注册、什么时候清」。
+ * 线上踩过的坑是「掉线瞬间被 clear 后再也不重建」，所以这里必须锁住这两条。
+ */
+function timerHarness(automation, aliveKeys = []) {
+    const storePath = require.resolve('../dist/models/store');
+    require.cache[storePath] = {
+        id: storePath,
+        filename: storePath,
+        loaded: true,
+        exports: { getAutomation: () => automation },
+    };
+    const cleared = [];
+    const timeouts = [];
+    const intervals = [];
+    const alive = new Set(aliveKeys);
+    return {
+        cleared,
+        timeouts,
+        intervals,
+        scheduler: {
+            clear: (key) => { cleared.push(key); alive.delete(key); },
+            has: (key) => alive.has(key),
+            setTimeoutTask: (key, ms) => { timeouts.push({ key, ms }); },
+            setIntervalTask: (key, ms, fn, options) => { intervals.push({ key, ms, options }); alive.add(key); },
+        },
+    };
+}
+
+test('定时器注册首跑与十分钟周期，且不再叠加错相位', () => {
+    const { startYishuTimer, YISHU_CHECK_INTERVAL_MS, YISHU_INITIAL_DELAY_MS } = require('../dist/services/yishuhuanfu-auto');
+    const h = timerHarness({ ...ALL_ON });
+    startYishuTimer(h.scheduler, () => true);
+
+    assert.equal(h.timeouts.length, 1);
+    assert.equal(h.timeouts[0].key, 'yishu_initial');
+    assert.equal(h.timeouts[0].ms, YISHU_INITIAL_DELAY_MS);
+    assert.equal(h.intervals.length, 1);
+    assert.equal(h.intervals[0].key, 'yishu_interval');
+    assert.equal(h.intervals[0].ms, YISHU_CHECK_INTERVAL_MS);
+    // 错相位会把首跑推到 phase + interval（14 分钟），配置一变就重建，首跑永远等不到。
+    assert.equal(h.intervals[0].options, undefined);
+});
+
+test('未登录时不碰已有定时器，重复挂表不重建', () => {
+    const { startYishuTimer } = require('../dist/services/yishuhuanfu-auto');
+
+    const offline = timerHarness({ ...ALL_ON }, ['yishu_interval']);
+    startYishuTimer(offline.scheduler, () => false);
+    assert.deepEqual(offline.cleared, [], '未登录时不能清掉已有定时器');
+    assert.equal(offline.timeouts.length, 0);
+    assert.equal(offline.intervals.length, 0);
+
+    const ready = timerHarness({ ...ALL_ON });
+    startYishuTimer(ready.scheduler, () => true);
+    const clearedAfterFirst = ready.cleared.length;
+    startYishuTimer(ready.scheduler, () => true);
+    assert.equal(ready.cleared.length, clearedAfterFirst, '第二次挂表不该再清一次');
+    assert.equal(ready.timeouts.length, 1);
+    assert.equal(ready.intervals.length, 1);
+});
+
+test('开关全关时只清不挂', () => {
+    const { startYishuTimer } = require('../dist/services/yishuhuanfu-auto');
+    const h = timerHarness({ yishu_claim_seed: false, yishu_share: false, yishu_auto_sell: false, yishu_claim_commission: false }, ['yishu_initial', 'yishu_interval']);
+    startYishuTimer(h.scheduler, () => true);
+    assert.deepEqual(h.cleared, ['yishu_initial', 'yishu_interval']);
+    assert.equal(h.timeouts.length, 0);
+    assert.equal(h.intervals.length, 0);
+});
+
+test('自动任务读快照时要求更硬的余额读取参数', async () => {
+    const harness = createHarness({ snapshot: makeSnapshot({ sweetPotatoBalance: '5' }), shops: [] });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    const read = harness.calls.find(entry => entry[0] === 'getActivity');
+    assert.equal(read[1].freshBalances, true);
+    // 轮询间隔 10 分钟 = 界面 stale 窗口，只试一次几乎必然读到未知值。
+    assert.equal(read[1].balanceRetries, 2);
+    assert.equal(read[1].balanceStaleMaxMs, 60 * 60 * 1000);
+});
+
+test('没读到蜜薯数量时把后端原因写进跳过日志', async () => {
+    const harness = createHarness({
+        snapshot: makeSnapshot({ sweetPotatoBalance: null, balanceError: 'itempb.ItemService.Bag timeout' }),
+        shops: [],
+    });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    assert.ok(harness.logs.some(entry => entry.message.includes('这次没读到背包蜜薯数量（itempb.ItemService.Bag timeout）')));
+});
+
+// 回归：DTO 里蜜薯只在 sweetPotato.balance 上。旧实现读顶层 sweetPotatoBalance（永远 undefined），
+// 每轮都判成「没读到背包蜜薯数量」→ 有蜜薯也从不卖。这条测试用的快照就是真实 DTO 形状。
+test('按真实 DTO 形状读蜜薯数量并卖出（与红薯种子/果实无关）', async () => {
+    const snapshot = makeSnapshot({ sweetPotato: { balance: '6', balanceKnown: true } });
+    assert.equal('sweetPotatoBalance' in snapshot, false, 'DTO 没有顶层 sweetPotatoBalance');
+
+    const harness = createHarness({ snapshot, shops: [makeShop({ quota: '100', totalPrice: '165' })] });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    const sells = harness.sells();
+    assert.equal(sells.length, 1, '真实 DTO 形状下必须卖出');
+    assert.equal(sells[0][2], '6', '卖的数量必须是蜜薯数量');
+    assert.ok(harness.logs.some(entry => String(entry.message).includes('卖出 6 个蜜薯')));
+});
+
+test('balanceKnown=false 时才跳过卖薯，且不把余额当 0 静默忽略', async () => {
+    const harness = createHarness({
+        snapshot: makeSnapshot({ sweetPotato: { balance: '9', balanceKnown: false } }),
+        shops: [makeShop({ quota: '100' })],
+    });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    assert.equal(harness.sells().length, 0);
+    assert.ok(harness.logs.some(entry => entry.message.includes('这次没读到背包蜜薯数量')));
+});
+
+test('旧形状快照（顶层 sweetPotatoBalance）仍能兼容，不会把自动任务打停', async () => {
+    const harness = createHarness({
+        snapshot: { active: true, sweetPotatoBalance: '4', daily: { seedClaimed: true, shared: true }, shop: { priceKnown: true } },
+        shops: [makeShop({ quota: '100' })],
+    });
+    await harness.automation.runYishuAutomation({ yishu_auto_sell: true, yishu_sell_fallback_own: true });
+
+    assert.equal(harness.sells().length, 1);
+    assert.equal(harness.sells()[0][2], '4');
+});
+
+test('本轮摘要日志带上蜜薯数量与是否读到', async () => {
+    const harness = createHarness({ snapshot: makeSnapshot({ sweetPotato: { balance: '0' } }), shops: [] });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    const summary = harness.logs.find(entry => entry.message === '以薯换福自动本轮开始');
+    assert.ok(summary, '每轮必须留一条摘要');
+    assert.equal(summary.meta.sweetPotato, '0');
+    assert.equal(summary.meta.sweetPotatoKnown, true);
+});
+
+// 出售时间闸门：22:00 UTC = 次日 06:00 北京时间？这里直接用 UTC 构造北京时间：
+// UTC 14:00 = 北京 22:00（未到 23:00），UTC 15:05 = 北京 23:05（已过点）。
+const BEIJING_2200_SEC = Date.UTC(2026, 10, 25, 14, 0, 0) / 1000;
+const BEIJING_2305_SEC = Date.UTC(2026, 10, 25, 15, 5, 0) / 1000;
+
+test('未到开始售卖时间时不卖薯，但领种子/分享/提成照常', async () => {
+    const harness = createHarness({
+        nowSec: BEIJING_2200_SEC,
+        snapshot: makeSnapshot({
+            sweetPotato: { balance: '6', balanceKnown: true },
+            commission: { pending: '86', claimable: true, flag: '1' },
+        }),
+        shops: [makeShop({ quota: '100' })],
+    });
+    await harness.automation.runYishuAutomation({ ...ALL_ON, yishu_sell_after_time: '23:00' });
+
+    assert.equal(harness.sells().length, 0);
+    assert.ok(harness.logs.some(entry => entry.message.includes('还没到开始售卖时间 23:00')));
+    assert.ok(harness.calls.some(entry => entry[0] === 'claimSeed'), '领种子不该被闸门挡住');
+    assert.ok(harness.calls.some(entry => entry[0] === 'shareShop'));
+    assert.ok(harness.calls.some(entry => entry[0] === 'claimCommission'));
+
+    const summary = harness.logs.find(entry => entry.message === '以薯换福自动本轮开始');
+    assert.equal(summary.meta.sellAfter, '23:00');
+    assert.equal(summary.meta.sellGateOpen, false);
+});
+
+test('过了开始售卖时间后每轮都按原逻辑卖', async () => {
+    const harness = createHarness({
+        nowSec: BEIJING_2305_SEC,
+        snapshot: makeSnapshot({ sweetPotato: { balance: '6', balanceKnown: true } }),
+        shops: [makeShop({ quota: '100' })],
+    });
+    await harness.automation.runYishuAutomation({ ...ALL_ON, yishu_sell_after_time: '23:00' });
+
+    assert.equal(harness.sells().length, 1);
+    assert.equal(harness.sells()[0][2], '6');
+    const summary = harness.logs.find(entry => entry.message === '以薯换福自动本轮开始');
+    assert.equal(summary.meta.sellGateOpen, true);
+});
+
+test('只开卖薯且未到点时连活动状态都不读', async () => {
+    const harness = createHarness({
+        nowSec: BEIJING_2200_SEC,
+        snapshot: makeSnapshot({ sweetPotato: { balance: '6', balanceKnown: true } }),
+        shops: [makeShop({ quota: '100' })],
+    });
+    await harness.automation.runYishuAutomation({ yishu_auto_sell: true, yishu_sell_after_time: '23:00' });
+
+    assert.equal(harness.calls.filter(entry => entry[0] === 'getActivity').length, 0);
+    assert.equal(harness.calls.filter(entry => entry[0] === 'scanFriends').length, 0);
+    assert.equal(harness.sells().length, 0);
+});
+
+test('没配开始售卖时间时保持随时可卖', async () => {
+    const harness = createHarness({
+        nowSec: BEIJING_2200_SEC,
+        snapshot: makeSnapshot({ sweetPotato: { balance: '6', balanceKnown: true } }),
+        shops: [makeShop({ quota: '100' })],
+    });
+    await harness.automation.runYishuAutomation({ yishu_auto_sell: true });
+
+    assert.equal(harness.sells().length, 1);
+    const summary = harness.logs.find(entry => entry.message === '以薯换福自动本轮开始');
+    assert.equal(summary.meta.sellAfter, '不限');
 });

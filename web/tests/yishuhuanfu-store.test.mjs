@@ -25,6 +25,14 @@ const api = {
       return { data: { ok: true, data: { shops: shopsPayload, scanned: 3 } } }
     }
     if (url.endsWith('/yishuhuanfu/shop')) {
+      const gid = config?.params?.friendGid
+      if (gid) {
+        return { data: { ok: true, data: {
+          targetGid: gid, own: false, price: '120', bonus: '30', totalPrice: '150',
+          quota: '100', quotaCap: '8000', quotaUsed: '7900', canSell: true,
+          shop: { gid, name: '手填铺主', level: '88' },
+        } } }
+      }
       return { data: { ok: true, data: { quota: '5000', quotaCap: '8000', quotaUsed: '3000' } } }
     }
     return { data: { ok: true, data: snapshotPayload } }
@@ -148,4 +156,58 @@ test('sell payload omits friendGid and count when not provided, and no retry on 
   assert.equal(post.body.count, 480)
   assert.equal('friendGid' in post.body, false)
   assert.equal(calls.filter(c => c.method === 'POST' && c.url.endsWith('/sell')).length, 1)
+})
+
+test('queryShopQuote uses friendGid and keeps the quote shape for rendering', async () => {
+  const store = freshStore()
+  // 面板一定先加载快照再查行情；queryShopQuote 与 operate 一样做账号/代际校验。
+  assert.equal(await store.load('1001'), true)
+  const quote = await store.queryShopQuote('1001', '987654')
+
+  assert.ok(quote)
+  assert.equal(quote.gid, '987654')
+  assert.equal(quote.name, '手填铺主')
+  assert.equal(quote.totalPrice, '150')
+  assert.equal(quote.quota, '100')
+  assert.equal(quote.canSell, true)
+  assert.equal(quote.via, 'manual')
+  assert.ok(calls.some(c => c.url.endsWith('/shop')))
+  // 非法 GID 直接返回 null，不打网关。
+  assert.equal(await store.queryShopQuote('1001', 'abc'), null)
+})
+
+test('friend scan keeps panel-source tags and shows backend message', async () => {
+  const store = freshStore()
+  shopsPayload = [
+    { gid: '1', name: '我的铺子', own: true, via: 'own', price: '100', bonus: '20', totalPrice: '120', quota: '8000', unlimited: true },
+    { gid: '2', name: '', via: 'panel', panelAccount: '另一个号', price: '90', bonus: '66', totalPrice: '156', quota: '8000', quotaCap: '8000' },
+  ]
+  // 桩件里注入 message 验证提示文案来自后端。
+  const originalGet = api.get
+  api.get = async (url, config) => {
+    const res = await originalGet(url, config)
+    if (url.endsWith('/friends') && res.data?.ok)
+      res.data.data.message = '已扫描 2 个铺子（含其它账号好友 1 个）'
+    return res
+  }
+  try {
+    assert.equal(await store.scanFriendShops('1001'), true)
+    assert.equal(store.friendShops[1].via, 'panel')
+    assert.equal(store.friendShops[1].panelAccount, '另一个号')
+    assert.match(store.notes.friends, /其它账号好友/)
+  } finally { api.get = originalGet }
+})
+
+test('snapshot refresh keeps the loaded catalog instead of flashing the skeleton', async () => {
+  const store = freshStore()
+  catalogPayload = [catalogEntry({ exchangeable: true, price: '8500' })]
+  snapshotPayload = { active: true, catalog: [{ index: 5, price: '0', status: 0 }], catalogLoaded: false, actions: { exchange: { enabled: false, available: false, availabilityKnown: true } } }
+  assert.equal(await store.loadCatalog('1001'), true)
+  assert.equal(store.catalog[0].price, '8500')
+
+  // 快照里的目录骨架价格是 0，不能把真实档位覆盖回去。
+  assert.equal(await store.load('1001', true), true)
+  assert.equal(store.state.catalog[0].price, '8500')
+  assert.equal(store.state.catalogLoaded, true)
+  assert.equal(store.state.actions.exchange.enabled, false)
 })

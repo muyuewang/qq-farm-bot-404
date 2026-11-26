@@ -162,6 +162,8 @@ function createHarness(options = {}) {
         getUserState: () => ({ gid: '1220537209' }),
         // 好友列表走桩，避免测试里拉起真实网关。
         getAllFriends: options.getAllFriends || (async () => ({ game_friends: [] })),
+        // 面板其它账号的好友默认空，测试可注入以覆盖跨账号候选池。
+        getPanelFriendGids: options.getPanelFriendGids || (() => []),
     });
     const operateRequest = () => requests.filter(entry => entry.method === 'Operate');
     return { service, requests, built, operateRequest };
@@ -732,4 +734,49 @@ test('yishuhuanfu commission stays unclaimable when nobody sold into the shop', 
     const snapshot = await harness.service.getCurrentYishuHuanfuActivity();
     assert.equal(snapshot.commission.pending, '0');
     assert.equal(snapshot.commission.claimable, false);
+});
+
+test('yishuhuanfu scan pools friends from every panel account, dedupes and rotates the window', async () => {
+    const quotes = {
+        1220537209: { price: '100', quota: '8000', name: '自己' },
+        900001: { price: '210', quota: '3000', name: '本号好友' },
+        910001: { price: '260', quota: '2000', name: 'A号好友甲' },
+        910002: { price: '230', quota: '2000', name: 'A号好友乙' },
+        910003: { price: '180', quota: '2000', name: 'B号好友' },
+    };
+    const harness = createHarness({
+        shopQuotes: quotes,
+        getAllFriends: async () => ({ game_friends: [{ gid: '900001', name: '本号好友' }] }),
+        getPanelFriendGids: () => [
+            { gid: '910001', accountName: 'A号' },
+            { gid: '910002', accountName: 'A号' },
+            // 和本号好友重复：只能算一次，不能重复打 cmd 92。
+            { gid: '900001', accountName: 'B号' },
+            { gid: '910003', accountName: 'B号' },
+        ],
+    });
+    // 上限 4：自己 + 3 个候选，候选池 4 个好友里有一个要等下一轮。
+    const result = await harness.service.scanYishuHuanfuFriendShops({ force: true, limit: 4 });
+    assert.equal(result.panelFriendCount, 3);
+    assert.equal(result.friendCount, 4);
+    assert.equal(result.scanned, 4);
+    assert.equal(result.pendingCount, 1);
+    assert.equal(result.limit, 4);
+
+    const queried = harness.operateRequest()
+        .map(entry => String(types.YshfShopQueryRequest.decode(Buffer.from(entry.body)).params?.shop_gid));
+    assert.equal(new Set(queried).size, queried.length, '重复 GID 不能查两次');
+
+    const panelRows = result.shops.filter(entry => entry.via === 'panel');
+    assert.ok(panelRows.length >= 1);
+    // 面板好友没有本地备注，界面上用 cmd 92 回包的铺主昵称补齐。
+    assert.ok(panelRows.every(entry => entry.name && entry.name !== entry.gid));
+    assert.ok(panelRows.every(entry => entry.panelAccount === 'A号' || entry.panelAccount === 'B号'));
+    assert.equal(result.shops.find(entry => entry.gid === '900001').via, 'friend');
+    assert.equal(result.shops.find(entry => entry.gid === '1220537209').via, 'own');
+
+    // 下一轮从游标接着扫：上一轮没轮到的 GID 必须出现，且自己的铺子仍在。
+    const next = await harness.service.scanYishuHuanfuFriendShops({ force: true, limit: 4 });
+    const allGids = new Set([...result.shops, ...next.shops].map(entry => entry.gid));
+    assert.equal(allGids.size, 5, '两轮轮换应覆盖自己 + 4 个候选好友');
 });

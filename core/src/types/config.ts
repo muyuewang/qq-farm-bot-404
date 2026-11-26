@@ -60,6 +60,12 @@ export interface AutomationConfig extends RanchAutomationConfig {
   yishu_scan_interval_minutes: number;
   /** 背包蜜薯达到该数量才进入比价卖薯。 */
   yishu_sell_min_count: number;
+  /**
+   * 到点之后才开始卖薯（"HH:MM"，空串 = 不限）。
+   * 不做精准卡点：过了这个时刻，之后每一轮自动任务（10 分钟）都会按原逻辑卖。
+   * 卖太早好友还没暴击、价格排后面；卖太晚高价铺子的额度又可能被别人吃满。
+   */
+  yishu_sell_after_time: string;
 }
 
 export interface IntervalConfig {

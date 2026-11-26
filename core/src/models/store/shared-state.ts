@@ -94,6 +94,8 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         yishu_scan_friend_limit: 20,
         yishu_scan_interval_minutes: 30,
         yishu_sell_min_count: 1,
+        // 空串 = 不限时段；填 "HH:MM" 就等过了这个点才卖。
+        yishu_sell_after_time: '',
     },
     plantingStrategy: 'max_exp',
     preferredSeedId: 0,
@@ -390,11 +392,22 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
             } else if (k === 'fertilizer_smart_seconds') {
                 cfg.automation.fertilizer_smart_seconds = Math.max(30, Math.min(3600, Number(v) || 300));
             } else if (k === 'yishu_scan_friend_limit') {
-                (cfg.automation as any)[k] = Math.max(1, Math.min(50, Number.parseInt(String(v), 10) || 20));
+                (cfg.automation as any)[k] = Math.max(1, Math.min(200, Number.parseInt(String(v), 10) || 60));
             } else if (k === 'yishu_scan_interval_minutes') {
                 (cfg.automation as any)[k] = Math.max(5, Math.min(720, Number.parseInt(String(v), 10) || 30));
             } else if (k === 'yishu_sell_min_count') {
                 (cfg.automation as any)[k] = Math.max(1, Math.min(10000, Number.parseInt(String(v), 10) || 1));
+            } else if (k === 'yishu_sell_after_time') {
+                // "HH:MM" 是字符串项，走下面的 !!v 会被折成 true，时间闸门直接失效。
+                const raw = String(v ?? '').trim();
+                const match = /^(\d{1,2})\s*[:：]\s*(\d{1,2})$/.exec(raw);
+                if (!match) {
+                    (cfg.automation as any)[k] = '';
+                } else {
+                    const hh = Math.max(0, Math.min(23, Number(match[1])));
+                    const mm = Math.max(0, Math.min(59, Number(match[2])));
+                    (cfg.automation as any)[k] = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+                }
             } else {
                 (cfg.automation as any)[k] = !!v;
             }

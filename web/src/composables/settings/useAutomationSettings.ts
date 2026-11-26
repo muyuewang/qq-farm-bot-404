@@ -97,6 +97,8 @@ const defaultAutomation = {
   yishu_scan_friend_limit: 20,
   yishu_scan_interval_minutes: 30,
   yishu_sell_min_count: 1,
+  // 空串 = 不限时段；到点后每轮自动任务都按原逻辑卖。
+  yishu_sell_after_time: '',
   ...RANCH_AUTOMATION_DEFAULTS,
 }
 

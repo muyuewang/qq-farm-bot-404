@@ -52,6 +52,10 @@ export interface YshfFriendShop {
   quotaUsed: string
   canSell: boolean | null
   unlimited: boolean
+  /** 铺子来源：own=本人 / friend=本账号好友 / panel=其它账号好友 / manual=手填 GID。 */
+  via?: string
+  /** 来源账号名（via=panel 时用于标注其它号好友）。 */
+  panelAccount?: string
 }
 
 export interface YshfRecord {
@@ -309,7 +313,13 @@ export const useYishuHuanfuStore = defineStore('yishuhuanfu', () => {
     try {
       const { data } = await api.get(ACTIVITY_API, { headers: headers(targetId) })
       if (!isCurrent(targetId, gen) || !data?.ok) return false
-      state.value = normalizeActivity(responsePayload(data.data))
+      const incoming = normalizeActivity(responsePayload(data.data))
+      // 快照不携带 cmd 97 目录：保留上一次已加载的真实档位，避免轮询把目录闪回骨架。
+      if (incoming && catalog.value.length && catalogAccountId.value === targetId) {
+        incoming.catalog = catalog.value
+        incoming.catalogLoaded = true
+      }
+      state.value = incoming
       needsRefresh.value = false
       // 快照里的目录只是骨架，进入页面后再单独拉一次真实档位与限购。
       if (force || (!catalog.value.length && catalogAccountId.value !== targetId))
@@ -349,7 +359,7 @@ export const useYishuHuanfuStore = defineStore('yishuhuanfu', () => {
           ...state.value,
           catalog: catalog.value,
           catalogLoaded: true,
-          actions: { ...state.value.actions, exchange: { ...state.value.actions.exchange, enabled: catalog.value.length > 0 } },
+          actions: { ...state.value.actions, exchange: state.value.actions.exchange },
         }
       }
       return true
@@ -424,6 +434,36 @@ export const useYishuHuanfuStore = defineStore('yishuhuanfu', () => {
     }
   }
 
+  /**
+   * 查任意 GID 的铺子行情（cmd 92）：蜜薯可卖给陌生人，不必先加好友。
+   * 返回结构与比价列表一致，复用同一套渲染；按 GID 记回执，改号后调用方自行丢弃旧提示。
+   */
+  async function queryShopQuote(id: string, gid: string): Promise<YshfFriendShop | null> {
+    const targetId = String(id || '').trim()
+    const targetGid = String(gid || '').trim()
+    if (!targetId || !/^\d+$/.test(targetGid)) return null
+    try {
+      const { data } = await api.get(`${ACTIVITY_API}/shop`, {
+        headers: headers(targetId), params: { friendGid: targetGid }, skipErrorToast: true,
+      } as any)
+      if (!isCurrent(targetId, generation) || !data?.ok) return null
+      const payload = record(responsePayload(data?.data))
+      const shop = record(payload.shop)
+      const price = text(payload.price)
+      const bonus = text(payload.bonus)
+      return {
+        gid: text(shop.gid, payload.targetGid, targetGid), name: text(shop.name),
+        avatar: text(shop.avatar), level: text(shop.level), own: bool(payload.own),
+        price, bonus,
+        totalPrice: text(payload.totalPrice, payload.total_price, price),
+        quota: text(payload.quota), quotaCap: text(payload.quotaCap, payload.quota_cap),
+        quotaUsed: text(payload.quotaUsed, payload.quota_used),
+        canSell: payload.canSell === null || payload.canSell === undefined ? null : bool(payload.canSell, payload.can_sell),
+        unlimited: bool(payload.own), via: 'manual',
+      }
+    } catch { return null }
+  }
+
   async function scanFriendShops(id: string, force = false) {
     const targetId = String(id || '').trim()
     if (!targetId || loadingFriends.value) return false
@@ -454,13 +494,15 @@ export const useYishuHuanfuStore = defineStore('yishuhuanfu', () => {
           quotaUsed: text(entry.quotaUsed, entry.quota_used),
           canSell: entry.canSell === undefined || entry.canSell === null ? null : bool(entry.canSell, entry.can_sell),
           unlimited: bool(entry.unlimited) || bool(entry.own),
+          via: text(entry.via), panelAccount: text(entry.panelAccount, entry.panel_account),
         }
       })
       friendScanAt.value = finiteNumber(payload.scannedAt ?? payload.scanned_at) || Date.now()
       const scanned = finiteNumber(payload.scanned)
       const failed = finiteNumber(payload.failed)
       notes.value.friends = text(payload.friendListError, payload.friend_list_error)
-        || (scanned === 0 ? '没有可查询的好友铺子'
+        || text(payload.message)
+        || (scanned === 0 ? '没有可查询的铺子'
           : `已扫描 ${friendShops.value.length} 个铺子${failed ? `，${failed} 个查询失败` : ''}`)
       return true
     }
@@ -505,6 +547,6 @@ export const useYishuHuanfuStore = defineStore('yishuhuanfu', () => {
     loading, pending, error, needsRefresh,
     loadingCatalog, loadingRecords, loadingFriends,
     walletKnown, sweetPotatoCount, luckCoinBalance,
-    load, loadCatalog, loadRecords, loadShop, scanFriendShops, operate, clear,
+    load, loadCatalog, loadRecords, loadShop, queryShopQuote, scanFriendShops, operate, clear,
   }
 })

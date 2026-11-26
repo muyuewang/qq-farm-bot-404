@@ -71,6 +71,8 @@ export interface AutomationConfig {
   fertilizer_multi_season?: boolean
   fertilizer_land_types?: string[]
   fertilizer_smart_seconds?: number
+  /** 以薯换福：到点后才开始卖薯（"HH:MM"，空串=不限）。 */
+  yishu_sell_after_time?: string
   // 牧场牧草机余量低于该百分比时才会自动补满（1–100），后端默认 20。
   ranch_grass_threshold_percent?: number
   ranch_market_organic?: boolean
