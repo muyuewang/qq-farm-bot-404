@@ -13,8 +13,8 @@ const ACCOUNTS_FILE: string = getDataFile('accounts.json');
 const configStorage = createConfigStorage(STORE_FILE);
 const KNOWN_FRIEND_GIDS_DIR: string = getDataFile('known_friend_gids');
 
-const ALLOWED_PLANTING_STRATEGIES: PlantingStrategy[] = ['preferred', 'level', 'max_exp', 'max_fert_exp', 'max_profit', 'max_fert_profit', 'bag_priority'];
-const ALLOWED_BAG_SEED_FALLBACK_STRATEGIES: BagSeedFallbackStrategy[] = ALLOWED_PLANTING_STRATEGIES.filter((s): s is BagSeedFallbackStrategy => s !== 'bag_priority');
+const ALLOWED_PLANTING_STRATEGIES: PlantingStrategy[] = ['preferred', 'level', 'max_exp', 'max_fert_exp', 'max_profit', 'max_fert_profit', 'bag_priority', 'task_priority'];
+const ALLOWED_BAG_SEED_FALLBACK_STRATEGIES: BagSeedFallbackStrategy[] = ALLOWED_PLANTING_STRATEGIES.filter((s): s is BagSeedFallbackStrategy => s !== 'bag_priority' && s !== 'task_priority');
 const PUSHOO_CHANNELS: Set<string> = new Set([
     'webhook', 'qmsg', 'serverchan', 'pushplus', 'pushplushxtrip',
     'dingtalk', 'wecom', 'bark', 'gocqhttp', 'onebot', 'atri',
@@ -35,6 +35,7 @@ let accountFallbackConfig: AccountConfig;
 
 const DEFAULT_OFFLINE_REMINDER: OfflineReminder = {
     channel: 'webhook',
+    reloginUrlMode: 'none',
     endpoint: '',
     token: '',
     secret: '',
@@ -99,6 +100,8 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
         yishu_sell_after_time: '14:00',
     },
     plantingStrategy: 'max_exp',
+    prioritize2x2Crops: false,
+    prioritizeGrowthTasks: false,
     preferredSeedId: 0,
     intervals: {
         farm: 2,
@@ -142,7 +145,10 @@ const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
     fertilizerBuyCheckIntervalMinutes: 60,
     emailClaimHour: 10,
     bagSeedPriority: [],
+    bagSeedKnownIds: [],
     bagSeedMultiLandReservationEnabled: false,
+    goldenBugKeepCount: 0,
+    goldenBugRoundLimit: 24,
     bagSeedLandTypes: {},
     bagSeedFallbackStrategy: 'level',
     autoAcceptFriendMinLevel: 0,
@@ -341,6 +347,8 @@ function cloneAccountConfig(base: Partial<AccountConfig> = DEFAULT_ACCOUNT_CONFI
         plantingStrategy: ALLOWED_PLANTING_STRATEGIES.includes(String(base.plantingStrategy || '') as PlantingStrategy)
             ? String(base.plantingStrategy) as PlantingStrategy
             : DEFAULT_ACCOUNT_CONFIG.plantingStrategy,
+        prioritize2x2Crops: base.prioritize2x2Crops !== undefined ? !!base.prioritize2x2Crops : DEFAULT_ACCOUNT_CONFIG.prioritize2x2Crops,
+        prioritizeGrowthTasks: base.prioritizeGrowthTasks !== undefined ? !!base.prioritizeGrowthTasks : DEFAULT_ACCOUNT_CONFIG.prioritizeGrowthTasks,
         preferredSeedId: Math.max(0, Number.parseInt(String(base.preferredSeedId), 10) || 0),
         plantBlacklist: rawPlantBlacklist.map(Number).filter(n => Number.isFinite(n) && n > 0),
         stealDelaySeconds: Math.max(0, Math.min(300, Number(base.stealDelaySeconds) || 0)),
@@ -353,9 +361,12 @@ function cloneAccountConfig(base: Partial<AccountConfig> = DEFAULT_ACCOUNT_CONFI
         fertilizerBuyCheckIntervalMinutes: Math.max(1, Math.min(1440, Number(base.fertilizerBuyCheckIntervalMinutes) || 30)),
         emailClaimHour: normalizeEmailClaimHour(base.emailClaimHour, DEFAULT_ACCOUNT_CONFIG.emailClaimHour),
         bagSeedPriority: normalizeBagSeedPriority(base.bagSeedPriority),
+        bagSeedKnownIds: normalizeBagSeedPriority(base.bagSeedKnownIds),
         bagSeedMultiLandReservationEnabled: base.bagSeedMultiLandReservationEnabled !== undefined
             ? !!base.bagSeedMultiLandReservationEnabled
             : DEFAULT_ACCOUNT_CONFIG.bagSeedMultiLandReservationEnabled,
+        goldenBugKeepCount: Math.max(0, Math.min(9999, Number(base.goldenBugKeepCount) || 0)),
+        goldenBugRoundLimit: Math.max(1, Math.min(100, Number(base.goldenBugRoundLimit) || 24)),
         bagSeedLandTypes: normalizeBagSeedLandTypes(base.bagSeedLandTypes),
         bagSeedFallbackStrategy: normalizeBagSeedFallbackStrategy(base.bagSeedFallbackStrategy),
         autoAcceptFriendMinLevel: normalizeAutoAcceptFriendMinLevel(base.autoAcceptFriendMinLevel, DEFAULT_ACCOUNT_CONFIG.autoAcceptFriendMinLevel),
@@ -417,6 +428,13 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
 
     if (src.plantingStrategy && ALLOWED_PLANTING_STRATEGIES.includes(src.plantingStrategy)) {
         cfg.plantingStrategy = src.plantingStrategy;
+    }
+
+    if (src.prioritize2x2Crops !== undefined && src.prioritize2x2Crops !== null) {
+        cfg.prioritize2x2Crops = src.prioritize2x2Crops === true;
+    }
+    if (src.prioritizeGrowthTasks !== undefined && src.prioritizeGrowthTasks !== null) {
+        cfg.prioritizeGrowthTasks = src.prioritizeGrowthTasks === true;
     }
 
     if (src.preferredSeedId !== undefined && src.preferredSeedId !== null) {
@@ -513,6 +531,18 @@ function normalizeAccountConfig(input: unknown, fallback: AccountConfig = accoun
 
     if (src.bagSeedPriority !== undefined && src.bagSeedPriority !== null) {
         cfg.bagSeedPriority = normalizeBagSeedPriority(src.bagSeedPriority);
+    }
+
+    if (src.bagSeedKnownIds !== undefined && src.bagSeedKnownIds !== null) {
+        cfg.bagSeedKnownIds = normalizeBagSeedPriority(src.bagSeedKnownIds);
+    }
+
+    if (src.goldenBugKeepCount !== undefined && src.goldenBugKeepCount !== null) {
+        cfg.goldenBugKeepCount = Math.max(0, Math.min(9999, Number(src.goldenBugKeepCount) || 0));
+    }
+
+    if (src.goldenBugRoundLimit !== undefined && src.goldenBugRoundLimit !== null) {
+        cfg.goldenBugRoundLimit = Math.max(1, Math.min(100, Number(src.goldenBugRoundLimit) || 24));
     }
 
     if (src.bagSeedMultiLandReservationEnabled !== undefined && src.bagSeedMultiLandReservationEnabled !== null) {

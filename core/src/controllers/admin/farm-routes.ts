@@ -506,14 +506,22 @@ function mountFarmRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
-    // API: 获取背包种子列表
+    // API: 获取背包种子列表（含优先级/已知种子同步）
     app.get('/api/bag/seeds', async (req: Request, res: Response) => {
         const id = getAccId(ctx, req);
         if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
 
         try {
-            const data = await ctx.provider.getBagSeeds(id);
-            res.json({ ok: true, data });
+            const seeds = await ctx.provider.getBagSeeds(id);
+            const result = store.syncBagSeedPriority(id, seeds);
+            res.json({
+                ok: true,
+                data: {
+                    seeds: result.seeds,
+                    priority: result.priority,
+                    knownIds: result.knownIds,
+                },
+            });
         } catch (e: any) {
             handleApiError(res, e);
         }

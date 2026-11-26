@@ -323,6 +323,8 @@ function createDataProvider(options: DataProviderOptions) {
 
             copyIfPresent('plantingStrategy');
             if (!Object.hasOwn(snapshot, 'plantingStrategy')) copyIfPresent('strategy', 'plantingStrategy');
+            copyIfPresent('prioritize2x2Crops');
+            copyIfPresent('prioritizeGrowthTasks');
             copyIfPresent('preferredSeedId');
             if (!Object.hasOwn(snapshot, 'preferredSeedId')) copyIfPresent('seedId', 'preferredSeedId');
             for (const key of [
@@ -339,6 +341,9 @@ function createDataProvider(options: DataProviderOptions) {
                 'fertilizerBuyCheckIntervalMinutes',
                 'emailClaimHour',
                 'bagSeedPriority',
+                'bagSeedKnownIds',
+                'goldenBugKeepCount',
+                'goldenBugRoundLimit',
                 'bagSeedMultiLandReservationEnabled',
                 'bagSeedLandTypes',
                 'bagSeedFallbackStrategy',

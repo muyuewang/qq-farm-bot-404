@@ -46,6 +46,12 @@ function normalizeOfflineReminder(input: unknown): OfflineReminder {
     const msg = (src.msg !== undefined && src.msg !== null)
         ? String(src.msg).trim()
         : DEFAULT_OFFLINE_REMINDER.msg;
+    const rawReloginUrlMode = (src.reloginUrlMode !== undefined && src.reloginUrlMode !== null)
+        ? String(src.reloginUrlMode).trim().toLowerCase()
+        : DEFAULT_OFFLINE_REMINDER.reloginUrlMode;
+    const reloginUrlMode = ['none', 'qq_link', 'qr_link'].includes(rawReloginUrlMode)
+        ? rawReloginUrlMode
+        : DEFAULT_OFFLINE_REMINDER.reloginUrlMode;
     return {
         channel,
         endpoint,
@@ -53,6 +59,7 @@ function normalizeOfflineReminder(input: unknown): OfflineReminder {
         secret,
         title,
         msg,
+        reloginUrlMode,
         offlineDeleteSec,
     };
 }

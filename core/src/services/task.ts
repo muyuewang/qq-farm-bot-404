@@ -425,6 +425,8 @@ module.exports = {
     claimTaskReward,
     doClaim, // 供手动领取使用
     normalizeTaskInfo,
+    getTaskInfo, // 供种植模块读取成长任务进度
+
     getTaskClaimDailyState: () => ({
         key: 'task_claim',
         doneToday: taskClaimDoneDateKey === getSystemDateKey(),
