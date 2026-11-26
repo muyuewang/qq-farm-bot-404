@@ -9,6 +9,7 @@ const {
     getPlantExp,
     getPlantById,
     getSeedImageBySeedId,
+    getPlantPhaseImage,
     getPlantGrowTime,
     getPlantGrowPhases,
     getItemById,
@@ -393,6 +394,9 @@ function buildLandDetail(land: any, options: { friendMode?: boolean; landsMap?: 
         plantName,
         seedId,
         seedImage: seedId > 0 ? getSeedImageBySeedId(seedId) : '',
+        imagePhase: toNum(currentPhase.image_phase) || phaseVal,
+        plantImage: getPlantPhaseImage(displayPlantId, toNum(currentPhase.image_phase) || phaseVal)
+            || getPlantPhaseImage(plantId, toNum(currentPhase.image_phase) || phaseVal),
         phaseName: currentPhase.phaseName || PHASE_NAMES[phaseVal] || '',
         currentSeason,
         totalSeason,
