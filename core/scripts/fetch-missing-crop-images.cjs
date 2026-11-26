@@ -145,7 +145,15 @@ let ok = 0, fail = [];
     if (!files.length) continue;
     const key = 'Crop_' + N;
     const existed = !!manifest[key];
-    manifest[key] = files.map(f => parseInt(f)).sort((a, b) => a - b).map(p => String(p));
+    // manifest 条目必须是 { 阶段: 贴图URL } 的对象形态；写成数组会被
+    // gameConfig 的 Object.entries 展开成 phase→phase+1 的裸数字，导致破图。
+    manifest[key] = files
+      .map(f => parseInt(f))
+      .sort((a, b) => a - b)
+      .reduce((acc, p) => {
+        acc[String(p)] = `/game-config/plant_images/${key}/${p}.png`;
+        return acc;
+      }, {});
     if (!existed) added++;
   }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
