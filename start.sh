@@ -8,6 +8,12 @@ INSTALL_STAMP="$SCRIPT_DIR/node_modules/.qq-farm-install-stamp"
 WEB_OUTPUT="$SCRIPT_DIR/web/dist/index.html"
 CORE_OUTPUT="$SCRIPT_DIR/core/client.js"
 CORE_RUNTIME_OUTPUT="$SCRIPT_DIR/core/dist/runtime/runtime-engine.js"
+CORE_NEW_MODULE_OUTPUTS=(
+    "$SCRIPT_DIR/core/dist/runtime/wx-kickout-recovery.js"
+    "$SCRIPT_DIR/core/dist/runtime/account-startup.js"
+    "$SCRIPT_DIR/core/dist/services/wx-login/credential-store.js"
+    "$SCRIPT_DIR/core/dist/services/wx-login/credential-handoff.js"
+)
 FORCE_BUILD=0
 
 cd "$SCRIPT_DIR"
@@ -148,6 +154,11 @@ if [[ "$FORCE_BUILD" -eq 1 \
     || has_newer_input "$CORE_OUTPUT" "${core_inputs[@]}"; then
     build_core=1
 fi
+for output in "${CORE_NEW_MODULE_OUTPUTS[@]}"; do
+    if [[ ! -f "$output" ]]; then
+        build_core=1
+    fi
+done
 
 if [[ "$build_web" -eq 1 ]]; then
     echo "Building Web..."

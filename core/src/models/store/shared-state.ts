@@ -7,6 +7,7 @@ const { createConfigStorage } = require('./config-storage');
 const { storageError } = require('../../services/json-db');
 const { parseHourOfDay } = require('../../utils/hour-of-day');
 const { RANCH_AUTOMATION_DEFAULTS, normalizeRanchSetting, migrateRanchMarketAutomation } = require('../../config/ranch-automation');
+const { normalizeWxKickoutRelogin } = require('../../services/wx-login/reconnect-config');
 
 const STORE_FILE: string = getDataFile('store.json');
 const ACCOUNTS_FILE: string = getDataFile('accounts.json');
@@ -49,6 +50,12 @@ const DEFAULT_LOGIN_SETTINGS: LoginSettings = {
     qqQrLogin: false,
     napCatEndpoint: '',
     napCatSignature: '',
+    wxKickoutRelogin: {
+        enabled: true,
+        delayMinutes: 0,
+        dailyLimit: 5,
+        validUntil: '',
+    },
 };
 
 const DEFAULT_ACCOUNT_CONFIG: AccountConfig = {
@@ -637,19 +644,14 @@ function loadGlobalConfig(): void {
             }
 
             if (data.loginSettings && typeof data.loginSettings === 'object') {
+                // 顶层字段的最终类型校验仍在 global-config 的 normalizeLoginSettings 中完成；
+                // 这里额外对新增的嵌套对象做范围/类型归一化，旧配置缺少 wxKickoutRelogin 时补齐默认值。
                 globalConfig.loginSettings = {
-                    wechatQrLogin: typeof data.loginSettings.wechatQrLogin === 'boolean'
-                        ? data.loginSettings.wechatQrLogin
-                        : DEFAULT_LOGIN_SETTINGS.wechatQrLogin,
-                    qqQrLogin: typeof data.loginSettings.qqQrLogin === 'boolean'
-                        ? data.loginSettings.qqQrLogin
-                        : DEFAULT_LOGIN_SETTINGS.qqQrLogin,
-                    napCatEndpoint: typeof data.loginSettings.napCatEndpoint === 'string'
-                        ? data.loginSettings.napCatEndpoint.trim()
-                        : DEFAULT_LOGIN_SETTINGS.napCatEndpoint,
-                    napCatSignature: typeof data.loginSettings.napCatSignature === 'string'
-                        ? data.loginSettings.napCatSignature.trim()
-                        : DEFAULT_LOGIN_SETTINGS.napCatSignature,
+                    ...DEFAULT_LOGIN_SETTINGS,
+                    ...data.loginSettings,
+                    wxKickoutRelogin: normalizeWxKickoutRelogin(
+                        data.loginSettings.wxKickoutRelogin || DEFAULT_LOGIN_SETTINGS.wxKickoutRelogin,
+                    ),
                 };
             }
 

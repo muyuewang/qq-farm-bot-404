@@ -34,6 +34,7 @@ interface WorkerManagerOptions {
     deleteAccount: (id: string) => void;
     onStatusSync?: (accountId: string, status: any, accountName?: string) => void;
     onWorkerLog?: (entry: any, accountId: string, accountName?: string) => void;
+    onTerminalEvent?: (accountId: string, kind: 'kickout' | 'ws_400' | 'disconnect', payload: any) => void;
 }
 
 function createWorkerManager(options: WorkerManagerOptions) {
@@ -57,9 +58,19 @@ function createWorkerManager(options: WorkerManagerOptions) {
         deleteAccount,
         onStatusSync,
         onWorkerLog,
+        onTerminalEvent,
     } = options;
     const managerScheduler = createScheduler('worker_manager');
     const useThreadRuntime = runtimeMode === 'thread' && !(processRef as any).pkg && typeof WorkerThread === 'function';
+
+    function notifyTerminalRecovery(accountId: string, kind: 'kickout' | 'ws_400' | 'disconnect', payload: any): void {
+        if (typeof onTerminalEvent !== 'function') return;
+        try {
+            onTerminalEvent(accountId, kind, payload);
+        } catch (error: any) {
+            log('错误', `账号 ${accountId} 自动连回排程失败: ${error?.message || error}`, { accountId: String(accountId) });
+        }
+    }
 
     function createThreadWorker(account: any): any {
         const workerOptions: any = {
@@ -188,7 +199,7 @@ function createWorkerManager(options: WorkerManagerOptions) {
 
     function stopWorker(accountId: string): void {
         const worker = workers[accountId];
-        if (!worker) return;
+        if (!worker || worker.stopping) return;
 
         const proc = worker.process;
         worker.stopping = true;
@@ -357,12 +368,18 @@ function createWorkerManager(options: WorkerManagerOptions) {
             const message = msg.message || '';
             worker.wsError = { code, message, at: Date.now() };
             if (code === 400) {
+                if (worker.terminalHandled) return;
+                worker.terminalHandled = true;
                 addAccountLog(
                     'ws_400',
                     `账号 ${worker.name} 登录失效，请更新 Code`,
                     accountId,
                     worker.name,
                 );
+                // worker 未必会再发 account_disconnected（例如已不在 running 状态），
+                // 排程自动连回前先确保 master 侧的 Worker 已停止，否则到点会被 isAccountRunning 挡回。
+                stopWorker(accountId);
+                notifyTerminalRecovery(accountId, 'ws_400', { code, message });
             }
         } else if (msg.type === 'account_kicked') {
             if (worker.terminalHandled) return;
@@ -379,6 +396,7 @@ function createWorkerManager(options: WorkerManagerOptions) {
             });
             addAccountLog('kickout_stop', `账号 ${worker.name} 被踢下线，已自动停止`, accountId, worker.name, { reason, reasonCode, diagnostics });
             stopWorker(accountId);
+            notifyTerminalRecovery(accountId, 'kickout', { reason, reasonCode, diagnostics });
         } else if (msg.type === 'account_disconnected') {
             if (worker.terminalHandled) return;
             worker.terminalHandled = true;
@@ -417,6 +435,9 @@ function createWorkerManager(options: WorkerManagerOptions) {
                 { source, disconnectCode: code, reason, phase, connectionId: Number(msg.connectionId) || 0, diagnostics: msg.diagnostics || null },
             );
             stopWorker(accountId);
+            // 仅官方「登录态被拒」路径算登录失效；普通 ws_close 携带 400 关闭码不触发自动连回。
+            const kind = (source === 'ws_error' && code === 400) ? 'ws_400' : 'disconnect';
+            notifyTerminalRecovery(accountId, kind, { source, code, reason, phase, diagnostics: msg.diagnostics || null });
         } else if (msg.type === 'api_response') {
             const { id, result, error } = msg;
             managerScheduler.clear(`api_timeout_${accountId}_${id}`);

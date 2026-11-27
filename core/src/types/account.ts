@@ -8,6 +8,8 @@ export interface Account {
   qq: string;
   avatar: string;
   nick?: string;
+  /** 是否在服务重启后自动恢复运行；旧账号缺省视为 false。 */
+  autoStart?: boolean;
   createdAt: number;
   updatedAt: number;
 }

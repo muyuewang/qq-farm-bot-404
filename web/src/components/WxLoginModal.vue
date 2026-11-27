@@ -63,13 +63,18 @@ async function handleAutoAddAccount() {
     if (result.success && result.code) {
       const name = accountName.value.trim() || result.nickname || `微信账号${Date.now()}`
 
-      await accountStore.addAccount({
+      const saved = await accountStore.addAccount({
         name,
         code: result.code,
         platform: 'wx',
         loginType: 'wx_qr',
         wxid: result.wxid || '',
       })
+      if (saved?.wxAutoReconnectReady === false) {
+        wxLoginStore.errorMessage = '自动连回凭据未保存，请重新扫码一次'
+        wxLoginStore.statusMessage = '账号已添加，自动连回暂不可用'
+        return
+      }
       emit('saved')
       close()
     }

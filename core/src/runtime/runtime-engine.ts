@@ -9,6 +9,11 @@ const { createDataProvider } = require('./data-provider');
 const { createReloginReminderService } = require('./relogin-reminder');
 const { createRuntimeState } = require('./runtime-state');
 const { createWorkerManager } = require('./worker-manager');
+const { createWxKickoutRecoveryService } = require('./wx-kickout-recovery');
+const { createAccountStartupService } = require('./account-startup');
+const { WxLoginService } = require('../services/wx-login/service');
+const { getNativeWxLoginCode } = require('../services/wx-login/native-protocol');
+const { wxCredentialStore } = require('../services/wx-login/credential-store');
 
 const OPERATION_KEYS = ['harvest', 'farming', 'fertilize', 'plant', 'steal', 'helpFarming', 'taskClaim', 'sell', 'upgrade'];
 
@@ -66,6 +71,9 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         sendConfiguredPush,
     } = reloginReminder;
 
+    const wxLogin = new WxLoginService();
+    let wxRecovery: any = null;
+
     const { startWorker, stopWorker, restartWorker, callWorkerApi } = createWorkerManager({
         fork,
         WorkerThread: Worker,
@@ -92,7 +100,35 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
             runtimeEvents.emit('worker_log', { entry, accountId, accountName });
             if (onLog) onLog(entry, accountId, accountName);
         },
+        onTerminalEvent: (accountId: string, kind: 'kickout' | 'ws_400' | 'disconnect', payload: any) => {
+            if (!wxRecovery) return false;
+            return wxRecovery.onTerminalEvent(accountId, kind, payload);
+        },
     });
+
+    wxRecovery = createWxKickoutRecoveryService({
+        store,
+        credentialStore: wxCredentialStore,
+        startWorker,
+        isAccountRunning: (accountId: string) => !!workers[accountId],
+        issueCode: (loginBuffer: string, appId: string) => getNativeWxLoginCode(loginBuffer, appId),
+        refreshLoginBuffer: (credential: any, refreshOptions?: any) => wxLogin.refreshLoginBuffer(credential, refreshOptions),
+        log,
+        addAccountLog,
+    });
+
+    const accountStartup = createAccountStartupService({
+        store,
+        credentialStore: wxCredentialStore,
+        refreshCodeForStartup: (accountId: string) => (
+            wxRecovery ? wxRecovery.refreshCodeForStartup(accountId) : Promise.resolve(null)
+        ),
+        startWorker,
+        log,
+        addAccountLog,
+        concurrency: 2,
+    });
+
     const dataProvider = createDataProvider({
         workers,
         globalLogs: GLOBAL_LOGS,
@@ -111,7 +147,17 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         startWorker,
         stopWorker,
         restartWorker,
+        onManualStart: (accountId: string) => wxRecovery?.onManualStart(accountId),
+        onManualStop: (accountId: string) => wxRecovery?.onManualStop(accountId),
+        onAccountDeleted: (accountId: string) => wxRecovery?.forgetAccount(accountId),
+        onWxCredentialBound: (accountId: string) => wxRecovery?.bindCredential(accountId),
+        onWxReloginConfigChanged: () => wxRecovery?.rescheduleAll(),
+        getWxRecoveryStatus: (accountId: string) => wxRecovery?.getStatus(accountId) || null,
+        prepareAccountForStart: (accountId: string, prepareOptions?: any) => accountStartup.prepareAccountForStart(accountId, prepareOptions),
     });
+
+    // 引擎创建时只挂载长凭据保活；账号是否自动恢复由 startAllAccounts 按 autoStart 判断。
+    wxRecovery.rescheduleAll();
 
     runtimeEvents.on('log', (entry: any) => {
         if (onLog) onLog(entry, entry && entry.accountId ? entry.accountId : '', entry && entry.accountName ? entry.accountName : '');
@@ -143,14 +189,8 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         }
     }
 
-    function startAllAccounts(): void {
-        const accounts = (store.getAccounts().accounts || []);
-        if (accounts.length > 0) {
-            log('系统', `发现 ${accounts.length} 个账号，正在启动...`);
-            accounts.forEach((acc: any) => startWorker(acc));
-        } else {
-            log('系统', '未发现账号，请访问管理面板添加账号');
-        }
+    async function startAllAccounts(): Promise<number> {
+        return accountStartup.startPersistedAccounts();
     }
 
     async function start(options: { startAdminServer?: boolean; autoStartAccounts?: boolean } = {}): Promise<void> {
@@ -168,7 +208,7 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         }
 
         if (shouldAutoStartAccounts) {
-            startAllAccounts();
+            await startAllAccounts();
         }
     }
 
