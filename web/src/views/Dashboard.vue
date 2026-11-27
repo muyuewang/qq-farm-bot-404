@@ -43,6 +43,10 @@ const autoScroll = ref(true)
 const lastBagFetchAt = ref(0)
 const illustratedLevels = ref<{ crop: number | null, mutant: number | null }>({ crop: null, mutant: null })
 let illustratedLevelRequestId = 0
+// /api/status 不含钻石：余额需经 pay 服务单独查询，所以这里独立拉取并节流，避免每次推送都打一次充值接口。
+const diamondBalance = ref<number | null>(null)
+const lastDiamondFetchAt = ref(0)
+let diamondRequestId = 0
 const clearingLogs = ref(false)
 const refreshingLogs = ref(false)
 const pendingLogCount = ref(0)
@@ -241,6 +245,9 @@ const stealCountdownTotal = ref(1)
 function resetDashboardState() {
   illustratedLevelRequestId += 1
   illustratedLevels.value = { crop: null, mutant: null }
+  diamondRequestId += 1
+  diamondBalance.value = null
+  lastDiamondFetchAt.value = 0
   lastBagFetchAt.value = 0
   localUptime.value = 0
   localNextFarmRemainSec = 0
@@ -490,6 +497,32 @@ async function refreshBag(force = false) {
   await bagStore.fetchBag(currentAccountId.value)
 }
 
+async function refreshDiamond(force = false) {
+  if (!currentAccountId.value || !status.value?.connection?.connected)
+    return
+
+  const now = Date.now()
+  // 钻石余额走 pay 服务，节流 30s 避免频繁打充值接口
+  if (!force && now - lastDiamondFetchAt.value < 30000)
+    return
+
+  const accountId = currentAccountId.value
+  const requestId = ++diamondRequestId
+  try {
+    lastDiamondFetchAt.value = now
+    const { data } = await api.get('/api/diamond', {
+      headers: { 'x-account-id': accountId },
+    })
+    if (requestId !== diamondRequestId || accountId !== currentAccountId.value)
+      return
+    if (data.ok && typeof data.data?.diamond === 'number')
+      diamondBalance.value = data.data.diamond
+  }
+  catch {
+    // 失败时保留上次已知值，不归零
+  }
+}
+
 async function refreshIllustratedLevels() {
   if (!currentAccountId.value || !status.value?.connection?.connected)
     return
@@ -537,6 +570,7 @@ async function refresh(forceReloadLogs = false) {
 
   // 仅在账号运行且连接稳定后再拉背包，避免启动阶段出现 500。
   await refreshBag()
+  await refreshDiamond()
 }
 
 function syncRealtimeAccount() {
@@ -575,6 +609,7 @@ watch(currentAccountId, async (newId, oldId) => {
 watch(() => status.value?.connection?.connected, (connected) => {
   if (connected && !isRanchScene.value) {
     refreshBag(true)
+    refreshDiamond(true)
     refreshIllustratedLevels()
   }
 })
@@ -747,7 +782,7 @@ useIntervalFn(updateCountdowns, 1000)
               钻石
             </div>
             <div class="text-2xl text-cyan-600 font-bold dark:text-cyan-400">
-              {{ formatCouponAmount(status?.status?.diamond || 0) }}
+              {{ diamondBalance === null ? '--' : formatCouponAmount(diamondBalance) }}
             </div>
           </div>
           <div class="min-w-0 text-right">
