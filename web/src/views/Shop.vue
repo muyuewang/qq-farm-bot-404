@@ -24,6 +24,7 @@ import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatCurrencyAmountByLabel } from '@/utils/number-format'
 import { RANCH_VIEW_LABELS } from '@/utils/ranch'
+import { pickCurrencyBalance } from '@/utils/shop-currency'
 
 const accountStore = useAccountStore()
 const shopStore = useShopStore()
@@ -53,6 +54,10 @@ const tab = ref<'seed' | 'decoration' | 'mystery'>('seed')
 const ascending = ref(true)
 const SHOP_TABS = new Set(['seed', 'decoration', 'mystery'])
 const mysteryAutoBuyEnabled = ref(false)
+// 钻石走 pay 服务单独查询，节流 30s，避免每次进店或切场景都打一次充值接口。
+const diamondBalance = ref<number | null>(null)
+const lastDiamondFetchAt = ref(0)
+let diamondRequestId = 0
 
 const sortedSeeds = computed(() => {
   return [...seeds.value].sort((a, b) => ascending.value ? a.seedLevel - b.seedLevel : b.seedLevel - a.seedLevel)
@@ -107,9 +112,15 @@ const quantityModal = ref({
 
 const currentLevel = computed(() => status.value?.status?.level || 0)
 const currentGold = computed(() => status.value?.status?.gold || 0)
+// 道具商城只为商品定价用到的币种返回余额，点券与钻石常常不在其中：
+// 点券取 /api/status，钻石取 /api/diamond（pay 服务），都没有时保持 null 显示「未确认」。
+const couponFromStatus = computed(() => {
+  const raw = status.value?.status?.coupon
+  return Number.isFinite(Number(raw)) ? Number(raw) : null
+})
 const headerGold = computed(() => shopStore.currencyBalance(GOLD_ITEM_ID) ?? currentGold.value)
-const headerCoupon = computed(() => shopStore.currencyBalance(COUPON_ITEM_ID))
-const headerDiamond = computed(() => shopStore.currencyBalance(DIAMOND_ITEM_ID))
+const headerCoupon = computed(() => pickCurrencyBalance(shopStore.currencyBalance(COUPON_ITEM_ID), couponFromStatus.value))
+const headerDiamond = computed(() => pickCurrencyBalance(shopStore.currencyBalance(DIAMOND_ITEM_ID), diamondBalance.value))
 const headerGoldBean = computed(() => shopStore.currencyBalance(GOLD_BEAN_ITEM_ID))
 const isAnyLoading = computed(() => loading.value || propsLoading.value || mysteryLoading.value)
 const activeIsEmpty = computed(() => {
@@ -188,7 +199,34 @@ async function refreshAll() {
   // 牧场场景读的是牧场快照，农场商城的价格与限购等切回农场再拉。
   if (!currentAccountId.value || scene.value === 'ranch')
     return
-  await shopStore.refreshAll(currentAccountId.value)
+  await Promise.all([
+    shopStore.refreshAll(currentAccountId.value),
+    refreshDiamond(),
+  ])
+}
+
+async function refreshDiamond(force = false) {
+  const accountId = String(currentAccountId.value || '')
+  if (!accountId)
+    return
+  const now = Date.now()
+  if (!force && now - lastDiamondFetchAt.value < 30000)
+    return
+
+  const requestId = ++diamondRequestId
+  try {
+    lastDiamondFetchAt.value = now
+    const { data } = await api.get('/api/diamond', {
+      headers: { 'x-account-id': accountId },
+    })
+    if (requestId !== diamondRequestId || String(currentAccountId.value || '') !== accountId)
+      return
+    if (data?.ok && typeof data.data?.diamond === 'number')
+      diamondBalance.value = data.data.diamond
+  }
+  catch {
+    // 查询失败保留上次已知值，不归零，避免把真实余额显示成 0。
+  }
 }
 
 async function refreshMysteryAutoBuyStatus() {
@@ -334,6 +372,10 @@ function confirmBuyPropsGoods(item: any) {
 
 watch(currentAccountId, () => {
   shopStore.clearShopData()
+  // 钻石余额属于账号级数据，切号必须先清空，避免短暂显示上一个账号的数值。
+  diamondRequestId += 1
+  diamondBalance.value = null
+  lastDiamondFetchAt.value = 0
   refreshAll()
   refreshMysteryAutoBuyStatus()
 })
