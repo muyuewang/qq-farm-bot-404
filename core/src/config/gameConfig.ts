@@ -214,8 +214,43 @@ function loadConfigs(): void {
             }
             console.warn(`[配置] 已加载植物配置 (${plantConfig!.length} 种)`);
         }
+
+        // 活动植物通常早于全量静态配置发布，用轻量增量表补齐植物/种子/果实三者
+        // 关系，否则背包里的活动种子会被 getBagSeeds() 当成非作物过滤掉。
+        // 只补 plantMap/seedToPlant 中尚不存在的条目，避免覆盖正式作物配置
+        // （EventPlants.json 中大部分条目已在 Plant.json 里，且字段更简略）。
+        const eventPlantPath = path.join(configDir, 'EventPlants.json');
+        if (fs.existsSync(eventPlantPath)) {
+            const eventPlants: any[] = JSON.parse(fs.readFileSync(eventPlantPath, 'utf8'));
+            let added = 0;
+            for (const entry of (Array.isArray(eventPlants) ? eventPlants : [])) {
+                const plantId = Number(entry && entry.id) || 0;
+                const seedId = Number(entry && entry.seed_id) || 0;
+                if (plantId <= 0) continue;
+                if (plantMap.has(plantId) || (seedId > 0 && seedToPlant.has(seedId))) continue;
+                const fruitId = Number(entry && entry.fruit_id) || 0;
+                const plant: any = {
+                    ...entry,
+                    id: plantId,
+                    name: String(entry.name || `作物${plantId}`),
+                    seed_id: seedId || null,
+                    fruit: { id: fruitId, count: Number(entry.fruit_count) || 0 },
+                    size: Math.max(1, Number(entry.size) || 1),
+                    seasons: Number(entry.seasons) || 1,
+                    grow_phases: entry.grow_phases || '',
+                    exp: Number(entry.exp) || 0,
+                    planting_priority: Math.max(0, Number(entry.planting_priority) || 0),
+                };
+                plantMap.set(plantId, plant);
+                if (seedId > 0) seedToPlant.set(seedId, plant);
+                if (fruitId > 0 && !fruitToPlant.has(fruitId)) fruitToPlant.set(fruitId, plant);
+                added += 1;
+            }
+            plantConfig = Array.from(plantMap.values());
+            console.warn(`[配置] 已合并活动植物配置 (新增 ${added} 种)`);
+        }
     } catch (e: any) {
-        console.warn('[配置] 加载 Plant.json 失败:', e.message);
+        console.warn('[配置] 加载 Plant.json / EventPlants.json 失败:', e.message);
     }
 
     // 加载物品配置（含种子/果实价格）
