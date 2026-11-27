@@ -32,6 +32,4 @@
   {"id":1021435,"name":"森野柿子","seed_id":21435,"seasons":1,"grow_phases":"种子:8640;发芽:8640;小叶子:8640;大叶子:8640;初熟:8640;成熟:0;","exp":1680,"fruit_id":41435,"fruit_count":10,"size":1,"asset_name":"Crop_1435","level":1,"mutant_effect_plant":"5:1121435:1","all_state_spine":null},
   {"id":1020529,"name":"森野芭乐","seed_id":20529,"seasons":1,"grow_phases":"种子:8640;发芽:8640;小叶子:8640;大叶子:8640;初熟:8640;成熟:0;","exp":1680,"fruit_id":40529,"fruit_count":10,"size":1,"asset_name":"Crop_529","level":1,"mutant_effect_plant":"5:1120529:1","all_state_spine":null},
   {"id":1029005,"name":"森野黄金芽","seed_id":29005,"seasons":1,"grow_phases":"种子:8640;发芽:8640;小叶子:8640;大叶子:8640;初熟:8640;成熟:0;","exp":7680,"fruit_id":49005,"fruit_count":10,"size":2,"asset_name":"Crop_9005","level":1,"mutant_effect_plant":"5:1129005:1;17:1028005:1","all_state_spine":"spine/v2/xiyouzhongzi/senyehuangjinya/1029005"}
-,
-  {"id":1020307,"seed_id":20307,"fruit_id":40307,"asset_name":"Crop_307","name":"红薯"}
 ]
