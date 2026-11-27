@@ -63,6 +63,9 @@ function normalizeAccount(raw: any): Account {
         avatar: String(source.avatar || source.avatarUrl || ''),
         createdAt: Number(source.createdAt) || Date.now(),
         updatedAt: Number(source.updatedAt) || Date.now(),
+        // 旧账号没有该字段时默认视为未启用：引入该字段前服务重启从不自动拉起账号，
+        // 升级后不能突然全部启动；手动启动成功一次后才写入 true。
+        autoStart: typeof source.autoStart === 'boolean' ? source.autoStart : false,
     };
     const nick = String(source.nick || '').trim();
     if (nick) account.nick = nick;
@@ -75,7 +78,7 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
     let touchedAccountId = '';
     const source: any = acc || {};
     const cleanAccount: any = {};
-    for (const key of ['id', 'name', 'code', 'platform', 'uin', 'qq', 'avatar', 'avatarUrl', 'nick']) {
+    for (const key of ['id', 'name', 'code', 'platform', 'uin', 'qq', 'avatar', 'avatarUrl', 'nick', 'autoStart']) {
         if (source[key] !== undefined) cleanAccount[key] = source[key];
     }
     acc = cleanAccount;
@@ -96,6 +99,8 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
             uin: acc.uin ? String(acc.uin) : '',
             qq: acc.qq ? String(acc.qq) : (acc.uin ? String(acc.uin) : ''),
             avatar: acc.avatar || acc.avatarUrl || '',
+            // 新账号由随后的 startAccount 成功后写入 true；启动失败时保持 false。
+            autoStart: typeof acc.autoStart === 'boolean' ? acc.autoStart : false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });

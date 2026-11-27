@@ -19,7 +19,8 @@ function getAppRootForWritable(): string {
 }
 
 function getDataDir(): string {
-    return path.join(getAppRootForWritable(), 'data');
+    const override = String(process.env.FARM_DATA_DIR || '').trim();
+    return override ? path.resolve(override) : path.join(getAppRootForWritable(), 'data');
 }
 
 function ensureDataDir(): string {

@@ -128,8 +128,9 @@ export const useAccountStore = defineStore('account', () => {
 
   async function addAccount(payload: any) {
     try {
-      await api.post('/api/accounts', payload)
+      const response = await api.post('/api/accounts', payload)
       await fetchAccounts()
+      return response.data
     }
     catch (e) {
       console.error('添加账号失败', e)

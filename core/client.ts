@@ -48,7 +48,7 @@ if (isWorkerProcess) {
 
     runtimeEngine.start({
         startAdminServer: true,
-        autoStartAccounts: false,
+        autoStartAccounts: true,
     }).catch((err: any) => {
         mainLogger.error('runtime bootstrap failed', { error: err && err.message ? err.message : String(err) });
     });

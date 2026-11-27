@@ -152,11 +152,22 @@ export interface UIConfig {
   theme: 'light' | 'dark';
 }
 
+export interface WxKickoutReloginConfig {
+  enabled: boolean;
+  /** 0 = 使用 5min → 30min → 1h → 3h 的递增退避。 */
+  delayMinutes: number;
+  /** 每日自动连回上限；0 = 不限次数，同时取消连续失败熔断。 */
+  dailyLimit: number;
+  /** 自定义延迟的绝对有效期 ISO 时间；空串 = 一直生效。 */
+  validUntil: string;
+}
+
 export interface LoginSettings {
   wechatQrLogin: boolean;
   qqQrLogin: boolean;
   napCatEndpoint: string;
   napCatSignature: string;
+  wxKickoutRelogin: WxKickoutReloginConfig;
 }
 
 export interface DeviceInfo {

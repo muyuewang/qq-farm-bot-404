@@ -7,11 +7,13 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
 import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
+import WxKickoutReloginCard from '@/components/settings/WxKickoutReloginCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAccountSettings } from '@/composables/settings/useAccountSettings'
 import { useAutomationSettings } from '@/composables/settings/useAutomationSettings'
 import { useStrategySettings } from '@/composables/settings/useStrategySettings'
 import { useUserSettings } from '@/composables/settings/useUserSettings'
+import { useWxKickoutRelogin } from '@/composables/settings/useWxKickoutRelogin'
 import { useAdminSystemConfig } from '@/composables/useAdminSystemConfig'
 import { useSettingStore } from '@/stores/setting'
 
@@ -58,7 +60,7 @@ watch(activeTab, (newTab) => {
 const tabs = [
   { key: 'account', label: '账号管理', icon: 'i-carbon-user-settings' },
   { key: 'account-config', label: '账号设置', icon: 'i-carbon-settings-adjust' },
-  { key: 'notification', label: '通知设置', icon: 'i-carbon-notification' },
+  { key: 'notification', label: '离线设置', icon: 'i-carbon-notification' },
   { key: 'system', label: '系统配置', icon: 'i-carbon-settings-services' },
 ] as const
 
@@ -131,6 +133,15 @@ const {
   openClearStoppedConfirm,
   confirmClearStopped,
 } = useAccountSettings(showAlert)
+
+const {
+  wxKickoutReloginConfig,
+  wxKickoutReloginStatus,
+  wxKickoutReloginError,
+  wxKickoutReloginSaving,
+  loadWxKickoutRelogin,
+  saveWxKickoutRelogin,
+} = useWxKickoutRelogin({ currentAccountId, showAlert })
 
 const {
   localAutomationSettings,
@@ -225,6 +236,7 @@ onMounted(async () => {
   await loadSystemConfig()
   await fetchAccounts()
   selectFirstAccountIfNeeded()
+  await loadWxKickoutRelogin()
   if (currentAccountId.value) {
     await loadStrategyData()
     syncLocalAutomationSettings()
@@ -316,14 +328,14 @@ onMounted(async () => {
           <div class="flex items-center justify-between">
             <div>
               <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-                通知设置
+                离线设置
               </h3>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                配置账号离线后的通知渠道和消息内容。
+                配置账号离线后的通知渠道、消息内容与自动连回策略。
               </p>
             </div>
             <BaseButton size="sm" :loading="offlineSaving" :disabled="offlineTesting" @click="handleSaveOffline">
-              保存通知设置
+              保存离线设置
             </BaseButton>
           </div>
           <OfflineReminderCard
@@ -335,6 +347,13 @@ onMounted(async () => {
             :show-save="false"
             @open-docs="openChannelDocs"
             @test="handleTestOffline"
+          />
+          <WxKickoutReloginCard
+            v-model:config="wxKickoutReloginConfig"
+            :status="wxKickoutReloginStatus"
+            :error="wxKickoutReloginError"
+            :saving="wxKickoutReloginSaving"
+            @save="saveWxKickoutRelogin"
           />
         </div>
 

@@ -1,17 +1,17 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { createRequire } = require('node:module');
 const vm = require('node:vm');
 const test = require('node:test');
 
 function emailHarness(t) {
-    const dataRoot = path.resolve(__dirname, '../data');
-    fs.mkdirSync(dataRoot, { recursive: true });
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qq-farm-email-'));
     const dir = fs.mkdtempSync(path.join(dataRoot, 'test-email-'));
     t.after(() => {
         assert.equal(path.dirname(dir), dataRoot);
-        fs.rmSync(dir, { recursive: true, force: true });
+        fs.rmSync(dataRoot, { recursive: true, force: true });
     });
     const clock = { now: Date.parse('2026-11-09T01:59:59Z'), failLists: false, failWrite: false, emails: { 1: [], 2: [] }, interruptClaim: false };
     const methods = [];

@@ -65,7 +65,7 @@ function writeTextFileAtomic(filePath: string, text = ''): void {
     const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
 
     try {
-        fs.writeFileSync(tmpPath, String(text), 'utf8');
+        fs.writeFileSync(tmpPath, String(text), { encoding: 'utf8', mode: 0o600 });
         fs.renameSync(tmpPath, filePath);
     } finally {
         try {

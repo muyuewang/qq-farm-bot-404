@@ -1,10 +1,15 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 
-// 缓存文件名由 FARM_ACCOUNT_ID 推导，先设好再加载模块，避开真实账号的缓存文件。
+// 测试缓存写入系统临时目录，避免污染真实 core/data。
+const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'friend-pet-cache-'));
+process.env.FARM_DATA_DIR = testDataDir;
 process.env.FARM_ACCOUNT_ID = 'friend-pet-cache-test';
+test.after(() => fs.rmSync(testDataDir, { recursive: true, force: true }));
 
 const {
     PROTECT_DOG_ID,

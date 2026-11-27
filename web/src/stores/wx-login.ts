@@ -141,7 +141,7 @@ export const useWxLoginStore = defineStore('wx-login', () => {
   }
 
   // 获取QQ农场Code
-  async function getFarmCode(): Promise<{ success: boolean, code?: string, wxid?: string, nickname?: string }> {
+  async function getFarmCode(): Promise<{ success: boolean, code?: string, wxid?: string, nickname?: string, autoReloginReady?: boolean }> {
     const checkedTaskId = taskId.value
     if (!checkedTaskId)
       return { success: false }
@@ -158,11 +158,12 @@ export const useWxLoginStore = defineStore('wx-login', () => {
 
       const openid = String(data.data.openid || '')
       const nickname = String(data.data.nickname || '') || undefined
+      const autoReloginReady = data.data.auto_relogin_ready === true
       taskId.value = ''
       wxid.value = openid
       status.value = 'success'
-      statusMessage.value = '已获取QQ农场Code'
-      return { success: true, code: String(data.data.code), wxid: openid || undefined, nickname }
+      statusMessage.value = autoReloginReady ? '已获取 Code，请在 5 分钟内完成添加账号以启用自动连回' : '已获取QQ农场Code'
+      return { success: true, code: String(data.data.code), wxid: openid || undefined, nickname, autoReloginReady }
     }
     catch (e: any) {
       status.value = 'error'

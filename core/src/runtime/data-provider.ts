@@ -20,6 +20,13 @@ interface DataProviderOptions {
     startWorker: (account: any) => boolean;
     stopWorker: (accountId: string) => void;
     restartWorker: (account: any) => void;
+    onManualStart?: (accountId: string) => void;
+    onManualStop?: (accountId: string) => void;
+    onAccountDeleted?: (accountId: string) => void;
+    onWxCredentialBound?: (accountId: string, status: any) => void;
+    onWxReloginConfigChanged?: () => void;
+    getWxRecoveryStatus?: (accountId: string) => any;
+    prepareAccountForStart?: (accountId: string, options?: any) => Promise<any | null>;
 }
 
 function createDataProvider(options: DataProviderOptions) {
@@ -41,7 +48,35 @@ function createDataProvider(options: DataProviderOptions) {
         startWorker,
         stopWorker,
         restartWorker,
+        onManualStart,
+        onManualStop,
+        onAccountDeleted,
+        onWxCredentialBound,
+        onWxReloginConfigChanged,
+        getWxRecoveryStatus,
+        prepareAccountForStart,
     } = options;
+
+    // 启动/重启需要先异步换 Code；每次操作带序号，等待期间用户停止时迟到结果不得覆盖停止意图。
+    const startIntent = new Map<string, number>();
+
+    function nextIntent(accountId: string): number {
+        const key = String(accountId || '');
+        const next = (startIntent.get(key) || 0) + 1;
+        startIntent.set(key, next);
+        return next;
+    }
+
+    function isCurrentIntent(accountId: string, value: number): boolean {
+        return (startIntent.get(String(accountId || '')) || 0) === value;
+    }
+
+    async function prepareForStart(account: any, accountId: string, freshCode: boolean, failureMessage: string): Promise<any> {
+        if (typeof prepareAccountForStart !== 'function') return account;
+        const prepared = await prepareAccountForStart(accountId, { freshCode });
+        if (!prepared) throw new Error(failureMessage);
+        return prepared;
+    }
 
     function getStoredAccountsList(): any[] {
         const data = getAccounts();
@@ -450,11 +485,28 @@ function createDataProvider(options: DataProviderOptions) {
             return data;
         },
 
-        startAccount: (accountRef: string) => {
+        startAccount: async (accountRef: string, startOptions: any = {}) => {
             const accountId = resolveAccountRefId(accountRef);
             const acc = findAccountByAnyRef(accountId || accountRef);
             if (!acc) return false;
-            startWorker(acc);
+            const targetId = accountId || String(acc.id || '');
+            const intent = nextIntent(targetId);
+            // 先完成启动前准备再落盘状态：准备失败时账号不应被误标记为自动启动，
+            // 也不应提前取消已经排好的自动连回。
+            const prepared = await prepareForStart(
+                acc,
+                targetId,
+                startOptions.freshCode === true,
+                '微信账号启动前自动换 Code 失败，请检查网络或重新扫码一次',
+            );
+            if (!isCurrentIntent(targetId, intent) || workers[targetId]) return true;
+            if (typeof onManualStart === 'function') onManualStart(targetId);
+            // 只有 Worker 真正拉起后才落盘自动启动标记；startWorker 抛错或返回 false 时
+            // 账号保持未启用，避免下次服务重启按错误状态自动恢复。
+            const started = startWorker(prepared);
+            if (started !== false && typeof store.addOrUpdateAccount === 'function') {
+                store.addOrUpdateAccount({ id: targetId, autoStart: true });
+            }
             return true;
         },
 
@@ -462,17 +514,54 @@ function createDataProvider(options: DataProviderOptions) {
             const accountId = resolveAccountRefId(accountRef);
             const acc = findAccountByAnyRef(accountId || accountRef);
             if (!acc) return false;
-            if (accountId) stopWorker(accountId);
+            const targetId = accountId || String(acc.id || '');
+            nextIntent(targetId);
+            if (typeof store.addOrUpdateAccount === 'function') {
+                store.addOrUpdateAccount({ id: targetId, autoStart: false });
+            }
+            if (typeof onManualStop === 'function') onManualStop(targetId);
+            if (targetId) stopWorker(targetId);
             return true;
         },
 
-        restartAccount: (accountRef: string) => {
+        restartAccount: async (accountRef: string, restartOptions: any = {}) => {
             const accountId = resolveAccountRefId(accountRef);
             const acc = findAccountByAnyRef(accountId || accountRef);
             if (!acc) return false;
-            restartWorker(acc);
+            const targetId = accountId || String(acc.id || '');
+            const intent = nextIntent(targetId);
+            // 与手动启动一致：重启微信账号同样要用长凭据换全新 Code，绝不重放旧 Code。
+            const prepared = await prepareForStart(
+                acc,
+                targetId,
+                restartOptions.freshCode === true,
+                '微信账号重启前自动换 Code 失败，请检查网络或重新扫码一次',
+            );
+            if (!isCurrentIntent(targetId, intent)) return true;
+            if (typeof onManualStart === 'function') onManualStart(targetId);
+            // restartWorker 是同步触发，不会抛出；仅在调用后持久化，与 startAccount 保持一致。
+            restartWorker(prepared);
+            if (typeof store.addOrUpdateAccount === 'function') {
+                store.addOrUpdateAccount({ id: targetId, autoStart: true });
+            }
             return true;
         },
+
+        onWxCredentialBound: (accountId: string, status: any) => {
+            if (typeof onWxCredentialBound === 'function') onWxCredentialBound(accountId, status);
+        },
+
+        onWxAccountDeleted: (accountId: string) => {
+            if (typeof onAccountDeleted === 'function') onAccountDeleted(accountId);
+        },
+
+        onWxReloginConfigChanged: () => {
+            if (typeof onWxReloginConfigChanged === 'function') onWxReloginConfigChanged();
+        },
+
+        getWxRecoveryStatus: (accountId: string) => (
+            typeof getWxRecoveryStatus === 'function' ? getWxRecoveryStatus(accountId) : null
+        ),
 
         isAccountRunning: (accountRef: string) => {
             const accountId = resolveAccountRefId(accountRef);

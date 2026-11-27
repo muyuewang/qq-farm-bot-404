@@ -10,6 +10,8 @@ const store = require('../../models/store');
 const { addOrUpdateAccount, deleteAccount } = store;
 const { findAccountByRef } = require('../../services/account-resolver');
 const { updateRuntimeConfig, getRuntimeConfig, getDefaultSystemConfig, getDevicePresets, getTimeZoneOptions } = require('../../config/config');
+const { bindWxCredentialFromCode } = require('../../services/wx-login/credential-binding');
+const { DEFAULT_WX_KICKOUT_RELOGIN } = require('../../services/wx-login/reconnect-config');
 
 const {
     getAccId,
@@ -61,7 +63,7 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
-    app.post('/api/accounts', (req: Request, res: Response) => {
+    app.post('/api/accounts', async (req: Request, res: Response) => {
         try {
             const rawBody = (req.body && typeof req.body === 'object') ? req.body : {};
             const requestedName = typeof rawBody.name === 'string' ? rawBody.name.trim() : '';
@@ -99,31 +101,73 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
                 }
             }
 
+            // 新增账号的 ID 由存储层分配，先记录调用前的 ID 集合，用差集定位刚创建的账号，
+            // 不再依赖「新账号一定是数组最后一个」这一位置假设。
+            let knownIds: Set<string> | null = null;
+            if (!isUpdate) {
+                try {
+                    const before = store.getAccounts();
+                    knownIds = new Set((before && Array.isArray(before.accounts) ? before.accounts : [])
+                        .map((item: any) => String((item && item.id) || '')));
+                } catch {
+                    knownIds = null;
+                }
+            }
             const data = addOrUpdateAccount(payload);
+            const createdAccount = knownIds
+                ? (data.accounts || []).find((item: any) => !knownIds!.has(String((item && item.id) || ''))) || null
+                : null;
+            const savedAccountId = isUpdate
+                ? String(payload.id)
+                : String((createdAccount || data.accounts.at(-1) || {}).id || '');
+            const accountName = payload.name || '';
             if (ctx.provider.addAccountLog) {
-                const accountId = isUpdate ? String(payload.id) : String((data.accounts.at(-1) || {}).id || '');
-                const accountName = payload.name || '';
                 ctx.provider.addAccountLog(
                     isUpdate ? 'update' : 'add',
                     isRemarkRelogin
-                        ? `通过备注重新登录账号: ${accountName || accountId}`
-                        : isUpdate ? `更新账号: ${accountName || accountId}` : `添加账号: ${accountName || accountId}`,
-                    accountId,
+                        ? `通过备注重新登录账号: ${accountName || savedAccountId}`
+                        : isUpdate ? `更新账号: ${accountName || savedAccountId}` : `添加账号: ${accountName || savedAccountId}`,
+                    savedAccountId,
                     accountName
                 );
             }
-            // 如果是新增，自动启动
-            if (!isUpdate) {
-                const newAcc = data.accounts.at(-1);
-                if (newAcc) ctx.provider.startAccount(newAcc.id);
-            } else if (isRemarkRelogin) {
-                // Adding with an existing remark is a relogin operation, including for stopped accounts.
-                ctx.provider.restartAccount(payload.id);
-            } else if (wasRunning && !onlyRemarkChanged) {
-                // 如果是更新，且之前在运行，且不是仅修改备注，则重启
-                ctx.provider.restartAccount(payload.id);
+            // 账号已落盘，凭据绑定和自动启动都属于附加动作；它们失败不能让整个请求失败，
+            // 否则前端重试会重复建号，且一次性 Code 的交接凭据已被消费。
+            const reportFailure = (action: string, error: any) => {
+                if (ctx.provider.addAccountLog) {
+                    ctx.provider.addAccountLog(action, String(error?.message || error), savedAccountId, accountName);
+                }
+            };
+            // 微信扫码产生的长凭据只在后端交接；前端拿到的仍只有一次性 Code。
+            let credentialStatus: any = null;
+            try {
+                credentialStatus = bindWxCredentialFromCode(savedAccountId, payload.code, payload);
+                if (credentialStatus && typeof ctx.provider.onWxCredentialBound === 'function') {
+                    ctx.provider.onWxCredentialBound(savedAccountId, credentialStatus);
+                    if (ctx.provider.addAccountLog) {
+                        ctx.provider.addAccountLog('wx_credential_bound', `账号 ${accountName || savedAccountId} 已启用微信被踢自动连回`, savedAccountId, accountName);
+                    }
+                }
+            } catch (e: any) {
+                reportFailure('wx_credential_bind_failed', new Error(`微信自动连回凭据保存失败，请重新扫码: ${e?.message || String(e)}`));
             }
-            res.json({ ok: true, data });
+            // 如果是新增，自动启动
+            try {
+                if (!isUpdate) {
+                    const newAcc = createdAccount || data.accounts.at(-1);
+                    // 扫码刚拿到的 Code 是全新的，无需再换一次。
+                    if (newAcc) await ctx.provider.startAccount(newAcc.id, { freshCode: true });
+                } else if (isRemarkRelogin) {
+                    // Adding with an existing remark is a relogin operation, including for stopped accounts.
+                    await ctx.provider.restartAccount(payload.id, { freshCode: true });
+                } else if (wasRunning && !onlyRemarkChanged) {
+                    // 如果是更新，且之前在运行，且不是仅修改备注，则重启
+                    await ctx.provider.restartAccount(payload.id);
+                }
+            } catch (e: any) {
+                reportFailure('start_failed', new Error(`账号自动启动/重启失败，请手动启动: ${e?.message || String(e)}`));
+            }
+            res.json({ ok: true, data, wxAutoReconnectReady: !!credentialStatus });
         } catch (e: any) {
             handleApiError(res, e);
         }
@@ -137,6 +181,9 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
             const target = findAccountByRef(before.accounts || [], req.params.id);
             ctx.provider.stopAccount(resolvedId);
             const data = deleteAccount(resolvedId);
+            if (typeof ctx.provider.onWxAccountDeleted === 'function') {
+                ctx.provider.onWxAccountDeleted(resolvedId);
+            }
             if (ctx.provider.addAccountLog) {
                 ctx.provider.addAccountLog('delete', `删除账号: ${(target && target.name) || req.params.id}`, resolvedId, target ? target.name : '');
             }
@@ -428,11 +475,19 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
+    const fallbackLoginSettings = {
+        wechatQrLogin: true,
+        qqQrLogin: false,
+        napCatEndpoint: '',
+        napCatSignature: '',
+        wxKickoutRelogin: DEFAULT_WX_KICKOUT_RELOGIN,
+    };
+
     app.get('/api/settings/login-config', (_req: Request, res: Response) => {
         try {
             const loginSettings = store.getLoginSettings
                 ? store.getLoginSettings()
-                : { wechatQrLogin: true, qqQrLogin: false, napCatEndpoint: '', napCatSignature: '' };
+                : fallbackLoginSettings;
             res.json({ ok: true, data: loginSettings });
         } catch (e: any) {
             handleApiError(res, e);
@@ -442,15 +497,46 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
     app.post('/api/settings/login-config', (req: Request, res: Response) => {
         try {
             const body = (req.body && typeof req.body === 'object') ? req.body : {};
+            const patch: Record<string, any> = {};
+            for (const key of ['wechatQrLogin', 'qqQrLogin', 'napCatEndpoint', 'napCatSignature', 'wxKickoutRelogin']) {
+                if (Object.hasOwn(body, key)) patch[key] = body[key];
+            }
             const loginSettings = store.setLoginSettings
-                ? store.setLoginSettings({
-                    wechatQrLogin: body.wechatQrLogin,
-                    qqQrLogin: body.qqQrLogin,
-                    napCatEndpoint: body.napCatEndpoint,
-                    napCatSignature: body.napCatSignature,
-                })
-                : { wechatQrLogin: true, qqQrLogin: false, napCatEndpoint: '', napCatSignature: '' };
+                ? store.setLoginSettings(patch)
+                : fallbackLoginSettings;
+            if (Object.hasOwn(patch, 'wxKickoutRelogin') && typeof ctx.provider.onWxReloginConfigChanged === 'function') {
+                ctx.provider.onWxReloginConfigChanged();
+            }
             res.json({ ok: true, data: loginSettings });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
+    app.get('/api/settings/wx-reconnect/status', (req: Request, res: Response) => {
+        try {
+            const accountId = getAccId(ctx, req);
+            const status = typeof ctx.provider.getWxRecoveryStatus === 'function'
+                ? ctx.provider.getWxRecoveryStatus(accountId)
+                : null;
+            res.json({
+                ok: true,
+                data: status || {
+                    enabled: false,
+                    bound: false,
+                    blocked: false,
+                    credentialReady: false,
+                    pending: false,
+                    nextRunAt: 0,
+                    attempts: 0,
+                    failures: 0,
+                    expiresAt: 0,
+                    lastSuccessAt: 0,
+                    delayMinutes: DEFAULT_WX_KICKOUT_RELOGIN.delayMinutes,
+                    dailyLimit: DEFAULT_WX_KICKOUT_RELOGIN.dailyLimit,
+                    validUntil: DEFAULT_WX_KICKOUT_RELOGIN.validUntil,
+                },
+            });
         } catch (e: any) {
             handleApiError(res, e);
         }
