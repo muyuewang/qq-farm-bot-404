@@ -554,9 +554,13 @@ function startMysteryShopTimer(): void {
     } = require('../services/mystery-shop-auto');
     stopMysteryShopTimer();
     if (!loginReady || !isMysteryShopWatchEnabled(getAutomation())) return;
+    // runImmediately: 定时器默认要等满一个完整间隔(2h)才首次执行，
+    // 且每次保存配置都会 stop+start 重置倒计时 —— 导致用户刚打开自动购买开关后，
+    // 商人可能已过期后端都还没检查过一次。改为注册后立即检查一次。
+    // 检查走 runExclusiveAutomationTask 串行队列，不会与农场/好友任务并发。
     workerScheduler.setIntervalTask('mystery_shop_interval', AUTO_BUY_CHECK_INTERVAL_MS, () => {
         runExclusiveAutomationTask('mystery_shop', runMysteryShopTick).catch(() => null);
-    });
+    }, { runImmediately: true });
 }
 
 function applyRuntimeConfig(snapshot: any, syncNow: boolean = false): number {
