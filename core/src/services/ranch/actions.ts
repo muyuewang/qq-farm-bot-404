@@ -636,6 +636,17 @@ async function operate(action: string, input: any = {}, feedStage?: RanchFeedSta
             if (!skipped && completed > 0 && (action === 'harvest' || action === 'produce')) {
                 recordOperation(action, completed, 'ranch');
             }
+            // 牧场流水：只记确认生效、会产生资源变化的动作；上锁、赠送好友不计入本账号流水
+            if (!skipped && completed > 0 && action !== 'setItemLock' && !before.recipient) {
+                const toLedgerItem = (item: any) => ({ id: Number(item.id), name: String(item.name || `物品${item.id}`), count: Number(item.count) || 0 });
+                require('../operation-ledger').recordRanchOperation({
+                    action,
+                    label: plan.label || action,
+                    completed,
+                    costs: (actualCosts || []).map(toLedgerItem),
+                    rewards: sumItems(rewards).map(toLedgerItem),
+                });
+            }
             // 单批出售与放养一样给出具体收益，一键出售数量太多时仍沿用汇总提示。
             const notice = before.recipient ? `已向${before.recipient.name}赠送 ${completed} 份牧草`
                 : action === 'release' || action === 'sell' && input.all !== true ? `${plan.label}完成${rewards.length ? `，获得 ${sumItems(rewards).map((item: any) => `${item.name} ×${item.count}`).join('、')}` : ''}`

@@ -3,6 +3,7 @@ export {};
 const { sendMsgAsync } = require('../utils/network');
 const { types } = require('../utils/proto');
 const { toNum } = require('../utils/utils');
+const { ATTRIBUTION_BALANCE_REFRESH, observeBalance } = require('./currency-ledger');
 
 const DEFAULT_RECHARGE_SOURCE: string = 'MallUI';
 
@@ -23,7 +24,11 @@ async function getRechargeInfo(source: string = DEFAULT_RECHARGE_SOURCE): Promis
 async function getDiamondBalance(): Promise<number> {
     const reply: any = await getRechargeInfo();
     const infos: any[] = Array.isArray(reply?.recharge_infos) ? reply.recharge_infos : [];
-    return Math.max(0, toNum(infos[0]?.balance));
+    const balance = Math.max(0, toNum(infos[0]?.balance));
+    // 钻石不进背包，主动查询到的余额也交给流水做差，捕获没有推送的变化
+    const accountId = process.env.FARM_ACCOUNT_ID || '';
+    if (accountId) observeBalance(accountId, 'diamond', balance, ATTRIBUTION_BALANCE_REFRESH);
+    return balance;
 }
 
 module.exports = {

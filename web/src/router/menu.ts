@@ -77,6 +77,13 @@ export const menuRoutes: MenuItem[] = [
     scenes: ['farm'],
   },
   {
+    path: 'currency-ledger',
+    name: 'currencyLedger',
+    label: '流水',
+    icon: 'i-carbon-receipt',
+    component: () => import('@/views/CurrencyLedger.vue'),
+  },
+  {
     path: 'settings',
     name: 'Settings',
     label: '设置',

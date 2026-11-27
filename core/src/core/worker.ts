@@ -24,6 +24,7 @@ const { checkDailyShareStatus, getShareDailyState } = require('../services/share
 const { refreshActivityWindows } = require('../services/activity-windows');
 const { startYishuTimer } = require('../services/yishuhuanfu-auto');
 const { resetSessionGains, recordOperation, initStatsWithPersistence, saveStats } = require('../services/stats');
+const { ATTRIBUTION_LOGIN_SYNC, observeBalance: observeLedgerBalance } = require('../services/currency-ledger');
 const { initStatusBar, setStatusPlatform, statusData } = require('../services/status');
 const { setRecordGoldExpHook } = require('../services/status');
 const { cleanupTaskSystem, checkAndClaimTasks, getTaskClaimDailyState, getTaskDailyStateLikeApp, getGrowthTaskStateLikeApp } = require('../services/task');
@@ -790,6 +791,7 @@ async function startBot(config: any): Promise<void> {
         if (!canContinueLogin()) return;
 
         // 登录后只拉一次背包，同时初始化点券（1002）和金豆豆（1005）
+        let loginBagLoaded = false;
         try {
             const bagReply = await runExclusiveAutomationTask('login_bag_init', getBag);
             const items = getBagItems(bagReply);
@@ -806,6 +808,7 @@ async function startBot(config: any): Promise<void> {
             const state = getUserState();
             state.coupon = Math.max(0, coupon);
             state.goldBean = Math.max(0, goldBean);
+            loginBagLoaded = true;
         } catch {
             // ignore
         }
@@ -814,6 +817,15 @@ async function startBot(config: any): Promise<void> {
         const accountId = process.env.FARM_ACCOUNT_ID || '';
         initStatsWithPersistence(accountId, Number(latest.gold || 0), Number(latest.exp || 0), Number(latest.coupon || 0));
         resetSessionGains();
+        // 货币流水：用登录时的权威余额校准。与上次运行保存的余额不同的部分记为「登录校准」，
+        // 即离线期间（例如手机上操作）的变化；背包拉取失败时点券/金豆不可信，留给后续推送校准。
+        if (accountId) {
+            observeLedgerBalance(accountId, 'gold', Number(latest.gold || 0), ATTRIBUTION_LOGIN_SYNC);
+            if (loginBagLoaded) {
+                observeLedgerBalance(accountId, 'coupon', Number(latest.coupon || 0), ATTRIBUTION_LOGIN_SYNC);
+                observeLedgerBalance(accountId, 'goldBean', Number(latest.goldBean || 0), ATTRIBUTION_LOGIN_SYNC);
+            }
+        }
 
         // 登录成功后启动各模块
         await runExclusiveAutomationTask('invite_codes', processInviteCodes);
