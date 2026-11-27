@@ -45,8 +45,15 @@ test('微信凭据以 0600 文件持久化，重新扫码后旧阻断自动解�
     const store = createWxCredentialStore({ filePath, now: () => 1_730_000_000_000 });
 
     store.set('1', makeCredential());
-    assert.equal(fs.statSync(filePath).mode & 0o777, 0o600);
-    assert.equal(fs.statSync(path.dirname(filePath)).mode & 0o777, 0o700);
+    // Windows 的 ACL 文件系统不保留 Unix 权限位（chmod 后 mode 仍是 0o666），
+    // 只有在 POSIX 文件系统上才能断言 0600/0700；Windows 上只校验文件已落盘。
+    if (process.platform !== 'win32') {
+        assert.equal(fs.statSync(filePath).mode & 0o777, 0o600);
+        assert.equal(fs.statSync(path.dirname(filePath)).mode & 0o777, 0o700);
+    } else {
+        assert.equal(fs.existsSync(filePath), true);
+        assert.equal(fs.readFileSync(filePath, 'utf8').includes('loginBuffer'), true);
+    }
 
     const reloaded = createWxCredentialStore({ filePath, now: () => 1_730_000_000_000 });
     assert.equal(reloaded.get('1').loginBuffer, 'lb1');
