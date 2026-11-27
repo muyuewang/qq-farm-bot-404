@@ -160,6 +160,9 @@ export function useStrategySettings({
       if (res.ok) {
         showAlert('策略设置已保存', 'primary')
       }
+      else if ((res as any).unconfirmed) {
+        showAlert(res.error || '配置已提交，等待后台确认后生效', 'primary')
+      }
       else {
         showAlert(`保存失败: ${res.error}`, 'danger')
       }

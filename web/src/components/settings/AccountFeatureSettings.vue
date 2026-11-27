@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import api from '@/api'
+import RanchCubPriority from '@/components/settings/RanchCubPriority.vue'
 import StrategySettingsTab from '@/components/settings/StrategySettingsTab.vue'
 import StrategyTimingPanel from '@/components/settings/StrategyTimingPanel.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -10,7 +10,6 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW, YISHU_HUANFU_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useRanchStore } from '@/stores/ranch'
-import { useSceneStore } from '@/stores/scene'
 import { isRanchFeedStage, isRanchSwitchDefaultOn, RANCH_AUTOMATION_DEFAULTS, RANCH_AUTOMATION_GROUPS, RANCH_AUTOMATION_LIMITS, RANCH_AUTOMATION_SWITCHES, RANCH_BAG_FALLBACK_OPTIONS, RANCH_FEED_STAGE_HINTS, RANCH_FEED_STAGE_OPTIONS, RANCH_STRATEGY_OPTIONS, ranchUsesPreferredAnimal } from '@/utils/ranch'
 
 type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity' | 'ranch'
@@ -77,7 +76,6 @@ const yishuSellTimeOptions = computed(() => {
 })
 
 const ranchStore = useRanchStore()
-const { scene } = storeToRefs(useSceneStore())
 const ranchKeys = RANCH_AUTOMATION_SWITCHES.map(item => item.key)
 const ranchSwitchGroups = computed(() => RANCH_AUTOMATION_GROUPS.map((group) => {
   const items = RANCH_AUTOMATION_SWITCHES.filter(item => item.group === group.key)
@@ -132,11 +130,9 @@ const moduleInfo: Record<ModuleKey, { title: string, description: string, icon: 
 
 const activeInfo = computed(() => activeModule.value ? moduleInfo[activeModule.value] : null)
 
-/**
- * 牧场策略已在「策略」菜单独立成页。牧场场景下不再展示这张卡片，
- * 否则同一个开关会在设置弹窗和策略页各有一份入口。
- */
-const visibleModules = computed(() => Object.entries(moduleInfo).filter(([key]) => scene.value !== 'ranch' || key !== 'ranch'))
+// 牧场配置统一收敛到「设置 → 账号设置」这一个入口：不再保留独立的策略菜单，
+// 因此牧场卡片在农场/牧场两个场景都可见，避免旧入口删掉后无处配置。
+const visibleModules = computed(() => Object.entries(moduleInfo))
 const fertilizerName = computed(() => (props.fertilizerOptions || []).find(item => item.value === automation.value?.automation?.fertilizer)?.label || '未设置')
 const selectedLandNames = computed(() => props.fertilizerLandTypeOptions.filter(item => automation.value.automation.fertilizer_land_types?.includes(item.value)).map(item => item.label))
 const selectedLandTypeCount = computed(() => Array.isArray(automation.value.automation.fertilizer_land_types) ? automation.value.automation.fertilizer_land_types.length : 0)
@@ -388,12 +384,6 @@ function cancel() {
   editSnapshot.value = null
   activeModule.value = null
 }
-
-// 切到牧场场景时关掉还在编辑的牧场弹窗，避免与独立「策略」页同时改同一份配置。
-watch(scene, (next) => {
-  if (next === 'ranch' && activeModule.value === 'ranch')
-    cancel()
-})
 
 onMounted(() => {
   loadQixiFriends()
@@ -795,6 +785,13 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 <p v-if="ranchNeedsPreferred && ranchStore.animalOptions.length === 0" class="text-xs text-amber-600 dark:text-amber-400">
                   动物清单未加载成功，当前只能保留「不指定」；保存时后端仍会按官方配置校验窝与棚的适用范围。
                 </p>
+                <!-- 背包优先策略下放养顺序由这份清单决定；原先只在独立策略页提供，菜单合并后收敛到这里。 -->
+                <div v-if="automation.automation.ranch_strategy === 'bag_priority'" class="border border-gray-100 rounded-lg bg-gray-50/70 p-3 dark:border-gray-700 dark:bg-gray-900/25">
+                  <RanchCubPriority
+                    v-model="automation.automation"
+                    :account-id="String(currentAccountId || '')"
+                  />
+                </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                   补栏、升级与购买牧草只花费金券；报价里出现其他消耗品时后端会跳过本次操作，不会产生钻石消费。
                 </p>

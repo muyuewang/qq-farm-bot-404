@@ -165,7 +165,7 @@ useModalFocus(() => props.show, modalSurface, close)
             class="border rounded-lg p-2"
             :style="{ borderColor: 'color-mix(in srgb, var(--theme-text) 20%, transparent)', background: '#fff' }"
           >
-            <img :src="qrImageSrc" class="h-48 w-48">
+            <img :src="qrImageSrc" alt="微信登录二维码" class="h-48 w-48">
           </div>
           <div
             v-else

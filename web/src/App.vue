@@ -174,24 +174,4 @@ body {
 .bg-gradient-primary {
   background: var(--theme-gradient);
 }
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--theme-primary) 50%, #94a3b8);
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--theme-secondary);
-  opacity: 0.8;
-}
 </style>

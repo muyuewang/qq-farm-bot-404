@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { RanchItem } from '@/utils/ranch'
+import { storeToRefs } from 'pinia'
 import { computed, nextTick, ref, watch } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import { useStatusStore } from '@/stores/status'
 import { formatQuantity, RANCH_ENDPOINT } from '@/utils/ranch'
 
 /**
@@ -15,7 +17,12 @@ import { formatQuantity, RANCH_ENDPOINT } from '@/utils/ranch'
  * 上游这份组件直接用 Naive UI 的 NButton 与 axios；本项目改成 BaseButton + 统一 api 封装，
  * 样式跟随 ui-card / ui-subtle-panel 的变量体系。
  */
-const props = defineProps<{ accountId: string, connected: boolean }>()
+const props = withDefaults(defineProps<{ accountId: string, connected?: boolean }>(), { connected: undefined })
+
+// 默认从状态 store 读在线状态；也允许显式传入 connected 以便复用在自定义场景。
+const statusStore = useStatusStore()
+const { status: accountStatus, currentStatusReady } = storeToRefs(statusStore)
+const online = computed(() => props.connected ?? (currentStatusReady.value && accountStatus.value?.connection?.connected === true))
 
 const automation = defineModel<Record<string, any>>({ required: true })
 
@@ -39,7 +46,7 @@ const status = ref('')
 const refreshRevision = ref(0)
 const dragging = ref<{ key: PriorityKey, id: number } | null>(null)
 
-watch([() => props.accountId, () => props.connected, refreshRevision], async ([accountId, connected], _, onCleanup) => {
+watch([() => props.accountId, online, refreshRevision], async ([accountId, connected], _, onCleanup) => {
   inventory.value = []
   loading.value = connected && !!accountId
   error.value = ''
@@ -154,13 +161,13 @@ function drop(key: PriorityKey, target: number) {
         <span class="text-xs" :style="{ color: 'var(--muted-text)' }">
           拖动或用箭头调整，保存策略后生效
         </span>
-        <BaseButton variant="secondary" size="sm" :disabled="!connected || loading" @click="refreshRevision++">
+        <BaseButton variant="secondary" size="sm" :disabled="!online || loading" @click="refreshRevision++">
           {{ loading ? '读取中…' : '刷新库存' }}
         </BaseButton>
       </div>
     </div>
 
-    <p v-if="!connected" class="cub-priority__state" role="status">
+    <p v-if="!online" class="cub-priority__state" role="status">
       账号未在线，暂时无法读取背包库存；已有顺序不会丢失。
     </p>
     <p v-else-if="loading" class="cub-priority__state" role="status">

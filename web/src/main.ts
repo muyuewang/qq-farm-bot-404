@@ -1,6 +1,6 @@
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
-import { useAppStore } from '@/stores/app'
+import { DEFAULT_THEME, useAppStore } from '@/stores/app'
 import { useToastStore } from '@/stores/toast'
 import App from './App.vue'
 import router from './router'
@@ -16,7 +16,7 @@ app.use(router)
 
 // Apply theme immediately before app mounts
 const THEME_KEY = 'ui_theme'
-const savedTheme = localStorage.getItem(THEME_KEY) || 'light-pink'
+const savedTheme = localStorage.getItem(THEME_KEY) || DEFAULT_THEME
 const themes: Record<string, { isDark: boolean, bg: string, text: string, primary: string, secondary: string, gradient: string }> = {
   'light-blue': { isDark: false, bg: '#f9fafb', text: '#1f2937', primary: '#3b82f6', secondary: '#2563eb', gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' },
   'dark-blue': { isDark: true, bg: '#111827', text: '#f3f4f6', primary: '#3b82f6', secondary: '#2563eb', gradient: 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)' },
@@ -28,7 +28,7 @@ const themes: Record<string, { isDark: boolean, bg: string, text: string, primar
   'dark-red': { isDark: true, bg: '#18181b', text: '#fda4af', primary: '#f43f5e', secondary: '#e11d48', gradient: 'linear-gradient(135deg, #fb7185 0%, #f43f5e 100%)' },
 }
 
-const theme = themes[savedTheme] || themes['light-pink']
+const theme = themes[savedTheme] || themes[DEFAULT_THEME]
 if (theme) {
   document.documentElement.style.setProperty('--theme-bg', theme.bg)
   document.documentElement.style.setProperty('--theme-text', theme.text)

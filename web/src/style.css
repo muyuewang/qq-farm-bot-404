@@ -9,14 +9,15 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* slate-300 */
+  /* 跟随主题主色，浅色主题下与 slate-300 接近，深色主题由下方规则覆盖。 */
+  background-color: color-mix(in srgb, var(--theme-primary, #3b82f6) 50%, #94a3b8);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* slate-400 */
+  background-color: var(--theme-secondary, #2563eb);
 }
 
 /* Dark mode scrollbar */

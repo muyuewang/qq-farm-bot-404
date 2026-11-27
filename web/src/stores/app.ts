@@ -6,6 +6,9 @@ const THEME_KEY = 'ui_theme'
 
 export type Theme = 'light-blue' | 'light-green' | 'light-pink' | 'dark-blue' | 'dark-purple' | 'dark-teal' | 'dark-orange' | 'dark-red'
 
+/** 首次加载的默认主题。main.ts 首屏样式与 store 必须引用同一常量，否则新用户会先看到粉色再被覆盖成蓝色。 */
+export const DEFAULT_THEME: Theme = 'light-blue'
+
 export interface LoginPageConfig {
   logoUrl: string
   title: string
@@ -26,7 +29,7 @@ const defaultLoginPageConfig: LoginPageConfig = {
 
 export const useAppStore = defineStore('app', () => {
   const sidebarOpen = ref(false)
-  const currentTheme = ref<Theme>((localStorage.getItem(THEME_KEY) as Theme) || 'light-blue')
+  const currentTheme = ref<Theme>((localStorage.getItem(THEME_KEY) as Theme) || DEFAULT_THEME)
   const showThemePanel = ref(false)
   const loginPageConfig = ref<LoginPageConfig>({ ...defaultLoginPageConfig })
 
@@ -148,7 +151,7 @@ export const useAppStore = defineStore('app', () => {
 
   function applyTheme(theme: Theme) {
     if (!themes[theme]) {
-      theme = 'light-pink'
+      theme = DEFAULT_THEME
     }
 
     const t = themes[theme]

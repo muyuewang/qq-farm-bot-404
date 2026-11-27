@@ -310,9 +310,12 @@ export const useSettingStore = defineStore('setting', () => {
         goldenBugRoundLimit: newSettings.goldenBugRoundLimit ?? 24,
       }
 
-      await api.post('/api/settings/save', settingsPayload, {
+      const { data: saveResult } = await api.post('/api/settings/save', settingsPayload, {
         headers: { 'x-account-id': accountId },
       })
+      // worker 尚未确认应用时后端返回 202 / ok:false / unconfirmed:true，
+      // 不能当成保存成功，否则 UI 会提示已生效但配置其实还没落地。
+      const unconfirmed = saveResult?.unconfirmed === true || saveResult?.status === 'unconfirmed'
 
       if (newSettings.automation) {
         await api.post('/api/automation', newSettings.automation, {
@@ -321,6 +324,9 @@ export const useSettingStore = defineStore('setting', () => {
       }
 
       await fetchSettings(accountId)
+      if (unconfirmed) {
+        return { ok: false, error: saveResult?.error || '配置已提交，等待后台确认后生效', unconfirmed: true }
+      }
       return { ok: true }
     }
     finally {

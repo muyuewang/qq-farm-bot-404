@@ -174,8 +174,14 @@ async function saveCurrentAccountSettings(_module?: string, quiet = false) {
   accountSettingsSaving.value = true
   try {
     const result = await settingStore.saveSettings(String(currentAccountId.value), buildCurrentAccountConfig())
-    if (!result.ok)
+    if (!result.ok) {
+      // 202 未确认属于「已提交待生效」，用提示而非错误弹窗，避免误导用户以为保存失败。
+      if ((result as any).unconfirmed) {
+        showAlert(result.error || '配置已提交，等待后台确认后生效')
+        return
+      }
       throw new Error(result.error || '保存失败')
+    }
     if (!quiet)
       showAlert('账号设置已保存')
   }

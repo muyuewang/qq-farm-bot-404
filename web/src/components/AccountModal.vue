@@ -380,7 +380,7 @@ useModalFocus(() => props.show, modalSurface, close)
               @keydown.enter.prevent="!qqLoading && startQqLogin()"
               @keydown.space.prevent="!qqLoading && startQqLogin()"
             >
-              <img :src="qqQrImage" class="h-48 w-48">
+              <img :src="qqQrImage" alt="QQ 登录二维码" class="h-48 w-48">
             </div>
             <div v-else class="h-48 w-48 flex items-center justify-center rounded-lg" :style="{ background: 'color-mix(in srgb, var(--theme-bg) 90%, var(--theme-text))' }">
               <div v-if="qqLoading" i-svg-spinners-90-ring-with-bg class="text-3xl" :style="{ color: 'var(--theme-primary)' }" />
@@ -411,7 +411,7 @@ useModalFocus(() => props.show, modalSurface, close)
               class="border rounded-lg p-2"
               :style="{ borderColor: 'color-mix(in srgb, var(--theme-text) 20%, transparent)', background: '#fff' }"
             >
-              <img :src="wxQrImageSrc" class="h-48 w-48">
+              <img :src="wxQrImageSrc" alt="微信登录二维码" class="h-48 w-48">
             </div>
             <div
               v-else
