@@ -3,9 +3,7 @@ export {};
  * 数据分析模块 - 作物效率分析
  */
 
-const { getAllPlants, getFruitPrice, getSeedPrice, getItemImageById, getItemById } = require('../config/gameConfig');
-
-const EXCLUDED_RADISH_SEED_ID = 29999;
+const { getAllPlants, getFruitPrice, getSeedPrice, getItemImageById, getItemById, isInvalidPlant } = require('../config/gameConfig');
 
 function parseGrowTime(growPhases: string): number {
     if (!growPhases) return 0;
@@ -64,9 +62,9 @@ interface PlantRankingResult {
 function getPlantRankings(sortBy: string = 'exp'): PlantRankingResult[] {
     const plants: any[] = getAllPlants();
 
-    // 筛选普通作物，排除 id 为 29999 的白萝卜种子。
+    // 筛选普通作物，无效植物（InvalidPlants.json 维护）一律不进收益排行。
     const normalPlants: any[] = plants.filter((p: any) => {
-        return Number(p.seed_id) !== EXCLUDED_RADISH_SEED_ID
+        return !isInvalidPlant(p)
             && p.seed_id > 0
             && p.grow_phases;
     });
