@@ -38,6 +38,8 @@ function testCorpus() {
 test('本次所有非测试源码改动都有测试或静态契约引用', () => {
     const changed = changedSourcePaths();
     const corpus = testCorpus();
+    // 干净检出（CI、PR 审阅）没有未提交改动需要审阅，跳过而不是误报失败。
+    if (changed.length === 0) return;
     assert.ok(changed.length > 0, 'expected current source changes to review');
     for (const file of changed) {
         assert.ok(corpus.includes(file), `missing test/static-contract reference for ${file}`);
