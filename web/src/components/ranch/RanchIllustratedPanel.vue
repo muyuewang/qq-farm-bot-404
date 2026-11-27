@@ -232,7 +232,7 @@ function giantText(animal: any) {
           >
             <div class="flex items-start gap-2">
               <img v-if="entry.image" :src="entry.image" :alt="entry.name" class="h-10 w-10 shrink-0 rounded object-contain">
-              <div v-else class="i-fa-solid-star h-10 w-10 shrink-0 text-xl text-gray-300" />
+              <div v-else class="i-fas-star h-10 w-10 shrink-0 text-xl text-gray-300" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">
                   {{ entry.name }}
@@ -293,7 +293,7 @@ function giantText(animal: any) {
           >
             <div class="flex items-start gap-2">
               <img v-if="animal.image" :src="animal.image" :alt="animal.name" class="h-10 w-10 shrink-0 rounded object-contain">
-              <div v-else class="i-fa-solid-paw h-10 w-10 shrink-0 text-xl text-gray-300" />
+              <div v-else class="i-fas-paw h-10 w-10 shrink-0 text-xl text-gray-300" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">
                   {{ animal.name }}

@@ -43,7 +43,7 @@ export const menuRoutes: MenuItem[] = [
     path: 'pet',
     name: 'pet',
     label: '宠物',
-    icon: 'i-fa-solid-paw',
+    icon: 'i-fas-paw',
     component: () => import('@/views/Pet.vue'),
     scenes: ['farm'],
   },
