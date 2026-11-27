@@ -565,7 +565,7 @@ watch(currentAccountId, () => {
                     class="border border-gray-200 rounded-lg p-3 dark:border-gray-700"
                   >
                     <div class="flex items-center gap-2">
-                      <span class="i-fa-solid-paw h-4 w-4 shrink-0" :style="{ color: 'var(--theme-primary)' }" />
+                      <span class="i-fas-paw h-4 w-4 shrink-0" :style="{ color: 'var(--theme-primary)' }" />
                       <p class="min-w-0 flex-1 truncate text-sm font-medium">
                         {{ row.name }}
                       </p>

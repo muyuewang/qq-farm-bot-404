@@ -89,7 +89,7 @@ onMounted(load)
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-3">
       <div class="min-w-0 flex items-center gap-3">
         <div class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--theme-primary)_12%,transparent)] text-[var(--theme-primary)]">
-          <span class="i-fa-solid-paw text-xl" />
+          <span class="i-fas-paw text-xl" />
         </div>
         <div class="min-w-0">
           <h1 class="text-xl text-gray-900 font-bold sm:text-2xl dark:text-gray-100">
@@ -143,7 +143,7 @@ onMounted(load)
           <div class="guardian-strip flex shrink-0 flex-wrap items-center gap-3 border-b border-gray-200 p-3 sm:flex-nowrap dark:border-gray-700 sm:p-4">
             <div class="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-gray-50 dark:bg-gray-700/60">
               <img v-if="deployed?.image" :src="deployed.image" :alt="deployed.name" class="h-14 w-14 object-contain">
-              <span v-else class="i-fa-solid-paw text-2xl text-gray-300 dark:text-gray-500" />
+              <span v-else class="i-fas-paw text-2xl text-gray-300 dark:text-gray-500" />
             </div>
             <div class="min-w-0 flex-1">
               <div class="mb-1 flex flex-wrap items-center gap-2">
@@ -193,7 +193,7 @@ onMounted(load)
               <div class="min-w-0 flex items-start gap-2.5">
                 <div class="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-gray-50 dark:bg-gray-700/70">
                   <img v-if="dog.image" :src="dog.image" :alt="dog.name" loading="lazy" class="h-13 w-13 object-contain">
-                  <span v-else class="i-fa-solid-paw text-xl text-gray-300 dark:text-gray-500" />
+                  <span v-else class="i-fas-paw text-xl text-gray-300 dark:text-gray-500" />
                 </div>
                 <div class="min-w-0 flex-1 pt-0.5">
                   <div class="flex items-start justify-between gap-1">

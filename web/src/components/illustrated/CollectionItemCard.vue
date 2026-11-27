@@ -40,7 +40,7 @@ const upgradeLabel = computed(() => (props.item.activated ? '升星' : '激活')
             ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
             : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300'"
       >
-        <span v-if="item.isNew" class="i-carbon-new-report text-xs" />
+        <span v-if="item.isNew" class="i-carbon-star text-xs" />
         {{ item.displayed ? '展示中' : item.activated ? '已激活' : item.unlocked ? '可激活' : '未解锁' }}
       </span>
       <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-14 max-w-14 object-contain">

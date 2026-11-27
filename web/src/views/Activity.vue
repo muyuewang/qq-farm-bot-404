@@ -272,7 +272,7 @@ const activityCards = computed(() => {
       icon: {
         '': 'i-carbon-calendar',
         'milk-tea': 'i-carbon-cafe',
-        'pet-diary': 'i-fa-solid-paw',
+        'pet-diary': 'i-fas-paw',
         'charity-flower': 'i-carbon-favorite',
         'rain-poem': 'i-carbon-rain-heavy',
         'wish-sign': 'i-carbon-sun',
