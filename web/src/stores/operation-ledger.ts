@@ -11,10 +11,17 @@ export interface OperationItem {
   count: number
 }
 
+/** 后端按场景统一口径算好的标准指标：经验、收入、支出（农场为金币，牧场为金券）。 */
+export interface EntryMetrics {
+  exp: number
+  income: number
+  expense: number
+}
+
 export interface FarmEntry {
   id: string
   ts: number
-  op: 'buy_seed' | 'plant' | 'harvest' | 'sell'
+  op: 'buy_seed' | 'plant' | 'fertilize' | 'harvest' | 'sell'
   seedId?: number
   seedName?: string
   count?: number
@@ -22,10 +29,16 @@ export interface FarmEntry {
   unitPrice?: number
   landCount?: number
   landIds?: number[]
+  fertilizerId?: number
+  fertilizerName?: string
+  times?: number
   harvestCount?: number
   harvestInfo?: Array<{ landId: number, plantId?: number, name?: string, exp?: number }>
   items?: OperationItem[]
   goldEarned?: number
+  actionLabel?: string
+  day?: string
+  metrics?: EntryMetrics
 }
 
 export interface RanchEntry {
@@ -36,29 +49,27 @@ export interface RanchEntry {
   completed: number
   costs: OperationItem[]
   rewards: OperationItem[]
+  actionLabel?: string
+  day?: string
+  metrics?: EntryMetrics
 }
 
-export interface FarmSummaryItem {
+export interface ActionSummary extends EntryMetrics {
+  key: string
+  label: string
   times: number
-  quantity: number
-  gold: number
-  exp: number
 }
 
-export interface RanchSummary {
-  actions: Array<{ action: string, label: string, times: number, completed: number }>
-  costs: OperationItem[]
-  rewards: OperationItem[]
+/** 农作物与牧场共用的汇总结构。 */
+export interface OperationSummary {
+  expLabel: string
+  currency: { id: number, name: string }
+  standardItemIds: number[]
+  total: EntryMetrics & { times: number }
+  actions: ActionSummary[]
 }
 
 export type OperationEntry = FarmEntry | RanchEntry
-
-interface FarmSummary {
-  buy_seed: FarmSummaryItem
-  plant: FarmSummaryItem
-  harvest: FarmSummaryItem
-  sell: FarmSummaryItem
-}
 
 const PAGE_SIZE = 100
 
@@ -67,7 +78,10 @@ export const useOperationLedgerStore = defineStore('operationLedger', () => {
 
   const scene = ref<OperationScene>('farm')
   const entries = ref<OperationEntry[]>([])
-  const summary = ref<FarmSummary | RanchSummary | null>(null)
+  const summary = ref<OperationSummary | null>(null)
+  // 服务器时区的今天与逐日条数（按当前筛选统计全部记录，不受分页影响）
+  const today = ref('')
+  const dayCounts = ref<Record<string, number>>({})
   const hasMore = ref(false)
   const nextCursor = ref('')
   const loading = ref(false)
@@ -94,6 +108,8 @@ export const useOperationLedgerStore = defineStore('operationLedger', () => {
     const current = ++generation
     entries.value = []
     summary.value = null
+    today.value = ''
+    dayCounts.value = {}
     hasMore.value = false
     nextCursor.value = ''
     error.value = ''
@@ -115,6 +131,8 @@ export const useOperationLedgerStore = defineStore('operationLedger', () => {
         throw new Error(data?.error || '流水读取失败')
       entries.value = data.data.entries || []
       summary.value = data.data.summary || null
+      today.value = data.data.today || ''
+      dayCounts.value = data.data.dayCounts || {}
       hasMore.value = !!data.data.hasMore
       nextCursor.value = data.data.nextCursor || ''
     }
@@ -189,6 +207,8 @@ export const useOperationLedgerStore = defineStore('operationLedger', () => {
     scene,
     entries,
     summary,
+    today,
+    dayCounts,
     hasMore,
     loading,
     loadingMore,

@@ -131,11 +131,12 @@ function entryTitle(entry: LedgerEntry) {
       >
         <div class="min-w-0 flex items-center gap-2.5">
           <img :src="currencyIcon(entry.currency)" :alt="currencyLabel(entry.currency)" class="h-5 w-5 shrink-0 object-contain">
+          <span class="shrink-0 text-sm text-gray-600 font-medium dark:text-gray-300">{{ currencyLabel(entry.currency) }}</span>
           <div class="min-w-0">
             <div class="truncate text-sm" :title="entryTitle(entry)">
               {{ entry.reason }}
             </div>
-            <div class="text-xs text-gray-400">
+            <div class="text-xs text-gray-400 tabular-nums">
               {{ formatTime(entry.ts) }}
             </div>
           </div>

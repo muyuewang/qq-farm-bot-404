@@ -104,6 +104,16 @@ async function fertilizeOne(landId: number, fertilizerId: number = NORMAL_FERTIL
     return fertilizeBatch([landId], fertilizerId);
 }
 
+// 农作物流水：自动施肥、临熟催熟、手动施肥都经过这里，只记服务端确认成功的施肥；旁路记录出错不影响施肥。
+function recordFertilizeLedger(fertilizerId: number, appliedLandIds: number[]): void {
+    if (appliedLandIds.length === 0) return;
+    try {
+        require('../operation-ledger').recordFertilize({ fertilizerId, landIds: appliedLandIds });
+    } catch {
+        // ignore
+    }
+}
+
 // 官方一键施肥：一条请求提交多个地块，每个地块只施一次。
 async function fertilizeBatch(landIds: number[], fertilizerId: number): Promise<any> {
     const body = types.FertilizeRequest.encode(types.FertilizeRequest.create({
@@ -115,6 +125,12 @@ async function fertilizeBatch(landIds: number[], fertilizerId: number): Promise<
     if (reply.operation_limits && onOperationLimitsUpdate) {
         onOperationLimitsUpdate(reply.operation_limits);
     }
+    // 回包 land 里出现的目标地块才算施肥成功，与一键施肥、临熟催熟的计数口径一致。
+    const requested = new Set<number>(landIds.map((landId: number) => toNum(landId)));
+    const applied = new Set<number>((Array.isArray(reply.land) ? reply.land : [])
+        .map((land: any) => toNum(land?.id))
+        .filter((landId: number) => requested.has(landId)));
+    recordFertilizeLedger(fertilizerId, [...applied]);
     return reply;
 }
 
@@ -136,30 +152,37 @@ function isSkippableFertilizeLandError(error: any): boolean {
  */
 async function fertilize(landIds: number[], fertilizerId: number = NORMAL_FERTILIZER_ID, propagateErrors: boolean = false): Promise<number> {
     let successCount: number = 0;
-    for (const landId of landIds) {
-        try {
-            const body = types.FertilizeRequest.encode(types.FertilizeRequest.create({
-                land_ids: [toLong(landId)],
-                fertilizer_id: toLong(fertilizerId),
-            })).finish();
-            await sendMsgAsync('gamepb.plantpb.PlantService', 'Fertilize', body);
-            successCount++;
-        } catch (error) {
-            if (isSkippableFertilizeLandError(error)) {
-                log('施肥', `第 ${landId} 块地当前不能施肥，已跳过`, {
-                    module: 'farm',
-                    event: '施肥',
-                    result: 'skip',
-                    landId,
-                    code: getGatewayErrorCode(error),
-                });
-            } else if (propagateErrors) {
-                throw error;
-            } else {
-                break;
+    const applied: number[] = [];
+    try {
+        for (const landId of landIds) {
+            try {
+                const body = types.FertilizeRequest.encode(types.FertilizeRequest.create({
+                    land_ids: [toLong(landId)],
+                    fertilizer_id: toLong(fertilizerId),
+                })).finish();
+                await sendMsgAsync('gamepb.plantpb.PlantService', 'Fertilize', body);
+                successCount++;
+                applied.push(toNum(landId));
+            } catch (error) {
+                if (isSkippableFertilizeLandError(error)) {
+                    log('施肥', `第 ${landId} 块地当前不能施肥，已跳过`, {
+                        module: 'farm',
+                        event: '施肥',
+                        result: 'skip',
+                        landId,
+                        code: getGatewayErrorCode(error),
+                    });
+                } else if (propagateErrors) {
+                    throw error;
+                } else {
+                    break;
+                }
             }
+            if (landIds.length > 1) await sleep(50);  // 50ms 间隔
         }
-        if (landIds.length > 1) await sleep(50);  // 50ms 间隔
+    } finally {
+        // propagateErrors 中途抛错时，之前已经成功的施肥也要入账
+        recordFertilizeLedger(fertilizerId, applied);
     }
     return successCount;
 }
@@ -174,28 +197,35 @@ async function fertilizeOrganicLoop(landIds: number[] | any[], propagateErrors: 
 
     let successCount: number = 0;
     let idx: number = 0;
+    const applied: number[] = [];
     const operationLimit = Math.min(
         MAX_ORGANIC_FERTILIZE_OPERATIONS,
         ids.length * MAX_ORGANIC_FERTILIZE_ROUNDS,
     );
 
-    while (successCount < operationLimit) {
-        const landId = ids[idx];
-        try {
-            const body = types.FertilizeRequest.encode(types.FertilizeRequest.create({
-                land_ids: [toLong(landId)],
-                fertilizer_id: toLong(ORGANIC_FERTILIZER_ID),
-            })).finish();
-            await sendMsgAsync('gamepb.plantpb.PlantService', 'Fertilize', body);
-            successCount++;
-        } catch (error) {
-            // 常见是有机肥耗尽，按需求直接停止
-            if (propagateErrors) throw error;
-            break;
-        }
+    try {
+        while (successCount < operationLimit) {
+            const landId = ids[idx];
+            try {
+                const body = types.FertilizeRequest.encode(types.FertilizeRequest.create({
+                    land_ids: [toLong(landId)],
+                    fertilizer_id: toLong(ORGANIC_FERTILIZER_ID),
+                })).finish();
+                await sendMsgAsync('gamepb.plantpb.PlantService', 'Fertilize', body);
+                successCount++;
+                applied.push(toNum(landId));
+            } catch (error) {
+                // 常见是有机肥耗尽，按需求直接停止
+                if (propagateErrors) throw error;
+                break;
+            }
 
-        idx = (idx + 1) % ids.length;
-        await randomDelay(1000, 1500);
+            idx = (idx + 1) % ids.length;
+            await randomDelay(1000, 1500);
+        }
+    } finally {
+        // 整轮循环合并成一条流水；中途抛错时已成功的部分同样入账
+        recordFertilizeLedger(ORGANIC_FERTILIZER_ID, applied);
     }
 
     if (successCount >= operationLimit) {

@@ -1,208 +1,234 @@
 <script setup lang="ts">
-import type { FarmEntry, OperationEntry, RanchEntry, RanchSummary as RanchSummaryType } from '@/stores/operation-ledger'
-import { computed } from 'vue'
+import type { LedgerMetrics, LedgerTone, LedgerViewEntry, MetricKey } from '@/utils/operation-ledger-view'
+import { computed, ref } from 'vue'
 import { useOperationLedgerStore } from '@/stores/operation-ledger'
 import { formatWanAmount } from '@/utils/number-format'
+import {
+  dayLabel,
+  describeEntry,
+  describeRow,
+  groupLedgerEntries,
+  metricsOf,
+  toneOf,
+  topSources,
+} from '@/utils/operation-ledger-view'
 
-// 纯展示组件：拉取、切换场景、刷新都由页面统一调度
+// 纯展示组件：拉取、切换场景、刷新都由页面统一调度。
+// 农作物与牧场同一结构：指标卡 → 动作筛选 → 按天分组的明细，口径由后端归一化。
 const props = defineProps<{ scene: 'farm' | 'ranch' }>()
 
 const store = useOperationLedgerStore()
 
-const FARM_LABELS: Record<string, string> = {
-  buy_seed: '买种子',
-  plant: '种植',
-  harvest: '收获',
-  sell: '出售',
+// 桌面端露出的筛选标签数；手机端横向滚动，全部可见
+const CHIP_LIMIT = 10
+
+const TONE_CLASSES: Record<LedgerTone, string> = {
+  income: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
+  expense: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  exp: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
+  none: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
 }
 
-const emptyText = computed(() => props.scene === 'farm'
-  ? '暂无农作物流水，运行后买种子、种植、收获、出售会自动记录。'
-  : '暂无牧场流水，购买、投喂、生产、收获、出售会自动记录。')
+interface Line {
+  id: string
+  group: boolean
+  expanded: boolean
+  nested: boolean
+  time: string
+  label: string
+  tone: LedgerTone
+  title: string
+  count: number
+  detail: string
+  metrics: LedgerMetrics
+}
 
-const farmSummary = computed(() => {
-  const data = store.summary as any
-  return props.scene === 'farm' && data && 'buy_seed' in data ? data : null
+const chipsExpanded = ref(false)
+const expandedGroups = ref(new Set<string>())
+
+const summary = computed(() => store.summary)
+const actions = computed(() => summary.value?.actions ?? [])
+const expLabel = computed(() => summary.value?.expLabel ?? (props.scene === 'ranch' ? '牧场经验' : '经验'))
+const currencyName = computed(() => summary.value?.currency?.name ?? (props.scene === 'ranch' ? '金券' : '金币'))
+const standardIds = computed(() => new Set(summary.value?.standardItemIds ?? []))
+const showSummary = computed(() => !!summary.value && (summary.value.total.times > 0 || !!store.op))
+
+const emptyText = computed(() => {
+  if (store.op)
+    return '所选动作在当前时间范围内没有记录。'
+  return props.scene === 'farm'
+    ? '暂无农作物流水，运行后买种子、种植、施肥、收获、出售会自动记录。'
+    : '暂无牧场流水，购买、添加罐头、投喂、生产、收获、出售会自动记录。'
 })
 
-const ranchSummary = computed(() => {
-  const data = store.summary as any
-  return props.scene === 'ranch' && data && 'actions' in data ? data as RanchSummaryType : null
-})
+function signedGain(value: number) {
+  return value > 0 ? `+${formatWanAmount(value)}` : '0'
+}
 
-const ranchTotalTimes = computed(() => (ranchSummary.value?.actions || []).reduce((sum, item) => sum + item.times, 0))
+function sourceText(metric: MetricKey, sign: string) {
+  const list = topSources(actions.value, metric)
+  return list.length ? list.map(item => `${item.label} ${sign}${formatWanAmount(item.value)}`).join(' · ') : '暂无'
+}
 
-const farmCards = computed(() => {
-  const data = farmSummary.value
+const kpis = computed(() => {
+  const data = summary.value
   if (!data)
     return []
+  const { exp, income, expense, times } = data.total
+  const net = income - expense
   return [
-    { key: 'buy_seed', label: FARM_LABELS.buy_seed, times: data.buy_seed.times, value: `${data.buy_seed.quantity} 个`, hint: `花费 ${formatWanAmount(data.buy_seed.gold)} 金币` },
-    { key: 'plant', label: FARM_LABELS.plant, times: data.plant.times, value: `${data.plant.quantity} 块`, hint: '已种植地块' },
-    { key: 'harvest', label: FARM_LABELS.harvest, times: data.harvest.times, value: `${data.harvest.quantity} 块`, hint: `经验 +${formatWanAmount(data.harvest.exp)}` },
-    { key: 'sell', label: FARM_LABELS.sell, times: data.sell.times, value: `${formatWanAmount(data.sell.quantity)} 个`, hint: `收入 ${formatWanAmount(data.sell.gold)} 金币` },
+    { key: 'exp', label: expLabel.value, dot: 'bg-blue-500', value: signedGain(exp), unit: '', valueClass: exp > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400', sub: sourceText('exp', '+') },
+    { key: 'income', label: `${currencyName.value}收入`, dot: 'bg-emerald-500', value: signedGain(income), unit: '', valueClass: income > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400', sub: sourceText('income', '+') },
+    { key: 'expense', label: `${currencyName.value}支出`, dot: 'bg-red-500', value: expense > 0 ? `-${formatWanAmount(expense)}` : '0', unit: '', valueClass: expense > 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400', sub: sourceText('expense', '-') },
+    {
+      key: 'net',
+      label: '净收益',
+      dot: 'bg-gray-400',
+      value: net > 0 ? `+${formatWanAmount(net)}` : formatWanAmount(net),
+      unit: currencyName.value,
+      valueClass: net > 0 ? 'text-emerald-600 dark:text-emerald-400' : net < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400',
+      sub: `共 ${times} 次操作`,
+    },
   ]
 })
 
-function entryLabel(entry: OperationEntry) {
-  return 'op' in entry ? (FARM_LABELS[entry.op] ?? entry.op) : entry.label
+function chipHiddenOnDesktop(index: number, key: string) {
+  return !chipsExpanded.value && index >= CHIP_LIMIT && key !== store.op
 }
 
-function tagClass(entry: OperationEntry) {
-  if (!('op' in entry))
-    return 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300'
-  if (entry.op === 'sell')
-    return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
-  if (entry.op === 'buy_seed')
-    return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
-  if (entry.op === 'harvest')
-    return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-  return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+const hiddenChipCount = computed(() => actions.value.filter((action, index) => chipHiddenOnDesktop(index, action.key)).length)
+
+function selectOp(key: string) {
+  store.setOp(key && store.op === key ? '' : key)
 }
 
-function primaryText(entry: OperationEntry) {
-  if (!('op' in entry)) {
-    const ranch = entry as RanchEntry
-    return ranch.completed > 1 ? `${ranch.label} ×${ranch.completed}` : ranch.label
-  }
-  const farm = entry as FarmEntry
-  if (farm.op === 'buy_seed')
-    return `${farm.seedName ?? `种子${farm.seedId}`} ×${farm.count ?? 0}`
-  if (farm.op === 'plant')
-    return `${farm.seedName ?? `种子${farm.seedId}`} 种下 ${farm.landCount ?? 0} 块`
-  if (farm.op === 'harvest') {
-    const names = Array.from(new Set((farm.harvestInfo || []).map(i => i.name).filter(Boolean)))
-    const count = farm.harvestCount ?? 0
-    return names.length ? `${names.slice(0, 3).join('、')} 共 ${count} 块` : `收获 ${count} 块`
-  }
-  const items = farm.items || []
-  const total = items.reduce((sum, item) => sum + item.count, 0)
-  return `${items.slice(0, 3).map(i => `${i.name}×${i.count}`).join('、')}${items.length > 3 ? ' 等' : ''} 共 ${total} 个`
-}
-
-function secondaryText(entry: OperationEntry) {
-  if (!('op' in entry)) {
-    const ranch = entry as RanchEntry
-    const parts: string[] = []
-    if (ranch.costs?.length)
-      parts.push(`消耗 ${itemLine(ranch.costs)}`)
-    if (ranch.rewards?.length)
-      parts.push(`获得 ${itemLine(ranch.rewards)}`)
-    return parts.join(' · ')
-  }
-  const farm = entry as FarmEntry
-  if (farm.op === 'harvest') {
-    const exp = (farm.harvestInfo || []).reduce((sum, item) => sum + (item.exp || 0), 0)
-    return exp > 0 ? `经验 +${exp}` : ''
-  }
-  if (farm.op === 'plant' && farm.landIds?.length)
-    return `地块 ${farm.landIds.join(', ')}`
-  return ''
-}
-
-function amountText(entry: OperationEntry) {
-  if (!('op' in entry))
-    return ''
-  const farm = entry as FarmEntry
-  if (farm.op === 'buy_seed')
-    return farm.totalCost ? `-${formatWanAmount(farm.totalCost)}` : ''
-  if (farm.op === 'sell')
-    return farm.goldEarned ? `+${formatWanAmount(farm.goldEarned)}` : ''
-  return ''
-}
-
-function amountClass(entry: OperationEntry) {
-  if (!('op' in entry))
-    return ''
-  return (entry as FarmEntry).op === 'sell'
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : 'text-amber-600 dark:text-amber-400'
-}
-
-function itemLine(items?: Array<{ name: string, count: number }>) {
-  if (!items?.length)
-    return ''
-  return items.slice(0, 4).map(item => `${item.name}×${item.count}`).join('、')
+function toggleGroup(id: string) {
+  const next = new Set(expandedGroups.value)
+  if (next.has(id))
+    next.delete(id)
+  else
+    next.add(id)
+  expandedGroups.value = next
 }
 
 function pad(value: number) {
   return String(value).padStart(2, '0')
 }
 
-function formatTime(ts: number) {
+function clock(ts: number) {
   const d = new Date(ts)
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+function timeRange(earliest: number, latest: number) {
+  const from = clock(earliest)
+  const to = clock(latest)
+  return from === to ? to : `${from}–${to}`
+}
+
+// 筛选单一动作时不合并，否则整天的记录会被并成一行
+const dayBlocks = computed(() => {
+  const ids = standardIds.value
+  return groupLedgerEntries(store.entries as LedgerViewEntry[], !store.op).map((day) => {
+    const lines: Line[] = []
+    for (const row of day.rows) {
+      const group = row.entries.length > 1
+      const expanded = group && expandedGroups.value.has(row.id)
+      const text = describeRow(row, ids, formatWanAmount)
+      lines.push({
+        id: row.id,
+        group,
+        expanded,
+        nested: false,
+        time: group ? timeRange(row.earliestTs, row.latestTs) : clock(row.latestTs),
+        label: row.label,
+        tone: toneOf(row.metrics),
+        title: text.title,
+        count: group ? row.entries.length : 0,
+        detail: text.detail,
+        metrics: row.metrics,
+      })
+      if (!expanded)
+        continue
+      for (const entry of row.entries) {
+        const metrics = metricsOf(entry.metrics)
+        const child = describeEntry(entry, ids, formatWanAmount)
+        lines.push({
+          id: `${row.id}:${entry.id}`,
+          group: false,
+          expanded: false,
+          nested: true,
+          time: clock(entry.ts),
+          label: entry.actionLabel || row.label,
+          tone: toneOf(metrics),
+          title: child.title,
+          count: 0,
+          detail: child.detail,
+          metrics,
+        })
+      }
+    }
+    const loaded = day.rows.reduce((sum, row) => sum + row.entries.length, 0)
+    return { day: day.day, label: dayLabel(day.day, store.today), count: store.dayCounts[day.day] ?? loaded, lines }
+  })
+})
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- 农场：四类动作汇总，同时充当筛选入口 -->
-    <div v-if="scene === 'farm' && farmSummary" class="grid gap-2 lg:grid-cols-4 sm:grid-cols-2">
-      <button
-        v-for="card in farmCards"
-        :key="card.key"
-        class="border rounded-xl px-3 py-2.5 text-left shadow-sm transition"
-        :class="[
-          store.op === card.key ? 'text-white' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700/60',
-        ]"
-        :style="store.op === card.key ? { backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-primary)' } : {}"
-        @click="store.setOp(store.op === card.key ? '' : card.key)"
-      >
-        <div class="flex items-center justify-between gap-2">
-          <span class="truncate text-xs" :class="store.op === card.key ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'">{{ card.label }}</span>
-          <span class="shrink-0 text-xs" :class="store.op === card.key ? 'text-white/70' : 'text-gray-400'">{{ card.times }} 次</span>
+  <div class="space-y-3">
+    <template v-if="showSummary && summary">
+      <!-- 标准指标：与货币页汇总卡同风格 -->
+      <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div
+          v-for="card in kpis"
+          :key="card.key"
+          class="min-w-0 border border-gray-200 rounded-xl bg-white px-3 py-2.5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+        >
+          <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <span class="h-2 w-2 shrink-0 rounded-full" :class="card.dot" />
+            <span class="truncate">{{ card.label }}</span>
+          </div>
+          <div class="mt-1 truncate text-lg font-bold tabular-nums" :class="card.valueClass">
+            {{ card.value }}<span v-if="card.unit" class="ml-1 text-xs text-gray-400 font-normal">{{ card.unit }}</span>
+          </div>
+          <div class="truncate text-xs text-gray-400 dark:text-gray-500">
+            {{ card.sub }}
+          </div>
         </div>
-        <div class="mt-1 truncate text-lg font-bold">
-          {{ card.value }}
-        </div>
-        <div class="truncate text-xs" :class="store.op === card.key ? 'text-white/70' : 'text-gray-400 dark:text-gray-500'">
-          {{ card.hint }}
-        </div>
-      </button>
-    </div>
+      </div>
 
-    <!-- 牧场：动作汇总 + 消耗/收益 -->
-    <div v-if="scene === 'ranch' && ranchSummary" class="space-y-2">
-      <div class="flex flex-wrap gap-2">
+      <!-- 动作筛选：桌面端换行并折叠超出部分，手机端横向滚动 -->
+      <div class="flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         <button
-          class="h-9 flex items-center rounded-lg px-3 text-xs font-medium transition"
-          :class="store.op === '' ? 'text-white shadow-sm' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-gray-900/40 dark:text-gray-300 dark:hover:bg-gray-700'"
+          class="h-8 flex shrink-0 items-center gap-1 rounded-full px-3 text-xs font-medium transition"
+          :class="store.op === '' ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
           :style="store.op === '' ? { backgroundColor: 'var(--theme-primary)' } : {}"
-          @click="store.setOp('')"
+          @click="selectOp('')"
         >
-          全部 {{ ranchTotalTimes }} 次
+          全部 <span :class="store.op === '' ? 'text-white/80' : 'text-gray-400'">{{ summary.total.times }}</span>
         </button>
         <button
-          v-for="item in ranchSummary.actions.slice(0, 8)"
-          :key="item.action"
-          class="h-9 flex items-center rounded-lg px-3 text-xs font-medium transition"
-          :class="store.op === item.action ? 'text-white shadow-sm' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-gray-900/40 dark:text-gray-300 dark:hover:bg-gray-700'"
-          :style="store.op === item.action ? { backgroundColor: 'var(--theme-primary)' } : {}"
-          @click="store.setOp(store.op === item.action ? '' : item.action)"
+          v-for="(action, index) in actions"
+          :key="action.key"
+          class="h-8 flex shrink-0 items-center gap-1 rounded-full px-3 text-xs font-medium transition"
+          :class="[
+            store.op === action.key ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600',
+            chipHiddenOnDesktop(index, action.key) ? 'sm:hidden' : '',
+          ]"
+          :style="store.op === action.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
+          @click="selectOp(action.key)"
         >
-          {{ item.label }} {{ item.times }}
+          {{ action.label }} <span :class="store.op === action.key ? 'text-white/80' : 'text-gray-400'">{{ action.times }}</span>
+        </button>
+        <button
+          v-if="actions.length > CHIP_LIMIT"
+          class="hidden h-8 shrink-0 items-center border border-gray-300 rounded-full border-dashed px-3 text-xs text-gray-500 sm:inline-flex dark:border-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700"
+          @click="chipsExpanded = !chipsExpanded"
+        >
+          {{ chipsExpanded ? '收起 ▴' : `更多 ${hiddenChipCount} ▾` }}
         </button>
       </div>
-      <div class="grid gap-2 sm:grid-cols-2">
-        <div class="border border-gray-200 rounded-xl bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div class="text-xs text-gray-500 dark:text-gray-400">
-            累计消耗
-          </div>
-          <div class="mt-1 text-sm">
-            {{ itemLine(ranchSummary.costs) || '—' }}
-          </div>
-        </div>
-        <div class="border border-gray-200 rounded-xl bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-          <div class="text-xs text-gray-500 dark:text-gray-400">
-            累计获得
-          </div>
-          <div class="mt-1 text-sm">
-            {{ itemLine(ranchSummary.rewards) || '—' }}
-          </div>
-        </div>
-      </div>
-    </div>
+    </template>
 
     <!-- 状态 -->
     <div v-if="store.loading && store.entries.length === 0" class="flex justify-center py-12">
@@ -218,30 +244,50 @@ function formatTime(ts: number) {
       {{ emptyText }}
     </div>
 
-    <!-- 明细 -->
+    <!-- 明细：按天分组，一条一行；连续同类记录合并，可展开 -->
     <div v-else class="space-y-2">
-      <div
-        v-for="entry in store.entries"
-        :key="entry.id"
-        class="flex items-start justify-between gap-3 border border-gray-200 rounded-lg bg-white px-3 py-2.5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-      >
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded px-1.5 py-0.5 text-xs" :class="tagClass(entry)">{{ entryLabel(entry) }}</span>
-            <span class="text-sm">{{ primaryText(entry) }}</span>
+      <div class="overflow-hidden border border-gray-200 rounded-xl bg-white dark:border-gray-700 dark:bg-gray-800">
+        <template v-for="day in dayBlocks" :key="day.day">
+          <div class="flex items-center justify-between bg-gray-50 px-3 py-1 text-xs text-gray-400 dark:bg-gray-900/40 dark:text-gray-500">
+            <span>{{ day.label }}</span>
+            <span>{{ day.count }} 条</span>
           </div>
-          <div v-if="secondaryText(entry)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {{ secondaryText(entry) }}
-          </div>
-        </div>
-        <div class="shrink-0 text-right">
-          <div v-if="amountText(entry)" class="text-sm font-semibold" :class="amountClass(entry)">
-            {{ amountText(entry) }}
-          </div>
-          <div class="text-xs text-gray-400">
-            {{ formatTime(entry.ts) }}
-          </div>
-        </div>
+          <component
+            :is="line.group ? 'button' : 'div'"
+            v-for="line in day.lines"
+            :key="line.id"
+            :type="line.group ? 'button' : undefined"
+            class="grid grid-cols-[minmax(0,1fr)_auto] w-full items-center gap-x-3 gap-y-0.5 border-t border-gray-100 px-3 py-2 text-left sm:grid-cols-[6rem_4.5rem_minmax(0,1fr)_auto] dark:border-gray-700/60"
+            :class="[
+              line.nested ? 'bg-gray-50/70 pl-6 dark:bg-gray-900/30' : '',
+              line.group ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40' : '',
+            ]"
+            @click="line.group && toggleGroup(line.id)"
+          >
+            <span class="hidden text-xs text-gray-400 tabular-nums sm:block">{{ line.time }}</span>
+            <span class="hidden sm:block">
+              <span class="whitespace-nowrap rounded px-1.5 py-0.5 text-xs" :class="TONE_CLASSES[line.tone]">{{ line.label }}</span>
+            </span>
+            <div class="min-w-0 flex items-center gap-1.5">
+              <span class="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-xs sm:hidden" :class="TONE_CLASSES[line.tone]">{{ line.label }}</span>
+              <span class="min-w-0 truncate text-sm">
+                {{ line.title }}
+                <span v-if="line.count" class="ml-1 border border-gray-200 rounded-full px-1.5 text-xs text-gray-500 dark:border-gray-600 dark:text-gray-400">×{{ line.count }} {{ line.expanded ? '▴' : '▾' }}</span>
+                <span v-if="line.detail" class="hidden text-xs text-gray-400 sm:inline"> · {{ line.detail }}</span>
+              </span>
+            </div>
+            <div class="row-span-2 flex flex-col items-end gap-0.5 whitespace-nowrap text-right tabular-nums sm:row-span-1 sm:flex-row sm:items-center sm:gap-2">
+              <span v-if="line.metrics.income > 0" class="text-sm text-emerald-600 font-semibold dark:text-emerald-400">+{{ formatWanAmount(line.metrics.income) }} {{ currencyName }}</span>
+              <span v-if="line.metrics.expense > 0" class="text-sm text-red-500 font-semibold dark:text-red-400">-{{ formatWanAmount(line.metrics.expense) }} {{ currencyName }}</span>
+              <span v-if="line.metrics.exp > 0" class="text-xs text-blue-600 dark:text-blue-400">+{{ formatWanAmount(line.metrics.exp) }} 经验</span>
+            </div>
+            <div class="min-w-0 truncate text-xs text-gray-400 tabular-nums sm:hidden">
+              {{ line.time }}<template v-if="line.detail">
+                · {{ line.detail }}
+              </template>
+            </div>
+          </component>
+        </template>
       </div>
 
       <div v-if="store.hasMore" class="flex justify-center pt-1">
