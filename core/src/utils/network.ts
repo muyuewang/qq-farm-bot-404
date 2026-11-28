@@ -9,6 +9,7 @@ const { getClientVersion, getLoginDeviceInfo, isWechatPlatform } = require('./cl
 const { createScheduler } = require('../services/scheduler');
 const { updateStatusFromLogin, updateStatusGold, updateStatusLevel } = require('../services/status');
 const { recordOperation } = require('../services/stats');
+const currencyLedger = require('../services/currency-ledger');
 const { invalidateLandForecast } = require('../services/level-forecast');
 const { types } = require('./proto');
 const { toLong, toNum, syncServerTime, getServerTimeSec, formatDateKeyInTimeZone, log, logWarn, sleep } = require('./utils');
@@ -546,6 +547,41 @@ async function sendMsgNoReply(serviceName: string, methodName: string, bodyBytes
     await sendMsgAsync(serviceName, methodName, bodyBytes, { expectReply: false });
 }
 
+// ============ 货币流水 ============
+// 推送不带变动原因，按推送到达时网关上的请求推断：仍在等回包的请求优先，其次是刚完成的请求。
+const recentCompletedRequests: Array<{ serviceName: string; methodName: string; at: number }> = [];
+const MAX_RECENT_COMPLETED_REQUESTS = 16;
+
+function rememberCompletedRequest(pending: PendingRequest): void {
+    if (!pending.methodName) return;
+    recentCompletedRequests.push({ serviceName: pending.serviceName || '', methodName: pending.methodName, at: performance.now() });
+    if (recentCompletedRequests.length > MAX_RECENT_COMPLETED_REQUESTS) recentCompletedRequests.shift();
+}
+
+function currentLedgerAttribution(): any {
+    const pending = Array.from(pendingCallbacks.values()).map(item => ({
+        serviceName: item.serviceName || '',
+        methodName: item.methodName || '',
+        at: item.startedMono ?? 0,
+    }));
+    return currencyLedger.pickAttribution(pending, recentCompletedRequests, performance.now());
+}
+
+/** 推送里拿到的是权威余额（BasicNotify 金币、RechargeInfoNotify 钻石）。 */
+function recordLedgerBalance(currency: string, balance: number): void {
+    const accountId = process.env.FARM_ACCOUNT_ID || '';
+    if (!accountId) return;
+    currencyLedger.observeBalance(accountId, currency, balance, currentLedgerAttribution());
+}
+
+/** ItemNotify：count > 0 时是变化后的总量，否则只有增量，交给账本按已知余额换算。 */
+function recordLedgerItemChange(currency: string, count: number, delta: number): void {
+    const accountId = process.env.FARM_ACCOUNT_ID || '';
+    if (!accountId) return;
+    if (count > 0) currencyLedger.observeBalance(accountId, currency, count, currentLedgerAttribution());
+    else if (delta !== 0) currencyLedger.observeDelta(accountId, currency, delta, currentLedgerAttribution());
+}
+
 // ============ 消息处理 ============
 function handleMessage(data: Buffer): void {
     try {
@@ -581,6 +617,7 @@ function handleMessage(data: Buffer): void {
 
             if (pending) {
                 pendingCallbacks.delete(clientSeqVal);
+                if (errorCode === 0) rememberCompletedRequest(pending);
                 if (errorCode !== 0) {
                     pending.callback(new GatewayError(meta));
                 } else {
@@ -716,12 +753,14 @@ function handleNotify(msg: any): void {
                             userState.gold = Math.max(0, Number(userState.gold || 0) + delta);
                         }
                         updateStatusGold(userState.gold);
+                        recordLedgerItemChange('gold', count, delta);
                     } else if (id === 1002) {
                         if (count > 0) {
                             userState.coupon = count;
                         } else if (delta !== 0) {
                             userState.coupon = Math.max(0, Number(userState.coupon || 0) + delta);
                         }
+                        recordLedgerItemChange('coupon', count, delta);
                     } else if ((id === 7002 || id === 1008) && delta > 0) {
                         // 集市货币（便便 7002 / 松果 1008）到账即唤醒牧场例程，按最新余额和报价兑换。
                         networkEvents.emit('ranchMarketStockReady', { id, count, delta });
@@ -731,6 +770,7 @@ function handleNotify(msg: any): void {
                         } else if (delta !== 0) {
                             userState.goldBean = Math.max(0, Number(userState.goldBean || 0) + delta);
                         }
+                        recordLedgerItemChange('goldBean', count, delta);
                     }
                 }
             } catch {}
@@ -754,6 +794,7 @@ function handleNotify(msg: any): void {
                         if (Number.isFinite(nextGold) && nextGold >= 0) {
                             userState.gold = nextGold;
                             shouldUpdateGoldView = true;
+                            recordLedgerBalance('gold', nextGold);
                         }
                     }
                     if (hasOwn(notify.basic, 'exp')) {
@@ -887,6 +928,8 @@ function handleNotify(msg: any): void {
             try {
                 const notify = types.RechargeInfoNotify.decode(eventBody);
                 networkEvents.emit('rechargeInfoChanged', notify);
+                // 钻石只下发绝对余额，由账本与上次余额做差
+                if (notify.info && hasOwn(notify.info, 'balance')) recordLedgerBalance('diamond', toNum(notify.info.balance));
             } catch {}
             return;
         }

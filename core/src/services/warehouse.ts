@@ -12,6 +12,7 @@ const { types } = require('../utils/proto');
 const { toLong, toNum, toTimeSec, log, logWarn, sleep, getSystemDateKey } = require('../utils/utils');
 const { getSellConditionContext } = require('./activity-windows');
 const { updateStatusGold } = require('./status');
+const operationLedger = require('./operation-ledger');
 
 const SELL_BATCH_SIZE: number = 15;
 const LOCKABLE_ITEM_TYPES: Set<number> = new Set([17, 6, 5]);
@@ -695,6 +696,8 @@ async function sellAllFruits(): Promise<void> {
         const goldBefore: number = totalsBefore.gold;
         let serverGoldTotal: number = 0;
         let knownGold: number = goldBefore;
+        // 只把服务端确认成功的条目记入农作物流水，逐个重试里被跳过的不算
+        const soldItems: any[] = [];
         for (let i = 0; i < toSell.length; i += SELL_BATCH_SIZE) {
             const batch: any[] = toSell.slice(i, i + SELL_BATCH_SIZE);
             try {
@@ -703,6 +706,7 @@ async function sellAllFruits(): Promise<void> {
                 const gained: number = Math.max(0, toNum(inferred.gain));
                 knownGold = inferred.nextKnownGold;
                 if (gained > 0) serverGoldTotal += gained;
+                soldItems.push(...batch);
             } catch (batchErr: any) {
                 // 某个条目可能参数非法，降级为逐个出售，跳过错误条目
                 logWarn('仓库', `批量出售失败，改为逐个重试: ${batchErr.message}`);
@@ -713,6 +717,7 @@ async function sellAllFruits(): Promise<void> {
                         const gained: number = Math.max(0, toNum(inferred.gain));
                         knownGold = inferred.nextKnownGold;
                         if (gained > 0) serverGoldTotal += gained;
+                        soldItems.push(it);
                     } catch (singleErr: any) {
                         const sid: number = toNum(it.id);
                         const sc: number = toNum(it.count);
@@ -774,6 +779,16 @@ async function sellAllFruits(): Promise<void> {
             totalsDeltaGold,
             totalsDeltaExp,
         });
+
+        if (soldItems.length > 0) {
+            // 同一果实可能分多个批次（不同过期时间），按 ID 合并成一行
+            const merged = new Map<number, number>();
+            for (const it of soldItems) merged.set(toNum(it.id), (merged.get(toNum(it.id)) || 0) + toNum(it.count));
+            operationLedger.recordSell({
+                items: Array.from(merged, ([id, count]) => ({ id, name: getFruitName(id), count })),
+                goldEarned: totalGoldEarned,
+            });
+        }
 
         // 发送出售事件，用于统计金币收益
         if (totalGoldEarned > 0) {

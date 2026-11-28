@@ -11,6 +11,7 @@ const { toNum, log, logWarn, randomDelay } = require('../../utils/utils');
 const { createScheduler } = require('../scheduler');
 const { runExclusiveAutomationTask } = require('../automation-lock');
 const { recordOperation } = require('../stats');
+const farmLedger = require('../operation-ledger');
 const { getAllLands, harvest, farming, unlockLand, upgradeLand } = require('./api');
 const {
     analyzeLands,
@@ -137,13 +138,20 @@ async function harvestMatureOwnLandsOnce(actions: string[], propagateErrors: boo
     if (lands.length === 0) return 0;
 
     const ownGid = toNum(getUserState().gid);
-    const harvestable = autoHarvestLandIds(analyzeLands(lands, false, ownGid));
+    const analysis = analyzeLands(lands, false, ownGid);
+    const harvestable = autoHarvestLandIds(analysis);
     if (harvestable.length === 0) return 0;
 
     try {
         const harvestReply = await harvest(harvestable);
         actions.push(`施肥后收获${harvestable.length}`);
         recordOperation('harvest', harvestable.length);
+        farmLedger.recordHarvest({
+            harvestCount: harvestable.length,
+            harvestInfo: analysis.harvestableInfo
+                .filter((info: any) => harvestable.includes(toNum(info.landId)))
+                .map((info: any) => ({ landId: toNum(info.landId), plantId: toNum(info.plantId), name: info.name, exp: toNum(info.exp) })),
+        });
         networkEvents.emit('farmHarvested', {
             count: harvestable.length,
             landIds: [...harvestable],
@@ -291,6 +299,12 @@ async function runFarmOperation(
                 });
                 actions.push(`收获${harvestable.length}`);
                 recordOperation('harvest', harvestable.length);
+                farmLedger.recordHarvest({
+                    harvestCount: harvestable.length,
+                    harvestInfo: status.harvestableInfo
+                        .filter((info: any) => harvestable.includes(toNum(info.landId)))
+                        .map((info: any) => ({ landId: toNum(info.landId), plantId: toNum(info.plantId), name: info.name, exp: toNum(info.exp) })),
+                });
                 harvestedLandIds = [...harvestable];
                 networkEvents.emit('farmHarvested', {
                     count: harvestable.length,

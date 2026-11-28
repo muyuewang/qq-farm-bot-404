@@ -30,7 +30,20 @@ async function claim(): Promise<any> {
                 throw error('RANCH_RESULT_UNKNOWN', '每日福利领取回包未能确认，请刷新核对，勿重复提交');
             }
             cached = { ...state, claimed: true, available: false };
-            return { skipped: false, claimed: true, rewards: reply.reward_items.map(itemDto) };
+            const rewards = reply.reward_items.map(itemDto);
+            // 免费罐头不经过 operate()，在这里单独记入牧场流水；旁路记录出错不影响领取结果
+            try {
+                require('../operation-ledger').recordRanchOperation({
+                    action: 'claimDailyBenefit',
+                    label: '领取每日福利',
+                    completed: 1,
+                    costs: [],
+                    rewards: rewards.map((item: any) => ({ id: Number(item.id), name: String(item.name || `物品${item.id}`), count: Number(item.count) || 0 })),
+                });
+            } catch {
+                // ignore
+            }
+            return { skipped: false, claimed: true, rewards };
         });
     }));
 }

@@ -12,6 +12,8 @@ const { findAccountByRef } = require('../../services/account-resolver');
 const { updateRuntimeConfig, getRuntimeConfig, getDefaultSystemConfig, getDevicePresets, getTimeZoneOptions } = require('../../config/config');
 const { bindWxCredentialFromCode } = require('../../services/wx-login/credential-binding');
 const { DEFAULT_WX_KICKOUT_RELOGIN } = require('../../services/wx-login/reconnect-config');
+const { readLedger } = require('../../services/currency-ledger');
+const { readFarmLedger, readRanchLedger } = require('../../services/operation-ledger');
 
 const {
     getAccId,
@@ -567,6 +569,45 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
             }
             // Keep live sessions intact. A new login must use a fresh one-time Code.
             res.json({ ok: true, data: { saved, current: getRuntimeConfig() } });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
+    // API: 货币流水（worker 写入磁盘，主进程直接读文件，账号未运行时也能查历史）
+    app.get('/api/currency-ledger', (req: Request, res: Response) => {
+        const id = getAccId(ctx, req);
+        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
+        try {
+            const data = readLedger(id, {
+                days: req.query.days,
+                currency: req.query.currency,
+                limit: req.query.limit,
+                before: req.query.before ? String(req.query.before) : '',
+            });
+            res.json({ ok: true, data });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
+    // API: 农作物流水 / 牧场流水（同一套查询参数，scene 决定读哪个账本）
+    app.get('/api/operation-ledger', (req: Request, res: Response) => {
+        const id = getAccId(ctx, req);
+        if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
+        const scene = String(req.query.scene || 'farm');
+        if (scene !== 'farm' && scene !== 'ranch') {
+            return res.status(400).json({ ok: false, error: 'scene 只能是 farm 或 ranch' });
+        }
+        try {
+            const query = {
+                days: req.query.days,
+                op: req.query.op ? String(req.query.op) : '',
+                limit: req.query.limit,
+                before: req.query.before ? String(req.query.before) : '',
+            };
+            const data = scene === 'ranch' ? readRanchLedger(id, query) : readFarmLedger(id, query);
+            res.json({ ok: true, data });
         } catch (e: any) {
             handleApiError(res, e);
         }

@@ -99,18 +99,19 @@ test('patrol reuses its land read and rechecks once for harvest only after succe
         const calls = [];
         const land = growingLand(1, 120);
         const status = { harvestable: [], needWeed: [], needBug: [], needWater: [], needInteractionCleanup: [],
-            dead: [], empty: [], unlockable: [], upgradable: [], growing: [1] };
+            dead: [], empty: [], unlockable: [], upgradable: [], growing: [1], harvestableInfo: [] };
         const { runFarmOperation } = load('../dist/services/farm/scheduler', {
             '../../models/store': { getAutomation: () => ({ fertilizer: 'normal_ripen' }), isAutomationOn: () => false },
             '../../utils/network': { getUserState: () => ({ gid: 1 }), networkEvents: { emit() {} } },
             '../../utils/utils': { toNum: Number, log() {}, logWarn() {} },
             '../stats': { recordOperation() {} },
+            '../operation-ledger': { recordHarvest() {} },
             './api': {
                 getAllLands: async () => { calls.push('read'); return { lands: [land] }; },
                 harvest: async ids => { calls.push(`harvest:${ids.join(',')}`); return {}; },
             },
             './land-analysis': {
-                analyzeLands: () => calls.includes('ripen') ? { ...status, harvestable: [1] } : status,
+                analyzeLands: () => calls.includes('ripen') ? { ...status, harvestable: [1], harvestableInfo: [{ landId: 1, plantId: 20104, name: '非洲菊', exp: 30 }] } : status,
                 getCleanableFarmSocialEventItemIds: () => [], resolveRemovableHarvestedLands: async () => ({ growing: [] }),
             },
             './ripening': {

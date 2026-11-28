@@ -13,6 +13,7 @@ const { types } = require('../../utils/proto');
 const { getPlantRankings } = require('../analytics');
 const { recordOperation } = require('../stats');
 const { getBagSeeds } = require('../warehouse');
+const farmLedger = require('../operation-ledger');
 const { getCareerInfoOrNull } = require('../career');
 const { getAllLands, buyGoods, removePlant, fertilizeOne } = require('./api');
 // 临熟催熟逻辑抽到 ripening.ts，这里只负责按策略调度。
@@ -199,6 +200,14 @@ async function plantSeeds(seedId: number | string, landIds: number[], options: {
     }
     if (!uncertain && plantedLandIds.length > 0 && selectedLayouts.length < requestedLayouts.length) {
         pacing.deferred = true;
+    }
+    if (!uncertain && plantedLandIds.length > 0) {
+        farmLedger.recordPlant({
+            seedId: toNum(seedId),
+            seedName: getPlantNameBySeedId(toNum(seedId)),
+            landCount: new Set(plantedLandIds).size,
+            landIds: [...new Set(plantedLandIds)],
+        });
     }
     return {
         planted: plantedLandIds.length,
@@ -593,9 +602,20 @@ async function purchaseSeed(goodsIdInput: unknown, countInput: unknown): Promise
     const price = toNum(goods.price);
     if (price <= 0 || toNum(state.gold) < price * count) throw new Error('金币不足或商品价格无效');
     const reply = await buyGoods(goodsId, count, price);
+    let paidGold = 0;
     for (const item of reply.cost_items || []) {
-        if (toNum(item.id) === 1001) state.gold = Math.max(0, toNum(state.gold) - toNum(item.count));
+        if (toNum(item.id) === 1001) {
+            paidGold += toNum(item.count);
+            state.gold = Math.max(0, toNum(state.gold) - toNum(item.count));
+        }
     }
+    farmLedger.recordBuySeed({
+        seedId: toNum(goods.item_id),
+        seedName: getPlantNameBySeedId(toNum(goods.item_id)),
+        count,
+        totalCost: paidGold,
+        unitPrice: price,
+    });
     return reply;
 }
 
@@ -1065,6 +1085,13 @@ async function plantFromShop(landsToPlant: number[], state: any, overrideStrateg
             if (buyReply.cost_items) {
                 for (const item of buyReply.cost_items) state.gold -= toNum(item.count);
             }
+            farmLedger.recordBuySeed({
+                seedId: actualSeedId,
+                seedName: getPlantNameBySeedId(actualSeedId),
+                count: receivedSeedCount,
+                totalCost: candidate.price * purchaseUnits,
+                unitPrice: candidate.price,
+            });
             log('购买', `已购买${getPlantNameBySeedId(actualSeedId)}种子 x${purchaseUnits * unitItemCount}, 花费 ${candidate.price * purchaseUnits} 金币`, {
                 module: 'warehouse', event: '购买种子', result: 'ok', seedId: actualSeedId,
                 count: purchaseUnits * unitItemCount, purchaseUnits, cost: candidate.price * purchaseUnits
