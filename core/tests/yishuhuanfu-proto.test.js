@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const protobuf = require('protobufjs');
@@ -159,7 +160,8 @@ test('yishuhuanfu operate replies decode the verified result slots', async () =>
     assert.equal(int64(exchange9.yshf_exchange.grant.item_id), 101623);
     assert.equal(int64(exchange9.yshf_exchange.balance), 27120);
 
-    // cmd 98：分享给 4 个种子，带 share key
+    // cmd 98：分享给 4 个种子。2 号位是 32 位邀请码（与 GetShareKey 同源），
+    // 不是分享卡片里的 UUID 标识——这一点在 2026-11-28 的抓包里被纠正。
     const share = Reply.decode(Buffer.from(
         '08dc8590c6071062b20c6e0a0608d39e0110041021188201225a08f9d6ffc504122034323136393435366334623934386539613532613338336537303865636433311a20333335413841313034343335313044323139444538383436364135453833463220022a0c08dc8590c60710f9d6ffc50428da683001',
         'hex',
@@ -168,7 +170,7 @@ test('yishuhuanfu operate replies decode the verified result slots', async () =>
     assert.equal(int64(share.yshf_share.grant.item_id), 20307);
     assert.equal(int64(share.yshf_share.grant.count), 4);
     assert.equal(int64(share.yshf_share.price), 33);
-    assert.equal(share.yshf_share.shop.share_key, '42169456c4b948e9a52a383e708ecd31');
+    assert.equal(share.yshf_share.shop.invite_key, '42169456c4b948e9a52a383e708ecd31');
 });
 
 test('yishuhuanfu catalog decodes all ten price tiers', async () => {
@@ -190,7 +192,7 @@ test('yishuhuanfu catalog decodes all ten price tiers', async () => {
 test('yishuhuanfu catalog marks exchanged tiers after a purchase', async () => {
     const root = await loadRoot();
     const Reply = root.lookupType('gamepb.activitypb.ActivityOperateReply');
-    // 兑换第 9、10 档之后重新拉目录：这两档多了 field 5/6，且目录尾部带上了余额。
+    // 兑换第 9、10 档之后重新拉目录：这两档带上了累计已兑次数 exchanged，且目录尾部带上了余额。
     const reply = Reply.decode(Buffer.from(
         '08dc8590c6071061aa0c86010a0a080110c0843d180220010a0a080210e0d4031802201c0a0a080310c0b802180220280a0a080410c0b802180220280a0b080510b4421802203238010a0a080610e0da011802200a0a0a080710e0da011802200a0a0a080810e0da011802200a0a0e080910b891021802200a280130010a0f080a10d8361802203228013001380110f0d301',
         'hex',
@@ -200,13 +202,13 @@ test('yishuhuanfu catalog marks exchanged tiers after a purchase', async () => {
     const tier1 = goods.find(entry => int64(entry.index) === 1);
     const tier9 = goods.find(entry => int64(entry.index) === 9);
     const tier10 = goods.find(entry => int64(entry.index) === 10);
-    // 刚兑过的两档带 field 5/6（实机均为 1），没兑过的档位没有。
+    // 刚兑过的两档带 exchanged（实机均为 1），没兑过的档位没有。
     assert.equal(int64(tier9.field_5), 1);
-    assert.equal(int64(tier9.field_6), 1);
+    assert.equal(int64(tier9.exchanged), 1);
     assert.equal(int64(tier10.field_5), 1);
-    assert.equal(int64(tier10.field_6), 1);
+    assert.equal(int64(tier10.exchanged), 1);
     assert.equal(int64(tier1.field_5), 0);
-    assert.equal(int64(tier1.field_6), 0);
+    assert.equal(int64(tier1.exchanged), 0);
     // 目录尾部的余额与 cmd 96 回包、状态槽 field 3 三处一致。
     assert.equal(int64(reply.yshf_catalog.field_2), 27120);
     // 限购数量不因兑换而变化，仍是配置值。
@@ -271,4 +273,69 @@ test('yishuhuanfu cmd 95 and 99 replies round-trip their capture layout', async 
     assert.equal(int64(commission.amount), 86);
     assert.equal(int64(commission.field_3), 1);
     assert.equal(int64(commission.balance), 32156);
+});
+
+/**
+ * 2026-11-28 15:29 抓包（QQ 经典农场 1.17.1.13，gate-obt.nqf.qq.com）。
+ * 这一版服务端给「卖薯给好友」加了分享标识校验，并开始下发兑换档位的已兑次数。
+ * 下面三段都是抓包里对应槽位的原始字节，直接解，不经过本地再编码。
+ */
+test('yishuhuanfu 2026-11-28 slots: catalog used count, exchange write-back, share ref', async () => {
+    const root = await loadRoot();
+    const Catalog = root.lookupType('gamepb.activitypb.YshfCatalog');
+    const Exchange = root.lookupType('gamepb.activitypb.YshfExchangeReply');
+    const Share = root.lookupType('gamepb.activitypb.YshfShareReply');
+
+    // cmd 97 回包 slot 197：第 2 档 limit=28、exchanged=13 → 界面「限购 15/28」。
+    const catalog = Catalog.decode(Buffer.from(
+        '0a0a080110c0843d180220010a0e080210e0d4031802201c300d38010a0c080310c0b8021802202838010a0e080410c0b80218022028300138010a0b080510b4421802203238010a0c080610e0da011802200a38010a0c080710e0da011802200a38010a0e080810e0da011802200a300138010a0c080910b891021802200a38010a0b080a10d83618022032380110eccc0d',
+        'hex',
+    ));
+    assert.equal(catalog.goods.length, 10);
+    const tier2 = catalog.goods.find(entry => int64(entry.index) === 2);
+    assert.equal(int64(tier2.limit), 28);
+    assert.equal(int64(tier2.exchanged), 13);
+    // 目录尾部的福气币余额，与状态槽 130.3、卖薯回包 field 5 三处一致。
+    assert.equal(int64(catalog.field_2), 222828);
+    // 只兑过 1 次的第 4 档也带 exchanged，说明它不是「今日已兑」的布尔标记。
+    assert.equal(int64(catalog.goods.find(entry => int64(entry.index) === 4).exchanged), 1);
+
+    // cmd 96 回包 slot 196：兑 3 次后 exchanged=16（13+3），余额 42828 → 界面「限购 12/28」。
+    const exchange = Exchange.decode(Buffer.from(
+        '08a0fe0a121708fb99061003188092b8c398feffffff013088ff01380118ccce0220032810',
+        'hex',
+    ));
+    assert.equal(int64(exchange.price), 180000);
+    assert.equal(int64(exchange.grant.item_id), 101627);
+    assert.equal(int64(exchange.grant.count), 3);
+    assert.equal(int64(exchange.balance), 42828);
+    assert.equal(int64(exchange.count), 3);
+    assert.equal(int64(exchange.exchanged), 16);
+
+    // cmd 98 回包 slot 198：5 号位才是分享卡片里的铺子标识（UUID）。
+    const share = Share.decode(Buffer.from(
+        '189f0122800108f5effbc704122035326162356531363939346234313130623463376666373933363766636530331a20384130393431343434303830424134334139364144343334364534364131424520022a3208dc8590c60710f5effbc7041a2430643065353235632d316633652d343133332d383964362d64613333366438343565323928c88501',
+        'hex',
+    ));
+    assert.equal(int64(share.shop.gid), 1224669173);
+    assert.equal(share.shop.invite_key, '52ab5e16994b4110b4c7ff79367fce03');
+    assert.equal(share.shop.shop_ref.share_key, '0d0e525c-1f3e-4133-89d6-da336d845e29');
+    assert.equal(String(share.shop.shop_ref.activity_id), '2026111708');
+    assert.equal(String(share.shop.shop_ref.gid), '1224669173');
+});
+
+/**
+ * 静态契约：分享标识只有「导入」和「移出」两个写入口，两者都必须落到 provider 的同名方法上。
+ * 服务端没有按 gid 反查好友标识的接口，删掉任一入口都会让面板外的真人好友永远不可售
+ * （或者让误加的铺子只能等下一天分享才能消失）。
+ *
+ * 覆盖文件：core/src/controllers/admin/activity-center/yishuhuanfu-routes.ts
+ */
+test('yishuhuanfu routes expose share-key import and removal endpoints', () => {
+    const file = path.join(__dirname, '../src/controllers/admin/activity-center/yishuhuanfu-routes.ts');
+    const source = fs.readFileSync(file, 'utf8');
+    assert.match(source, /\/api\/activity-center\/yishuhuanfu\/share-key'/, '缺少导入标识路由');
+    assert.match(source, /\/api\/activity-center\/yishuhuanfu\/share-key\/remove'/, '缺少移出比价路由');
+    assert.match(source, /importYishuHuanfuShareKey/, '导入路由没有接到 provider');
+    assert.match(source, /forgetYishuHuanfuShareKey/, '移出路由没有接到 provider');
 });

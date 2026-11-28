@@ -628,5 +628,7 @@ module.exports = {
     scanYishuHuanfuFriendShops: yishuHuanfuService.scanYishuHuanfuFriendShops,
     exchangeYishuHuanfuGoods: yishuHuanfuService.exchangeYishuHuanfuGoods,
     shareYishuHuanfuShop: yishuHuanfuService.shareYishuHuanfuShop,
+    importYishuHuanfuShareKey: yishuHuanfuService.importYishuHuanfuShareKey,
+    forgetYishuHuanfuShareKey: yishuHuanfuService.forgetYishuHuanfuShareKey,
 };
 

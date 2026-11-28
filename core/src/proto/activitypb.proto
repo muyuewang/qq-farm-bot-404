@@ -185,12 +185,17 @@ message YshfCatalogGoods {
     int64 index = 1;
     int64 price = 2;
     int64 status = 3;
-    // 该档限购数量：实机 1 / 28 / 40 / 50 / 10，与界面逐档一致。
+    // 该档限购总数：实机 1 / 28 / 40 / 50 / 10，与界面「限购 x/y」的分母一致。
     int64 limit = 4;
-    // 下面三个字段只在兑换过之后出现，实机均取值 1，疑似今日/累计兑换次数与
-    // 达上限标记，未取得跨多日的样本，不做语义断言。
+    // 该档累计已兑换次数。2026-11-28 15:29 抓包实证：
+    //   index 2（福气金豆礼包，limit=28）此前 UI「限购 15/28」→ 此处 13，28−13=15；
+    //   再兑换 3 次后 cmd 96 回包 field 5 = 16，UI 变「限购 12/28」，28−16=12。
+    // 因此剩余可兑 = limit − exchanged，界面必须用它渲染，不能直接显示 limit。
+    int64 exchanged = 6;
+    // 5 号位在本轮抓包里始终缺失，语义未取证，保留原始编号不做断言。
     int64 field_5 = 5;
-    int64 field_6 = 6;
+    // 7 号位除 index 1 外恒为 1，与是否兑换过不对应（index 3 没兑换过也是 1），
+    // 语义未取证，不解成「已兑满」之类的开关。
     int64 field_7 = 7;
 }
 
@@ -217,13 +222,33 @@ message YshfShopBrief {
     int64 level = 4;
 }
 
-// 分享回包里的本人铺子信息（cmd 98），field 2 为分享 key。
+// cmd 92 / cmd 93 里的「好友铺子分享标识」。
+// 2026-11-28 15:29 抓包（QQ 经典农场 1.17.1.13）：每日分享（cmd 98）后，分享出去
+// 的铺子卡片会带一个当天唯一的 share_key，别人点卡片进来卖薯时必须原样回传，
+// 否则服务端不认这条成交——只带 gid 的旧「强制卖」方式从这天起失效。
+// 实测 share_key 形如 0d0e525c-1f3e-4133-89d6-da336d845e29（带连字符的 UUID），
+// 与 FriendService.GetShareKey 返回的 32 位十六进制串不是同一个值，不要混用。
+message YshfShopRef {
+    int64 activity_id = 1;
+    int64 gid = 2;
+    string share_key = 3;
+}
+
+// 分享回包里的本人铺子信息（cmd 98）。
+// 2026-11-28 15:29 抓包纠正了早期理解：2 号位是 FriendService.GetShareKey 同值的
+// 32 位十六进制邀请码，不是分享卡片里的标识；真正要回传的是 5 号位 shop_ref
+// （activity_id + gid + UUID 形式的 share_key）。之前把 2 号位当 share_key 用，
+// 拿到的值永远和卡片里那个 UUID 对不上。
 message YshfSelfShop {
     int64 gid = 1;
-    string share_key = 2;
-    string avatar = 3;
-    int64 level = 4;
-    bytes field_5 = 5;
+    // 32 位十六进制邀请码，与 GetShareKey 回包一致，实测 52ab5e16994b4110b4c7ff79367fce03。
+    string invite_key = 2;
+    // 账号 openid 哈希，头像 URL 里也带这一段（86 位大写十六进制）。
+    string openid_hash = 3;
+    int64 field_4 = 4;
+    // 分享卡片里的铺子标识，别人点卡片卖薯时回传它。
+    YshfShopRef shop_ref = 5;
+    int64 field_6 = 6;
 }
 
 // cmd 92 结果：某铺子的今日行情。这是只读查询，不会产生成交。
@@ -281,7 +306,11 @@ message YshfClaimSeedRequest {
 
 // cmd 92 查询指定铺子的今日行情。shop_gid 传本人 gid 即查自己铺子。
 message YshfShopQueryRequest {
-    message Params { int64 shop_gid = 1; }
+    message Params {
+        int64 shop_gid = 1;
+        // 查好友铺子时带上对方当天的分享标识；查自己铺子时实机不带这个字段。
+        YshfShopRef shop = 2;
+    }
     int64 activity_id = 1;
     int64 cmd = 2;
     Params params = 192;
@@ -292,6 +321,8 @@ message YshfSellRequest {
     message Params {
         int64 shop_gid = 1;
         int64 count = 2;
+        // 卖给好友铺子时必带对方当天的分享标识（同 cmd 92 的 shop 字段）。
+        YshfShopRef shop = 3;
     }
     int64 activity_id = 1;
     int64 cmd = 2;
@@ -376,8 +407,11 @@ message YshfExchangeReply {
     YshfExchangeGrant grant = 2;
     // 兑换后福气币余额，实机 62120 / 27120。
     int64 balance = 3;
-    int64 field_4 = 4;
-    int64 field_5 = 5;
+    // 本次兑换次数，实机 3（与请求 count 一致）。
+    int64 count = 4;
+    // 兑换后该档的累计已兑换次数，实机 16 = 13 + 3，与 cmd 97 的 exchanged 同源。
+    // 用它回写目录，界面上的「限购」才会从 15/28 变成 12/28。
+    int64 exchanged = 5;
 }
 
 // cmd 97 查询兑换目录。

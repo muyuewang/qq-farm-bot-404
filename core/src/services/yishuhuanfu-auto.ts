@@ -31,15 +31,23 @@ const YISHU_INITIAL_DELAY_MS = 260000;
 const YISHU_STEP_SPACER_MS = 1200;
 // 单轮最多切换几家铺子：每卖一家就是一次 cmd 93 写，铺子越多越像脚本。
 const YISHU_MAX_SHOPS_PER_RUN = 3;
-// 这两种错误说明「这家现在卖不进去」，换下一家即可，不当作本轮失败。
+// 这几种错误说明「这家现在卖不进去」，换下一家即可，不当作本轮失败。
 const YISHU_SKIP_SHOP_CODES = new Set([
     'YSHF_SHOP_QUOTA_INSUFFICIENT',
     'YSHF_SHOP_UNKNOWN',
     // can_sell = false：这家铺子当前不收蜜薯，换下一家，不算整轮失败。
     'YSHF_SHOP_CLOSED',
+    // 对方当天没分享 / 标识过期：没有 share_key 服务端不认这条成交，换下一家。
+    'YSHF_SHARE_KEY_MISSING',
+    // 1034184：对方重新分享过，旧链接被服务端作废。服务层已顺手删掉存档，
+    // 换下一家继续卖，别把整轮判成失败（下轮它自然不在候选池里）。
+    'YSHF_SHARE_KEY_EXPIRED',
 ]);
 
-const DEFAULT_FRIEND_LIMIT = 60;
+// 自动卖薯的比价下限：候选池通常几十家，只扫前 20 家会把窗口外的最优价永远挡在外面，
+// 只能反复卖次高价。这里保证至少扫 50 家，用户配得更大就按用户的来（上限 200）。
+const AUTO_SCAN_MIN_LIMIT = 50;
+const DEFAULT_FRIEND_LIMIT = 50;
 // 默认两小时比价一次，和账号配置默认值一致；这里兜底用于配置缺字段的情况。
 const DEFAULT_SCAN_INTERVAL_MINUTES = 120;
 const DEFAULT_SELL_MIN_COUNT = 1;
@@ -124,6 +132,9 @@ function createYishuAutomation(deps: {
     const skipLoggedOn = new Map<string, string>();
     // 比价结果按「好友数上限 + 配置间隔」复用，避免每轮都把好友扫一遍。
     let scanCache: { at: number; limit: number; shops: any[] } | null = null;
+    // 「已分享但标识没落盘」的补标识尝试，每天只做一次：
+    // 万一服务端那天就是不下发 shop_ref，不该每轮都白打一次网关。
+    let keyRecoveryDateKey = '';
 
     function todayKey(): string {
         return new Date((getServerTimeSec() + 8 * 3600) * 1000).toISOString().slice(0, 10);
@@ -155,6 +166,23 @@ function createYishuAutomation(deps: {
         const result = await scanFriends({ limit, force: true });
         const shops = Array.isArray(result?.shops) ? result.shops : [];
         scanCache = { at: now, limit, shops };
+        // 打印候选池与排名前几，线上能直接看出「为什么选了这家」，
+        // 而不是只看到最终卖了谁。
+        const top = shops.slice(0, 5).map((shop: any) => `${shop.own ? '自己' : (shop.name || shop.gid)}:${shop.totalPrice}`).join(' > ');
+        const pool = Number(result?.candidateCount) || shops.length;
+        const scanned = Number(result?.scanned) || shops.length;
+        const pending = Number(result?.pendingCount) || 0;
+        log('活动', `以薯换福比价：候选池 ${pool} 家，本轮扫描 ${scanned} 家${pending ? `（还有 ${pending} 家待轮换）` : ''}，`
+            + `排名 ${top || '无'}`, {
+            module: 'activity',
+            event: '以薯换福自动',
+            result: 'ok',
+            action: 'scan',
+            candidateCount: pool,
+            scannedCount: scanned,
+            pendingCount: pending,
+            limit,
+        });
         return shops;
     }
 
@@ -193,9 +221,13 @@ function createYishuAutomation(deps: {
             failed('scan', `好友铺子比价失败: ${e?.message || e}`);
             return;
         }
+        // 比价池本身已经只包含「能查能卖」的铺子（自家 + 当天分享过的账号），
+        // 这里不需要再按标识过滤一遍。
         const candidates = options.fallbackOwn ? shops : shops.filter((shop: any) => !shop.own);
         if (!candidates.length) {
-            skip('sell', shops.length ? '只把自己的铺子留在候选里，但已关闭卖给自己' : '没有可卖的好友铺子');
+            skip('sell', shops.length
+                ? '候选里只剩自己的铺子，且已关闭卖给自己'
+                : '没有可卖的好友铺子：先让面板里的账号各分享一次铺子');
             return;
         }
 
@@ -330,23 +362,39 @@ function createYishuAutomation(deps: {
         }
 
         if (shareEnabled) {
-            if (snapshot.daily?.shared) {
-                skip('share', '今日已经分享过铺子，暴击涨价每日只触发一次');
+            const alreadyShared = !!snapshot.daily?.shared;
+            // 已分享但本地没标识 → 还值得再发一次（只补标识，没有暴击和种子）。
+            const keyMissing = alreadyShared && !snapshot.daily?.shareKeySaved;
+            const canAttempt = !alreadyShared
+                || (keyMissing && keyRecoveryDateKey !== todayKey());
+            if (!canAttempt) {
+                skip('share', keyMissing
+                    ? '今天已尝试补分享标识仍没拿到，等下一次自然分享'
+                    : '今日已经分享过铺子，标识也已落盘');
             }
             else {
+                if (keyMissing)
+                    keyRecoveryDateKey = todayKey();
                 await spacing();
                 try {
                     const result = await shareShop({ withSnapshot: false });
                     wrote = true;
-                    const extra = result?.count && result.count !== '0' ? `，额外获得 ${result.count} 个红薯种子` : '';
-                    const report = result?.shareReported === false
-                        ? `（分享上报未生效：${result?.shareReportError || '未知原因'}，暴击加成可能没加上）`
-                        : '';
-                    done('share', `分享铺子完成${extra}${report}`);
+                    if (result?.rewardless) {
+                        done('share', result?.shareKeySaved
+                            ? '今天已分享过，补到分享标识（无暴击与种子）'
+                            : '今天已分享过，补标识失败：回包没带分享标识');
+                    }
+                    else {
+                        const extra = result?.count && result.count !== '0' ? `，额外获得 ${result.count} 个红薯种子` : '';
+                        const report = result?.shareReported === false
+                            ? `（分享上报未生效：${result?.shareReportError || '未知原因'}，暴击加成可能没加上）`
+                            : '';
+                        done('share', `分享铺子完成${extra}${report}`);
+                    }
                 }
                 catch (e: any) {
                     const code = String(e?.code || '');
-                    if (code === 'YSHF_SHARE_ALREADY_DONE') skip('share', '今日已经分享过铺子');
+                    if (code === 'YSHF_SHARE_ALREADY_DONE') skip('share', '今日已经分享过铺子，标识已落盘');
                     else if (code === 'YSHF_INACTIVE') skip('read', '不在开放窗口（尚未开始或已经结束）');
                     else failed('share', `分享铺子失败: ${e?.message || e}`);
                 }
@@ -359,7 +407,9 @@ function createYishuAutomation(deps: {
         }
         else if (sellEnabled) {
             await sellSweetPotatoes(snapshot, {
-                friendLimit: toInt(automation.yishu_scan_friend_limit, DEFAULT_FRIEND_LIMIT, 1, 200),
+                // 至少扫 50 家，避免旧配置（20）把候选池后半段的最优价截在窗口外；
+                // 用户调大则按用户的值，上限仍是 200。
+                friendLimit: Math.max(toInt(automation.yishu_scan_friend_limit, DEFAULT_FRIEND_LIMIT, 1, 200), AUTO_SCAN_MIN_LIMIT),
                 scanIntervalMinutes: toInt(automation.yishu_scan_interval_minutes, DEFAULT_SCAN_INTERVAL_MINUTES, 5, 720),
                 sellMinCount: toInt(automation.yishu_sell_min_count, DEFAULT_SELL_MIN_COUNT, 1, 10000),
                 fallbackOwn: automation.yishu_sell_fallback_own !== false,

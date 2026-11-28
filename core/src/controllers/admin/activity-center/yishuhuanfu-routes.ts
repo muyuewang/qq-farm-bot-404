@@ -30,4 +30,14 @@ export function mountYishuHuanfuActivityRoutes({ app, ctx, withAccount, mountGet
     // 领取收购提成（cmd 99）。
     app.post('/api/activity-center/yishuhuanfu/commission/claim', withAccount((accountId: string) => ctx.provider.claimYishuHuanfuCommission(accountId)));
     app.post('/api/activity-center/yishuhuanfu/share', withAccount((accountId: string) => ctx.provider.shareYishuHuanfuShop(accountId)));
+    // 手动导入好友当天分享标识（贴分享链接/卡片文本或 UUID）。
+    // 服务端没有按 gid 反查好友标识的接口，面板外的真人好友只能靠这个入口变得可售。
+    app.post('/api/activity-center/yishuhuanfu/share-key', withAccount((accountId: string, req: Request) => (
+        ctx.provider.importYishuHuanfuShareKey(accountId, req.body?.gid, req.body?.text)
+    )));
+    // 把某家铺子移出比价列表：比价池完全由标识存档决定，删掉这条就没了。
+    // 面板账号下次分享会重新落盘，所以这不是永久屏蔽。
+    app.post('/api/activity-center/yishuhuanfu/share-key/remove', withAccount((accountId: string, req: Request) => (
+        ctx.provider.forgetYishuHuanfuShareKey(accountId, req.body?.gid)
+    )));
 }

@@ -302,6 +302,12 @@ function createDataProvider(options: DataProviderOptions) {
         ),
         refreshYishuHuanfuQuote: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'refreshYishuHuanfuQuote'),
         shareYishuHuanfuShop: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'shareYishuHuanfuShop'),
+        forgetYishuHuanfuShareKey: (accountRef: string, gid: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'forgetYishuHuanfuShareKey', gid)
+        ),
+        importYishuHuanfuShareKey: (accountRef: string, gid: unknown, text: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'importYishuHuanfuShareKey', gid, text)
+        ),
         getPropsShop: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getPropsShop'),
         purchaseProps: (accountRef: string, goodsId: unknown, count: unknown, expectedOffer: unknown) => (
             callWorkerApi(resolveAccountRefId(accountRef), 'purchaseProps', goodsId, count, expectedOffer)

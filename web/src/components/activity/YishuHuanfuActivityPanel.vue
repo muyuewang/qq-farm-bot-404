@@ -86,12 +86,18 @@ async function claimSeed() {
 }
 async function share() {
   if (busy.value) return
+  const wasShared = !!activity.value?.daily.shared
   const ok = await store.operate('share', {}, accountId.value)
-  toast[ok ? 'success' : 'error'](ok ? '铺子分享完成' : (store.error || '分享失败'))
+  if (!ok) { toast.error(store.error || '分享失败'); return }
+  // 已分享过再点，只为补回没落盘的标识：服务端不会再给暴击和种子。
+  toast.success(wasShared ? '分享标识已补回' : '铺子分享完成')
 }
 async function sell() {
   if (!canSell.value || busy.value) return
-  const count = sellCount.value.trim() === '' ? null : Number(sellCount.value)
+  // type=number 的输入在部分浏览器/组件下会把值转成 number，直接 .trim() 会抛
+  // "trim is not a function"，这里统一转字符串再判断空值。
+  const rawCount = String(sellCount.value ?? '').trim()
+  const count = rawCount === '' ? null : Number(rawCount)
   if (count !== null && (!Number.isInteger(count) || count <= 0)) {
     toast.error('出售数量必须是正整数')
     return
@@ -114,6 +120,11 @@ async function exchange(index: number) {
     return
   }
   const ok = await store.operate('exchange', { index, count }, accountId.value)
+  if (ok) {
+    // 兑换会改变该档「累计已兑次数」，而目录来自独立命令 cmd 97，不在活动快照里：
+    // 重拉一次让全表剩余量对齐，否则界面还停在兑换前的「限购 x/y」。
+    await store.loadCatalog(accountId.value)
+  }
   toast[ok ? 'success' : 'error'](ok ? '兑换成功' : (store.error || '兑换失败'))
 }
 async function claimCommission() {
@@ -141,6 +152,46 @@ async function scan(force = false) {
   if (!accountId.value || busy.value) return
   const ok = await store.scanFriendShops(accountId.value, force)
   if (!ok) toast.error(store.notes.friends || '好友比价失败')
+}
+
+// 移出比价：第一次点击进入确认态，再点一次才执行，避免手滑把铺子删掉。
+const removingGid = ref('')
+async function removeShop(shop: YshfFriendShop) {
+  if (shop.own || busy.value) return
+  if (removingGid.value !== shop.gid) {
+    removingGid.value = shop.gid
+    return
+  }
+  const ok = await store.forgetShareKey(shop.gid, accountId.value)
+  removingGid.value = ''
+  toast[ok ? 'success' : 'error'](ok ? '已移出比价列表' : (store.error || '移出失败'))
+}
+
+// 手动导入标识：面板外的真人好友不会自动落盘，只能贴一次对方的分享链接。
+const showImportKey = ref(false)
+const importGid = ref('')
+const importText = ref('')
+const importing = ref(false)
+async function submitImportKey() {
+  if (importing.value) return
+  const gid = importGid.value.trim()
+  if (!/^\d+$/.test(gid)) { toast.error('请填写有效的铺主 GID'); return }
+  if (!importText.value.trim()) { toast.error('请粘贴对方的分享链接或标识'); return }
+  importing.value = true
+  try {
+    const ok = await store.importShareKey(gid, importText.value, accountId.value)
+    if (!ok) { toast.error(store.error || '导入分享标识失败'); return }
+    toast.success(`已记录 ${gid} 今日的分享标识`)
+    importText.value = ''
+    showImportKey.value = false
+  } finally { importing.value = false }
+}
+
+/** 比价行里的标识展示：整串太长时中间省略，完整值仍在 title 里。 */
+function shortShareKey(value: string): string {
+  const key = String(value || '')
+  if (key.length <= 18) return key
+  return `${key.slice(0, 8)}…${key.slice(-8)}`
 }
 
 watch(accountId, (id) => {
@@ -298,8 +349,10 @@ onUnmounted(() => {
             <BaseButton variant="primary" size="sm" :disabled="activity.daily.seedClaimed || !activity.actions.claimSeed.enabled" :loading="store.pending === 'seed/claim'" @click="claimSeed">
               {{ activity.daily.seedClaimed ? '今日种子已领' : '领取红薯种子' }}
             </BaseButton>
-            <BaseButton variant="secondary" size="sm" :disabled="activity.daily.shared || !activity.actions.share.enabled" :loading="store.pending === 'share'" @click="share">
-              {{ activity.daily.shared ? '今日已分享' : '分享铺子拿暴击' }}
+            <BaseButton variant="secondary" size="sm" :disabled="!activity.actions.share.enabled" :loading="store.pending === 'share'" @click="share">
+              {{ activity.daily.shared
+                ? (activity.daily.shareKeySaved ? '今日已分享' : '补分享标识')
+                : '分享铺子拿暴击' }}
             </BaseButton>
           </div>
         </section>
@@ -388,7 +441,7 @@ onUnmounted(() => {
               {{ entry.name || `第 ${entry.index} 档` }}
             </div>
             <div class="mt-2 text-xs text-gray-500">
-              {{ fmt(entry.price) }} 福气币 · 限 {{ fmt(entry.limit) }} 份
+              {{ fmt(entry.price) }} 福气币 · 限购 {{ fmt(entry.remaining) }}/{{ fmt(entry.limit) }}
             </div>
             <div class="mt-1 flex-1 text-xs" :class="entry.exchangeable ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'">
               {{ entry.exchangeable ? '可兑换' : '暂不可兑' }}
@@ -420,11 +473,26 @@ onUnmounted(() => {
                 按今日收购价从高到低排列，只查询不成交。
               </p>
             </div>
-            <BaseButton variant="primary" size="sm" :loading="store.loadingFriends" @click="scan(true)">
-              {{ store.friendScanAt ? '重新比价' : '开始比价' }}
-            </BaseButton>
+            <div class="flex items-center gap-2">
+              <BaseButton variant="secondary" size="sm" @click="showImportKey = !showImportKey">
+                {{ showImportKey ? '收起' : '导入标识' }}
+              </BaseButton>
+              <BaseButton variant="primary" size="sm" :loading="store.loadingFriends" @click="scan(true)">
+                {{ store.friendScanAt ? '重新比价' : '开始比价' }}
+              </BaseButton>
+            </div>
           </div>
           <p v-if="store.notes.friends" class="mt-2 text-xs text-gray-500">{{ store.notes.friends }}</p>
+          <!-- 卖薯要带对方当天的分享标识，面板外的真人好友只能手动贴一次 -->
+          <div v-if="showImportKey" class="mt-3 grid gap-2 rounded-lg bg-gray-50 p-3 sm:grid-cols-[10rem_1fr_auto] dark:bg-gray-900">
+            <BaseInput v-model="importGid" label="铺主 GID" placeholder="纯数字" />
+            <BaseInput v-model="importText" label="分享链接或标识" placeholder="粘贴对方分享的卡片/链接，或 UUID" />
+            <div class="flex items-end">
+              <BaseButton variant="primary" size="sm" :loading="importing" @click="submitImportKey">
+                导入
+              </BaseButton>
+            </div>
+          </div>
         </div>
         <div v-if="!store.friendShops.length" class="rounded-xl bg-white p-10 text-center text-sm text-gray-500 shadow-sm dark:bg-gray-800">
           还没有好友铺子行情，点「开始比价」查询。
@@ -452,13 +520,30 @@ onUnmounted(() => {
             <div class="mt-3 text-xs" :class="shop.canSell === false ? 'text-red-500' : 'text-gray-500'">
               {{ shop.unlimited ? '还可收 不限' : shop.canSell === false ? '当前不收薯' : `还可收 ${fmt(shop.quota)} / ${fmt(shop.quotaCap)}` }}
             </div>
+            <!-- 2026-11-28 起卖薯要带对方当天的分享标识：没有标识就只能看价 -->
+            <div class="mt-1 text-xs" :class="shop.shareKeyKnown ? 'text-gray-400' : 'text-amber-600 dark:text-amber-400'">
+              {{ shop.shareKeyKnown
+                ? (shop.shareKey ? `标识 ${shortShareKey(shop.shareKey)}` : '标识 今日未落盘')
+                : '缺今日标识，只能看价' }}
+            </div>
             <BaseButton
               variant="secondary" size="sm" class="mt-3" block
-              :disabled="shop.canSell === false || (!shop.unlimited && num(shop.quota) <= 0)"
+              :disabled="shop.canSell === false || !shop.shareKeyKnown || (!shop.unlimited && num(shop.quota) <= 0)"
               @click="targetGid = shop.gid; tab = 'shop'"
             >
               选它出售
             </BaseButton>
+            <div v-if="!shop.own" class="mt-2 flex justify-end">
+              <button
+                type="button"
+                class="text-xs"
+                :class="removingGid === shop.gid ? 'text-red-500 font-medium' : 'text-gray-400 hover:text-red-500'"
+                :title="shop.shareKey ? '移除本地标识后这家会从比价列表消失，对方下次分享会重新出现' : '从比价列表移除'"
+                @click="removeShop(shop)"
+              >
+                {{ removingGid === shop.gid ? '确认移出？' : '移出比价' }}
+              </button>
+            </div>
           </div>
         </div>
       </section>

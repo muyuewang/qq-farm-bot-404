@@ -85,7 +85,8 @@ const catalogEntry = overrides => ({
   price: '8500',
   status: 2,
   limit: '50',
-  exchangedToday: '0',
+  exchanged: '0',
+  remaining: '50',
   image: '',
   ...overrides,
 })
@@ -102,7 +103,7 @@ test('catalog keeps the server exchangeable flag and defaults missing flag to cl
     luckCoin: { id: '', name: '', image: '', balance: null, balanceKnown: false },
     catalog: [], catalogLoaded: false, commission: { pending: '', claimable: false, flag: '' },
     balanceError: '', balanceStale: false,
-    daily: { dateKey: '', seedClaimed: false, shared: false, sharedToday: false },
+    daily: { dateKey: '', seedClaimed: false, shared: false, sharedToday: false, shareKeySaved: false },
     actions: { claimSeed: { enabled: true, available: true, availabilityKnown: true }, sell: { enabled: true, available: true, availabilityKnown: true }, share: { enabled: true, available: true, availabilityKnown: true }, exchange: { enabled: false, available: false, availabilityKnown: false } },
   }
   return store.loadCatalog('1001').then((ok) => {
@@ -210,4 +211,75 @@ test('snapshot refresh keeps the loaded catalog instead of flashing the skeleton
   assert.equal(store.state.catalog[0].price, '8500')
   assert.equal(store.state.catalogLoaded, true)
   assert.equal(store.state.actions.exchange.enabled, false)
+})
+
+test('catalog uses limit minus exchanged as remaining, and falls back to limit on old backends', async () => {
+  const store = freshStore()
+  // 2026-11-28 起 cmd 97 的 6 号位是「累计已兑」：limit 28、已兑 13 → 界面「限购 15/28」。
+  catalogPayload = [
+    catalogEntry({ index: 2, price: '60000', limit: '28', exchanged: '13', remaining: '15' }),
+    // 兑满的档位 remaining=0，后端会同时把 exchangeable 置 false。
+    catalogEntry({ index: 3, price: '40000', limit: '40', exchanged: '40', remaining: '0', exchangeable: false }),
+  ]
+  snapshotPayload = { active: true, catalog: catalogPayload }
+  assert.equal(await store.loadCatalog('1001'), true)
+  assert.equal(store.catalog[0].limit, '28')
+  assert.equal(store.catalog[0].exchanged, '13')
+  assert.equal(store.catalog[0].remaining, '15')
+  assert.equal(store.catalog[1].remaining, '0')
+  assert.equal(store.catalog[1].exchangeable, false)
+
+  // 旧后端只下发 limit、没有 remaining/exchanged：remaining 退化成本档上限，不能显示 0。
+  catalogPayload = [{ index: 4, price: '40000', limit: '40' }]
+  await store.loadCatalog('1001')
+  assert.equal(store.catalog[0].exchanged, '0')
+  assert.equal(store.catalog[0].remaining, '40')
+})
+
+test('friend shop reports whether today share key is known, and defaults to sellable when absent', async () => {
+  const store = freshStore()
+  shopsPayload = [
+    { gid: '1', own: true, price: '111', bonus: '33', totalPrice: '144', quota: '8000', quotaCap: '8000', unlimited: true, shareKey: 'a0000001-0000-4000-8000-000000000001' },
+    { gid: '2', name: '有标识', price: '99', bonus: '66', totalPrice: '165', quota: '8000', quotaCap: '8000', shareKeyKnown: true, shareKey: 'b0000001-0000-4000-8000-000000000002' },
+    // 只能看价：没有对方当天标识，服务端会拒绝成交。
+    { gid: '3', name: '缺标识', price: '50', bonus: '0', totalPrice: '50', quota: '8000', quotaCap: '8000', shareKeyKnown: false },
+    // 旧后端不带这个字段：按「有标识」处理，不能把整排铺子标成不可卖。
+    { gid: '4', name: '旧后端', price: '40', bonus: '0', totalPrice: '40', quota: '8000', quotaCap: '8000' },
+  ]
+  assert.equal(await store.scanFriendShops('1001'), true)
+  assert.equal(store.friendShops[0].shareKeyKnown, true)
+  assert.equal(store.friendShops[0].shareKey, 'a0000001-0000-4000-8000-000000000001')
+  assert.equal(store.friendShops[1].shareKeyKnown, true)
+  assert.equal(store.friendShops[2].shareKeyKnown, false)
+  assert.equal(store.friendShops[2].shareKey, '')
+  assert.equal(store.friendShops[3].shareKeyKnown, true)
+})
+
+test('import and forget share key hit the right endpoints and rescan the pool', async () => {
+  const store = freshStore()
+  // 导入：整条分享链接也行，后端负责从文本里认标识。
+  assert.equal(await store.importShareKey('2001', 'https://example.com/shop?share_key=0d0e525c-1f3e-4133-89d6-da336d845e29', '1001'), true)
+  const importCall = calls.find(c => c.method === 'POST' && c.url.endsWith('/yishuhuanfu/share-key'))
+  assert.ok(importCall, '必须调用 share-key 导入接口')
+  assert.equal(importCall.body.gid, '2001')
+  assert.match(importCall.body.text, /0d0e525c/)
+  // 导入后要强扫一次比价，否则新铺子不会出现在列表里。
+  assert.ok(calls.some(c => c.method === 'GET' && c.url.endsWith('/friends')), '导入后必须重扫比价')
+
+  // 缺 GID 或缺文本时不发请求。
+  calls.length = 0
+  assert.equal(await store.importShareKey('', 'abc', '1001'), false)
+  assert.equal(await store.importShareKey('2001', '  ', '1001'), false)
+  assert.equal(calls.filter(c => c.method === 'POST').length, 0)
+
+  // 移出比价：删除的是本地标识存档，不是永久屏蔽。
+  shopsPayload = [{ gid: '2001', name: '被移出', price: '99', bonus: '0', totalPrice: '99', quota: '8000', quotaCap: '8000', shareKeyKnown: true }]
+  await store.scanFriendShops('1001')
+  assert.equal(store.friendShops.length, 1)
+  shopsPayload = []
+  assert.equal(await store.forgetShareKey('2001', '1001'), true)
+  const forgetCall = calls.find(c => c.method === 'POST' && c.url.endsWith('/yishuhuanfu/share-key/remove'))
+  assert.ok(forgetCall, '必须调用 share-key/remove 接口')
+  assert.equal(forgetCall.body.gid, '2001')
+  assert.equal(store.friendShops.length, 0, '移出后本地列表要立刻去掉这一家')
 })

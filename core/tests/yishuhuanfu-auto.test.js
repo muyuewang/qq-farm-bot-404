@@ -79,6 +79,13 @@ function createHarness(options = {}) {
         },
         scanFriends: async (args) => {
             calls.push(['scanFriends', args]);
+            // scanLimitTruncates：复刻真实后端「先按 totalPrice 降序、再按 limit 截断」，
+            // 用来验证自动任务的 limit 会不会把最优价截在窗口外。
+            if (options.scanLimitTruncates) {
+                const limit = Number(args?.limit) || shops.length;
+                const sorted = [...shops].sort((a, b) => Number(b.totalPrice) - Number(a.totalPrice));
+                return { shops: sorted.slice(0, limit), scanned: Math.min(limit, sorted.length), candidateCount: sorted.length, pendingCount: Math.max(0, sorted.length - limit) };
+            }
             return { shops };
         },
         sell: async (friendGid, count, args) => {
@@ -128,12 +135,20 @@ test('daily seed and share claims run once, then skip on the server flags', asyn
     assert.deepEqual(harness.calls.find(entry => entry[0] === 'claimSeed')[1], { withSnapshot: false });
 
     const second = createHarness({
-        snapshot: makeSnapshot({ daily: { seedClaimed: true, shared: true } }),
+        snapshot: makeSnapshot({ daily: { seedClaimed: true, shared: true, shareKeySaved: true } }),
     });
     await second.automation.runYishuAutomation(ALL_ON);
     assert.deepEqual(second.calls.filter(entry => entry[0] !== 'getActivity').map(entry => entry[0]), []);
     // 每天只记一条跳过，不刷日志。
     assert.ok(second.logs.some(entry => entry.message.includes('今日红薯种子已经领过')));
+    assert.ok(second.logs.some(entry => entry.message.includes('标识也已落盘')));
+
+    // 已分享但标识没落盘：还要再补一次分享，只拿标识、没有奖励。
+    const keyless = createHarness({
+        snapshot: makeSnapshot({ daily: { seedClaimed: true, shared: true, shareKeySaved: false } }),
+    });
+    await keyless.automation.runYishuAutomation(ALL_ON);
+    assert.deepEqual(keyless.calls.filter(entry => entry[0] !== 'getActivity').map(entry => entry[0]), ['shareShop']);
 });
 
 test('commission is claimed only when the server says it is claimable', async () => {
@@ -268,8 +283,33 @@ test('friend price scan is throttled by the configured interval', async () => {
 
     // 第二轮在 30 分钟窗口内，直接复用上一轮的排序结果。
     assert.equal(harness.calls.filter(entry => entry[0] === 'scanFriends').length, 1);
-    // 比价只传好友数上限，force 由自动任务自己控制。
-    assert.deepEqual(harness.calls.find(entry => entry[0] === 'scanFriends')[1], { limit: 20, force: true });
+    // 自动卖薯至少扫 50 家（配置 20 会被抬到下限 50），
+    // 否则候选池超过 20 家时，窗口外的最优价永远轮不到。
+    assert.deepEqual(harness.calls.find(entry => entry[0] === 'scanFriends')[1], { limit: 50, force: true });
+});
+
+test('auto sell scans the whole pool so the best price outside the manual limit wins', async () => {
+    // 配置里手动比价上限设 20，但候选池里第 30 家才是最高价：自动任务至少要扫到 50 家才选得中。
+    const cheap = Array.from({ length: 29 }, (_, index) => makeShop({ gid: `20${index}`, name: `低价${index}`, totalPrice: '299', quota: '1000' }));
+    const best = makeShop({ gid: '372001', name: '凉柚与歌', totalPrice: '372', price: '141', bonus: '231', quota: '5030' });
+    // 真实后端会按 totalPrice 降序排序、再按 limit 截断，这里复刻同样行为：
+    // 若自动任务仍传 limit=20，372 会被截掉；抬到下限 50 才扫得到。
+    const harness = createHarness({
+        snapshot: makeSnapshot({ sweetPotatoBalance: '30' }),
+        shops: [...cheap, best],
+        scanLimitTruncates: true,
+    });
+
+    await harness.automation.runYishuAutomation({ ...ALL_ON, yishu_scan_friend_limit: 20 });
+
+    // 必须至少扫 50 家，而不是被配置的 20 截断。
+    assert.equal(harness.calls.find(entry => entry[0] === 'scanFriends')[1].limit, 50);
+    // 选中窗口外的最优价 372，而不是窗口内的 299。
+    assert.equal(harness.sells().length, 1);
+    assert.equal(harness.sells()[0][1], '372001');
+    assert.ok(harness.logs.some(entry => entry.message.includes('凉柚与歌') && entry.message.includes('372')));
+    // 比价明细日志要能看出候选池排名，便于线上排查「为什么选这家」。
+    assert.ok(harness.logs.some(entry => entry.message.includes('以薯换福比价：候选池') && entry.message.includes('凉柚与歌:372')));
 });
 
 test('an inactive activity window stops the whole round', async () => {
@@ -484,4 +524,51 @@ test('没配开始售卖时间时保持随时可卖', async () => {
     assert.equal(harness.sells().length, 1);
     const summary = harness.logs.find(entry => entry.message === '以薯换福自动本轮开始');
     assert.equal(summary.meta.sellAfter, '不限');
+});
+
+// 2026-11-28 起，比价池本身只包含「自家 + 当天分享过的账号」，
+// 自动任务不再需要按 share_key 二次过滤：缺标识的铺子连 price 都查不到，进不了 shops。
+// 真遇到标识正好被删（文件清掉 / 跨日）时，卖薯会抛 YSHF_SHARE_KEY_MISSING 被跳过。
+test('比价池里最高价直接成交，不再二次筛标识', async () => {
+    const harness = createHarness({
+        snapshot: makeSnapshot({ sweetPotatoBalance: '30' }),
+        shops: [
+            makeShop({ gid: '900', name: '甲', totalPrice: '400', quota: '1000', shareKeyKnown: true }),
+            makeShop({ gid: '901', name: '乙', totalPrice: '300', quota: '1000', shareKeyKnown: true }),
+        ],
+    });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    const sells = harness.sells();
+    assert.equal(sells.length, 1);
+    assert.equal(sells[0][1], '900', '池里最高价直接卖，不做额外筛选');
+    assert.ok(harness.logs.some(entry => String(entry.message).includes('卖出 30 个蜜薯')));
+});
+
+// 2026-11-28 晚：铺主重新分享会让旧链接作废（服务端 1034184）。
+// 自动任务遇到它必须换下一家继续卖 —— 服务层已经删了那条死链，
+// 下轮它自然不在候选池，但这一轮剩下的蜜薯不能因此不卖。
+test('售卖撞到分享链接失效时换下一家，不判整轮失败', async () => {
+    const harness = createHarness({
+        snapshot: makeSnapshot({ sweetPotatoBalance: '30' }),
+        shops: [
+            makeShop({ gid: '900', name: '旧链接', totalPrice: '400', quota: '1000' }),
+            makeShop({ gid: '901', name: '正常', totalPrice: '300', quota: '1000' }),
+        ],
+        sell: (friendGid, count) => {
+            if (friendGid === '900') {
+                const error = new Error('900 的分享链接已失效（对方多半重新分享过一次）');
+                error.code = 'YSHF_SHARE_KEY_EXPIRED';
+                throw error;
+            }
+            return { count, price: '300', income: String(Number(count) * 300) };
+        },
+    });
+    await harness.automation.runYishuAutomation(ALL_ON);
+
+    assert.deepEqual(harness.sells().map(entry => entry[1]), ['900', '901']);
+    assert.ok(harness.logs.some(entry => String(entry.message).includes('换下一家')));
+    assert.ok(harness.logs.some(entry => String(entry.message).includes('卖出 30 个蜜薯')));
+    // 不能报「卖薯失败」：那是留给真正该停手的情况（回包不可信等）。
+    assert.equal(harness.logs.some(entry => String(entry.message).includes('卖薯失败')), false);
 });

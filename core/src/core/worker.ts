@@ -1304,6 +1304,12 @@ async function handleApiCall(msg: any): Promise<void> {
                 case 'shareYishuHuanfuShop':
                     result = await require('../services/activity-center').shareYishuHuanfuShop();
                     break;
+                case 'importYishuHuanfuShareKey':
+                    result = await require('../services/activity-center').importYishuHuanfuShareKey(args[0], args[1]);
+                    break;
+                case 'forgetYishuHuanfuShareKey':
+                    result = await require('../services/activity-center').forgetYishuHuanfuShareKey(args[0]);
+                    break;
                 case 'getPropsShop':
                     result = await require('../services/commerce').getPropsShop();
                     break;
